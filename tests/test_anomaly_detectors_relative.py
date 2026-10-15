@@ -180,3 +180,29 @@ def test_four_relative_detectors_on_1200_points_are_fast():
 
     once()
     assert np.min([once() for _ in range(15)]) < 0.020
+
+
+def test_erv_falls_back_to_the_last_measurable_age():
+    # Конец трёх суток в пробеле без оценки: сравнивается ERV к суткам, а не
+    # ничего (Пермский Политех в Telegram, 07.10: 15,7 % против 1,9 % к суткам,
+    # трое суток — в пробеле).
+    prepared, context = context_for("p10_high_erv_vk")
+    series = prepared.series
+    # Ряд продлён до 80 ч с пробелом 65–80 ч: просмотры за пробел выросли больше
+    # чем на 5 %, и коридора на 72-м часу нет.
+    extra = (50, 55, 60, 65, 80)
+    values = {metric: column + tuple(int(column[-1] * (1 + 0.1 * (index + 1) * (metric is Metric.VIEWS)))
+                                     for index, _ in enumerate(extra))
+              for metric, column in series.values.items()}
+    longer = replace(series, observed_at=series.observed_at + tuple(
+                         series.published_at + timedelta(hours=hours) for hours in extra),
+                     values=values,
+                     qualities={metric: column + ("exact",) * len(extra) for metric, column in series.qualities.items()},
+                     interval_uncertain=series.interval_uncertain + (False,) * len(extra))
+    longer_prepared = prepare(longer, longer.observed_at[-1], CollectionCadence())
+    end = float(AGE_BAND_EDGES[2])
+    assert counter_estimate_at(longer_prepared, Metric.VIEWS, end) is None
+    cell = context.norm.cells[("erv", 0)]
+    norm = replace(context.norm, cells={**context.norm.cells, ("erv", 1): cell})
+    (sign,) = erv_outlier.detect(longer_prepared, replace(context, norm=norm))
+    assert sign.render["band"] == 0 and sign.render["z"] >= erv_outlier.MIN_Z

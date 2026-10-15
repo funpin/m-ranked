@@ -252,7 +252,12 @@ def test_findings_sql_runs_with_route_parameters(fixture):
             "sort": "index", "direction": "desc", "exclude_anomalies": False, "group": "none", "cap": 50,
             "comment_floor": rules.COMMENT_NORM_FLOOR, "share_floor": rules.SHARE_NORM_FLOOR,
             "min_comments": rules.FINDING_MIN_COMMENTS, "min_shares": rules.FINDING_MIN_SHARES,
-            "top_reactions": 3}).fetchall()
+            "top_reactions": 3, "clean": False, "promotion": "all"}).fetchall()
+        connection.execute(findings.ANOMALOUS, {
+            "as_of": fixture["now"], "period_days": 7, "platform": "all", "institution_legacy_id": None,
+            "types": [], "q": "", "search_pattern": "%", "username_pattern": "%", "min_level": 2,
+            "sort": "index", "direction": "desc", "group": "none", "cap": 50, "clean": True,
+            "promotion": "only"}).fetchall()
 
 
 def test_latest_point_keeps_its_semantic_fingerprint_after_packing(fixture):

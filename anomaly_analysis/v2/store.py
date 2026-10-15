@@ -7,10 +7,11 @@
 """
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import json
-from typing import Any, Mapping, Sequence
+from typing import Any, Collection, Mapping, Sequence
 from uuid import UUID
 
 from .detectors import SiblingActivity
@@ -47,7 +48,7 @@ def effective_quality(platform: str, quality: str | None, count: int | None) -> 
 SERIES = """
 WITH target AS (
     SELECT publication.id, publication.primary_account_id, account.platform::text AS platform,
-           publication.published_at, publication.is_repost,
+           publication.published_at, publication.is_repost, publication.publication_type,
            date_trunc('month', publication.published_at AT TIME ZONE 'UTC')::date AS published_month
       FROM ingest.visible_publication publication
       JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
@@ -55,6 +56,7 @@ WITH target AS (
 )
 SELECT DISTINCT ON (target.id, snapshot.observed_at)
        target.id, target.primary_account_id, target.platform, target.published_at, target.is_repost,
+       target.publication_type,
        snapshot.observed_at, snapshot.interval_uncertain,
        snapshot.views_count, snapshot.views_quality::text AS views_quality,
        snapshot.reactions_count, snapshot.reactions_quality::text AS reactions_quality,
@@ -111,6 +113,89 @@ SELECT DISTINCT ON (target.id, snapshot.observed_at)
  ORDER BY target.id, snapshot.observed_at, snapshot.correction_sequence DESC
 """
 
+
+# Состав реакций по видам для потока одной реакции (признак 17): только
+# Telegram, только первые сутки поста и только у постов, где сумма реакций
+# хоть раз выросла на 30 за шесть часов, — иначе потока нет. Отдельным
+# запросом: в SERIES тот же состав для каждой точки удорожал чтение пачки
+# свежих постов Telegram на четверть-треть (замер 12.10 на копии прода).
+KINDS_HOURS = 24
+# Работник анализирует свежий пост каждые 15 минут, а окно потока к отметке
+# уже сложилось: состав читается, только когда пост перешёл отметку возраста,
+# найденный признак между отметками переносится из прошлого вывода
+# (worker._carried). Последняя отметка — после KINDS_HOURS с запасом на
+# интервал анализа.
+KINDS_MILESTONES_HOURS = (1, 3, 6, 12, 24, 26)
+KINDS_GATE_REACTIONS = 30
+KINDS_GATE_SECONDS = 6 * 3600
+KINDS = """
+WITH target AS (
+    SELECT publication.id, publication.published_at,
+           date_trunc('month', publication.published_at AT TIME ZONE 'UTC')::date AS published_month
+      FROM ingest.visible_publication publication
+     WHERE publication.id = ANY(%(ids)s::uuid[])
+)
+SELECT DISTINCT ON (target.id, snapshot.observed_at)
+       target.id, snapshot.observed_at,
+       coalesce(snapshot.reaction_breakdown,
+                coalesce(snapshot.metric_evidence,
+                         (SELECT evidence.payload FROM ingest.metric_evidence_dictionary evidence
+                           WHERE evidence.id = snapshot.metric_evidence_id)) -> 'reaction_breakdown',
+                CASE WHEN NOT snapshot.packed THEN
+                    (SELECT jsonb_object_agg(reaction.reaction_key, reaction.reaction_count
+                                             ORDER BY reaction.reaction_key)
+                       FROM ingest.reaction_breakdown reaction
+                      WHERE reaction.snapshot_published_month = snapshot.published_month
+                        AND reaction.snapshot_id = snapshot.id) END) AS reaction_kinds
+  FROM target
+  JOIN (
+    SELECT s.publication_id, s.published_month, s.id, false AS packed, s.observed_at, s.correction_sequence,
+           s.metric_evidence, s.metric_evidence_id, NULL::jsonb AS reaction_breakdown
+      FROM ingest.publication_metric_snapshot s
+     WHERE s.publication_id = ANY(%(ids)s::uuid[]) AND s.published_month = ANY(%(months)s::date[])
+       AND s.observed_at <= %(until)s AND NOT s.synthetic
+       AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
+                        WHERE successor.published_month = ANY(%(months)s::date[])
+                          AND successor.published_month = s.published_month
+                          AND successor.publication_id = s.publication_id
+                          AND successor.sampling_bucket = s.sampling_bucket
+                          AND successor.correction_sequence > s.correction_sequence)
+    UNION ALL
+    SELECT p.publication_id, p.published_month, p.id, true, p.observed_at, p.correction_sequence,
+           NULL::jsonb, NULL::bigint, p.reaction_breakdown
+      FROM ingest.packed_points_between(%(ids)s::uuid[], '-infinity', %(until)s) p
+     WHERE p.visible AND NOT p.synthetic
+  ) snapshot
+    ON snapshot.publication_id = target.id
+   AND snapshot.published_month = target.published_month
+ WHERE snapshot.published_month = ANY(%(months)s::date[])
+   AND snapshot.observed_at <= target.published_at + make_interval(hours => %(hours)s)
+ ORDER BY target.id, snapshot.observed_at, snapshot.correction_sequence DESC
+"""
+
+
+def needs_reaction_kinds(rows: Sequence[Mapping[str, Any]]) -> bool:
+    """Может ли у поста быть поток одной реакции: Telegram и +30 реакций за 6 ч в первые сутки."""
+    if not rows or rows[0]["platform"] != "telegram":
+        return False
+    published = rows[0]["published_at"]
+    points = [((row["observed_at"] - published).total_seconds(), row["reactions_count"]) for row in rows
+              if row["reactions_count"] is not None
+              and row["reactions_quality"] not in UNUSABLE_QUALITY
+              and (row["observed_at"] - published).total_seconds() <= KINDS_HOURS * 3600]
+    # Ноль публикации: пачка с первых минут растёт от нуля.
+    points.insert(0, (0.0, 0))
+    # Минимум скользящего окна — монотонной очередью: проверка линейна по точкам.
+    window: deque[tuple[float, int]] = deque()
+    for age, value in points:
+        while window and age - window[0][0] > KINDS_GATE_SECONDS:
+            window.popleft()
+        while window and window[-1][1] >= value:
+            window.pop()
+        window.append((age, value))
+        if value - window[0][1] >= KINDS_GATE_REACTIONS:
+            return True
+    return False
 
 # Сколько точек добавилось у постов пачки после прошлого анализа — без чтения
 # рядов. Семь из восьми просроченных постов оказываются отложенными: сборщик
@@ -339,10 +424,12 @@ class StateWrite:
 
 
 def series_from_rows(rows: Sequence[Mapping[str, Any]],
-                     collected: Sequence[datetime] = ()) -> PostSeries:
+                     collected: Sequence[datetime] = (),
+                     kinds: Mapping[datetime, Mapping[str, int]] | None = None) -> PostSeries:
     """Ряд поста из строк замеров одного поста, упорядоченных по времени.
 
-    `collected` — начала успешных циклов сбора аккаунта."""
+    `collected` — начала успешных циклов сбора аккаунта; `kinds` — состав
+    реакций по моменту замера (KINDS), если он читался."""
     first = rows[0]
     values: dict[Metric, tuple[int | None, ...]] = {}
     for metric in Metric:
@@ -359,7 +446,9 @@ def series_from_rows(rows: Sequence[Mapping[str, Any]],
                                                                  row[f"{metric.value}_count"]) for row in rows)
                                  for metric in values},
                       interval_uncertain=tuple(row.get("interval_uncertain", True) for row in rows),
-                      reaction_breakdowns=tuple(row.get("reaction_breakdown") for row in rows))
+                      reaction_breakdowns=tuple(row.get("reaction_breakdown") for row in rows),
+                      reaction_kinds=tuple(kinds.get(row["observed_at"]) for row in rows) if kinds else (),
+                      publication_type=first.get("publication_type"))
 
 
 def change_kind(previous: StoredState | None, level: int,
@@ -421,7 +510,9 @@ class PostgresAnomalyStore:
         return psycopg.connect(self._dsn, autocommit=True, row_factory=dict_row,
                                options=CONNECTION_OPTIONS)
 
-    def read_series(self, targets: Sequence[SeriesTarget]) -> dict[UUID, PostSeries]:
+    def read_series(self, targets: Sequence[SeriesTarget],
+                    kinds_for: Collection[UUID] | None = None) -> dict[UUID, PostSeries]:
+        """Ряды постов; состав реакций (KINDS) — у `kinds_for` (None — у всех), где поток возможен."""
         result: dict[UUID, PostSeries] = {}
         with self._factory() as connection:
             for start in range(0, len(targets), SERIES_BATCH):
@@ -435,8 +526,28 @@ class PostgresAnomalyStore:
                     grouped.setdefault(row["id"], []).append(row)
                 collected = self._read_collected(connection, {items[0]["primary_account_id"]
                                                               for items in grouped.values()})
-                result.update({key: series_from_rows(items, collected.get(items[0]["primary_account_id"], ()))
+                kinds = self._read_kinds(connection, [
+                    items for key, items in grouped.items()
+                    if (kinds_for is None or key in kinds_for) and needs_reaction_kinds(items)])
+                result.update({key: series_from_rows(items, collected.get(items[0]["primary_account_id"], ()),
+                                                     kinds.get(key))
                                for key, items in grouped.items()})
+        return result
+
+    @staticmethod
+    def _read_kinds(connection, posts: Sequence[Sequence[Mapping[str, Any]]]
+                    ) -> dict[UUID, dict[datetime, Mapping[str, int]]]:
+        if not posts:
+            return {}
+        published = [items[0]["published_at"] for items in posts]
+        rows = connection.execute(KINDS, {
+            "ids": [items[0]["id"] for items in posts],
+            "months": sorted({item.astimezone(timezone.utc).date().replace(day=1) for item in published}),
+            "until": max(published) + timedelta(hours=KINDS_HOURS), "hours": KINDS_HOURS}).fetchall()
+        result: dict[UUID, dict[datetime, Mapping[str, int]]] = {}
+        for row in rows:
+            if row["reaction_kinds"] is not None:
+                result.setdefault(row["id"], {})[row["observed_at"]] = row["reaction_kinds"]
         return result
 
     def read_runtime_policy(self, name: str) -> dict[str, Any] | None:
@@ -688,7 +799,7 @@ class PostgresAnomalyStore:
             return connection.execute(
                 """SELECT state.publication_id, publication.primary_account_id AS account_id,
                           account.platform::text AS platform, account.institution_id, state.published_at,
-                          publication.is_repost, state.tail_ledger
+                          publication.is_repost, publication.publication_type, state.tail_ledger
                      FROM analytics.post_anomaly_state state
                      JOIN ingest.visible_publication publication ON publication.id = state.publication_id
                      JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
@@ -734,6 +845,31 @@ class PostgresAnomalyStore:
                       AND publication.deleted_at IS NULL
                       AND (signal->>'pattern')::int = 8 AND signal->>'metric' = 'reactions'
                       AND signal->'render'->>'hour' IS NOT NULL""",
+                (published_after, published_until)).fetchall()
+
+    def read_post_levels(self, published_after: datetime, published_until: datetime) -> list[dict[str, Any]]:
+        """Выводы постов окна для находок по охватам (v2/reach_findings.py).
+
+        `patterns` — номера признаков у постов уровня 3; `view_pack` — признак 1
+        режима «short_views» не слабее выраженной аномалии. Репосты не входят:
+        у них чужое содержание.
+        """
+        with self._factory() as connection:
+            return connection.execute(
+                """SELECT state.publication_id, publication.primary_account_id AS account_id,
+                          account.platform::text AS platform, state.published_at, state.level,
+                          CASE WHEN state.level = 3 THEN ARRAY(
+                              SELECT DISTINCT (signal->>'pattern')::int
+                                FROM jsonb_array_elements(state.signals) signal) ELSE '{}'::int[] END AS patterns,
+                          EXISTS (SELECT 1 FROM jsonb_array_elements(state.signals) signal
+                                   WHERE (signal->>'pattern')::int = 1 AND signal->>'metric' = 'views'
+                                     AND signal->'render'->>'mode' = 'short_views'
+                                     AND (signal->>'strength')::numeric >= 0.7) AS view_pack
+                     FROM analytics.post_anomaly_state state
+                     JOIN ingest.visible_publication publication ON publication.id = state.publication_id
+                     JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
+                    WHERE state.published_at >= %s AND state.published_at < %s
+                      AND publication.deleted_at IS NULL AND NOT publication.is_repost""",
                 (published_after, published_until)).fetchall()
 
     def write_account_findings(self, findings: Sequence[Any], method_version: str) -> None:

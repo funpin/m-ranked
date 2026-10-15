@@ -185,3 +185,19 @@ def test_no_branch_code_reads_the_v1_tables():
     for relative, calls in V1_ADMIN_CALLS.items():
         text = (root / relative).read_text(encoding="utf-8")
         assert all(call in text for call in calls), relative
+
+
+def test_series_rows_carry_the_publication_type():
+    rows = [{"id": UUID(int=1), "primary_account_id": UUID(int=2), "platform": "vk",
+             "published_at": MOMENT, "is_repost": False, "publication_type": "video",
+             "observed_at": MOMENT + timedelta(minutes=5), "interval_uncertain": False,
+             "views_count": 100, "views_quality": "exact", "reactions_count": 5, "reactions_quality": "exact",
+             "comments_count": 0, "comments_quality": "exact", "shares_count": 0, "shares_quality": "exact"}]
+    assert series_from_rows(rows).publication_type == "video"
+    del rows[0]["publication_type"]
+    assert series_from_rows(rows).publication_type is None
+
+
+def test_series_query_reads_the_publication_type():
+    from anomaly_analysis.v2.store import SERIES
+    assert "publication.publication_type" in SERIES and "target.publication_type" in SERIES

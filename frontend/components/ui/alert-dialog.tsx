@@ -52,19 +52,23 @@ function AlertDialogContent({
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
-      <AnimatedPopup
-        data-slot="alert-dialog-content"
-        data-size={size}
-        initial={PANEL_IN}
-        animate={PANEL_SHOWN}
-        exit={PANEL_IN}
-        transition={PANEL_SPRING}
-        className={cn(
-          "group/alert-dialog-content fixed inset-0 z-[400] m-auto grid h-fit w-[calc(100%-2rem)] gap-3 rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-64 data-[size=default]:sm:max-w-sm",
-          className
-        )}
-        {...props}
-      />
+      {/* Центр — гибкой обёрткой, как у Dialog: inset-0, m-auto и h-fit Safari
+          растягивал на весь экран. */}
+      <div data-slot="alert-dialog-positioner" className="pointer-events-none fixed inset-0 z-[400] flex items-center justify-center p-4">
+        <AnimatedPopup
+          data-slot="alert-dialog-content"
+          data-size={size}
+          initial={PANEL_IN}
+          animate={PANEL_SHOWN}
+          exit={PANEL_IN}
+          transition={PANEL_SPRING}
+          className={cn(
+            "group/alert-dialog-content pointer-events-auto relative grid w-full content-start gap-3 rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-64 data-[size=default]:sm:max-w-sm",
+            className
+          )}
+          {...props}
+        />
+      </div>
     </AlertDialogPortal>
   )
 }

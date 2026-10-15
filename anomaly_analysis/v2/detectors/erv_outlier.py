@@ -20,12 +20,12 @@ import numpy as np
 from ..domain import Family, Metric, Sign
 from ..norms import ERV
 from ..series import (
-    AGE_BAND_EDGES, PreparedSeries, counter_estimate_at, engagement_estimate_at, views_belong_to_source,
+    AGE_BAND_EDGES, PreparedSeries, counter_estimate_at, engagement_estimate_at, views_ratio_unreliable,
 )
 from .base import DetectorContext, age_text, make_sign
 
 ID = "erv_outlier"
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 PATTERN = 10
 FAMILY = Family.CROSS_METRIC
 NEEDS_NORM = True
@@ -41,7 +41,7 @@ ENGAGEMENT = (Metric.REACTIONS, Metric.COMMENTS, Metric.SHARES)
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     series = prepared.series
     views = series.values.get(Metric.VIEWS)
-    if series.is_repost or context.norm is None or views is None or views_belong_to_source(series):
+    if series.is_repost or context.norm is None or views is None or views_ratio_unreliable(series):
         return ()
     observed = [at for at, value in zip(series.observed_at, views)
                 if value is not None and at <= prepared.analyzed_at]
@@ -49,16 +49,20 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         return ()
     ends = AGE_BAND_EDGES[1:]
     reached = np.flatnonzero(ends <= (observed[-1] - series.published_at).total_seconds())
-    if not reached.size:
-        return ()
-    band = int(reached[-1])
-    cell = context.norm.cells.get((ERV, band))
-    if cell is None or cell.log_erv is None:
-        return ()
-    end = float(ends[band])
-    seen = counter_estimate_at(prepared, Metric.VIEWS, end)
-    engaged = engagement_estimate_at(prepared, end)
-    if seen is None or engaged is None or seen.low <= 0 or engaged.low <= 0:
+    # Сравнивается последний пройденный возраст, где ERV поста измерим: у
+    # Telegram конец трёх суток бывает в пробеле без точной оценки, и пост
+    # с ERV втрое выше нормы к суткам иначе не проверялся вовсе. Измеримый
+    # возраст без признака — ответ; более ранний тогда не ищется.
+    for band in (int(item) for item in reached[::-1]):
+        cell = context.norm.cells.get((ERV, band))
+        if cell is None or cell.log_erv is None:
+            continue
+        end = float(ends[band])
+        seen = counter_estimate_at(prepared, Metric.VIEWS, end)
+        engaged = engagement_estimate_at(prepared, end)
+        if seen is not None and engaged is not None and seen.low > 0 and engaged.low > 0:
+            break
+    else:
         return ()
     value = float(np.log(engaged.value / seen.value))
     spread = max(1.4826 * cell.log_erv.mad, SPREAD_FLOOR)

@@ -40,20 +40,25 @@ function DialogContent({
   return (
     <DialogPortalPrimitive>
       <DialogBackdropPrimitive data-slot="dialog-overlay" initial={FADE_IN} animate={FADE_SHOWN} exit={FADE_IN} className="fixed inset-0 isolate z-[400] bg-black/70 supports-backdrop-filter:backdrop-blur-xs" />
-      {/* Центр — через inset-0 и m-auto, а не translate(-50%): при нечётной
-          высоте окна сдвиг на половину ставил его на полпикселя, и текст мылился. */}
-      <DialogPopupPrimitive
-        data-slot="dialog-content"
-        initial={PANEL_IN}
-        animate={PANEL_SHOWN}
-        exit={PANEL_IN}
-        transition={PANEL_SPRING}
-        className={cn(
-          "fixed inset-0 z-[400] m-auto grid h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-xl bg-popover p-5 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10 outline-none",
-          className
-        )}
-        {...props}
-      >
+      {/* Центр — гибкой обёрткой на весь экран, а не translate(-50%): при
+          нечётной высоте окна сдвиг на половину ставил его на полпикселя, и
+          текст мылился. Прежний центр через inset-0, m-auto и h-fit Safari
+          растягивал на всю высоту экрана, а сетка раздавала лишнее место
+          между строками. Обёртка клики не ловит: щелчок мимо окна приходится
+          на фон и закрывает его. */}
+      <div data-slot="dialog-positioner" className="pointer-events-none fixed inset-0 z-[400] flex items-center justify-center p-4">
+        <DialogPopupPrimitive
+          data-slot="dialog-content"
+          initial={PANEL_IN}
+          animate={PANEL_SHOWN}
+          exit={PANEL_IN}
+          transition={PANEL_SPRING}
+          className={cn(
+            "pointer-events-auto relative grid max-h-full w-full max-w-lg content-start gap-4 overflow-y-auto rounded-xl bg-popover p-5 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10 outline-none",
+            className
+          )}
+          {...props}
+        >
         {children}
         {showCloseButton ? (
           <DialogClosePrimitive
@@ -64,7 +69,8 @@ function DialogContent({
             <span className="sr-only">Закрыть</span>
           </DialogClosePrimitive>
         ) : null}
-      </DialogPopupPrimitive>
+        </DialogPopupPrimitive>
+      </div>
     </DialogPortalPrimitive>
   )
 }

@@ -391,3 +391,25 @@ def test_tail_ledgers_and_account_profiles_flow_from_worker_to_public_api(databa
                                    "WHERE account_id=%s", (ACCOUNT,)).fetchone()["n"]
     assert count == 1
     assert isinstance(today, date)
+
+
+def test_post_levels_name_level_three_patterns_and_view_packs(databases):
+    """Читатель находок по охватам: уровень, номера признаков уровня 3, пакет просмотров."""
+    from anomaly_analysis.v2.domain import DataQuality, Family, Interval, Level, Metric, PostVerdict, Sign
+    base = datetime.now(timezone.utc) - timedelta(days=3)
+    target = _publication(databases["admin"], base, 20)
+    store = PostgresAnomalyStore(databases["worker"])
+    now = datetime.now(timezone.utc)
+    span = Interval(base, base + timedelta(hours=3))
+    signs = (Sign(1, Family.VELOCITY, Metric.VIEWS, 0.8, span, timedelta(minutes=15), "пакет",
+                  {"kind": "linear", "mode": "short_views"}),
+             Sign(9, Family.SHAPE, Metric.REACTIONS, 0.95, span, timedelta(minutes=15), "рывок"))
+    verdict = PostVerdict(target.publication_id, Level.ARTIFICIAL_ACTIVITY_SIGNS, signs, DataQuality(1.0), {})
+    store.write_states([StateWrite(target.publication_id, target.published_at, now, now + timedelta(hours=1),
+                                   verdict=verdict, analyzed_points=20, last_point_observed_at=now)])
+    rows = [row for row in store.read_post_levels(base - timedelta(hours=1), now)
+            if row["publication_id"] == target.publication_id]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["level"] == 3 and row["view_pack"] is True and sorted(row["patterns"]) == [1, 9]
+    assert row["account_id"] == ACCOUNT and row["platform"] == "vk"

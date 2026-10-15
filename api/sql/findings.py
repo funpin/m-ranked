@@ -16,7 +16,7 @@ analytics.publication_checkpoint, поэтому снимки запрос не 
 from __future__ import annotations
 
 from ..statistics_capabilities import INTERACTION_COMPONENTS, PLATFORM_METRIC_CAPABILITIES
-from .statistics import SEARCH_PREDICATE
+from .statistics import MEASURED_COLUMNS, SEARCH_PREDICATE
 
 
 def _capability(platform: str) -> str:
@@ -102,26 +102,47 @@ SELECT account_id,hour_offset,
  GROUP BY account_id,hour_offset
 """
 
-FINDINGS = f"""
-WITH params AS (
-    SELECT %(as_of)s::timestamptz AS as_of,
-           %(as_of)s::timestamptz-make_interval(days=>%(period_days)s) AS cutoff
-), accounts AS MATERIALIZED (
-    SELECT account.id AS account_id,account.platform::text AS platform,account.institution_id,
+
+# Видимые аккаунты под фильтры страницы вместе с их аккаунтными находками:
+# значок у поста и переключатель «скрыть аккаунты с устойчивыми находками»
+# (clean). Находок — единицы на аккаунт, таблицу переписывает ночное задание.
+_ACCOUNTS = """    SELECT account.id AS account_id,account.platform::text AS platform,account.institution_id,
            account.current_username,account.current_title,
            institution.canonical_name AS institution_canonical_name,
            institution.short_name AS institution_short_name,
-           institution_alias.legacy_id AS institution_legacy_id
+           institution_alias.legacy_id AS institution_legacy_id,
+           finding.account_findings,finding.persistent_findings
       FROM catalog.visible_platform_account account
       JOIN catalog.visible_institution institution ON institution.id=account.institution_id
       LEFT JOIN LATERAL (
           SELECT alias.legacy_id FROM catalog.legacy_entity_alias alias
            WHERE alias.target_uuid=institution.id AND alias.entity_type='institutions'
            ORDER BY alias.legacy_id LIMIT 1) institution_alias ON true
+      LEFT JOIN LATERAL (
+          SELECT jsonb_agg(jsonb_build_object('kind',finding.kind,'status',finding.status)
+                           ORDER BY finding.status DESC,finding.kind) AS account_findings,
+                 coalesce(bool_or(finding.status=2),false) AS persistent_findings
+            FROM analytics.account_anomaly_finding finding
+           -- «Похоже на продвижение» — пометка постов, а не находка аккаунта.
+           WHERE finding.account_id=account.id AND finding.kind<>'promotion') finding ON true
      WHERE account.enabled
        AND (%(platform)s='all' OR account.platform::text=%(platform)s)
        AND (%(institution_legacy_id)s::bigint IS NULL
             OR institution_alias.legacy_id=%(institution_legacy_id)s::bigint)
+"""
+
+FINDINGS = f"""
+WITH params AS (
+    SELECT %(as_of)s::timestamptz AS as_of,
+           %(as_of)s::timestamptz-make_interval(days=>%(period_days)s) AS cutoff
+), promoted AS MATERIALIZED (
+    -- Посты с пометкой «похоже на продвижение»: участники немногих находок вида.
+    SELECT DISTINCT member AS publication_id
+      FROM analytics.account_anomaly_finding finding
+     CROSS JOIN LATERAL unnest(finding.members) member
+     WHERE finding.kind='promotion'
+), accounts AS MATERIALIZED (
+    {_ACCOUNTS}
 ), published AS MATERIALIZED (
     -- Уровень считается на пост, а не на каждую его точку: так соединения с
     -- анализом идут по ~25 тыс. постам, а не по ~130 тыс. точкам.
@@ -163,7 +184,8 @@ WITH params AS (
     -- Всё о посте уже есть в published: ни публикации, ни анализ повторно не
     -- читаются. Псевдоним publication и поле id нужны SEARCH_PREDICATE.
     SELECT publication.publication_id,publication.published_at,publication.publication_type,
-           accounts.*,publication.level
+           accounts.*,publication.level,
+           publication.publication_id IN (SELECT publication_id FROM promoted) AS promotion
       FROM (SELECT published.*,published.publication_id AS id FROM published) publication
       JOIN accounts ON accounts.account_id=publication.account_id
       JOIN catalog.visible_platform_account account ON account.id=accounts.account_id
@@ -214,6 +236,8 @@ WITH params AS (
              ELSE interaction_index END AS sort_value
       FROM eligible
      WHERE above_norm AND (NOT %(exclude_anomalies)s OR coalesce(level,0)<2)
+       AND NOT (%(clean)s AND persistent_findings)
+       AND (%(promotion)s='all' OR (%(promotion)s='only')=promotion)
 ), ranked AS (
     SELECT visible.*,
            row_number() OVER(ORDER BY
@@ -246,9 +270,13 @@ WITH params AS (
      GROUP BY norms.account_id
 ), summary AS (
     -- Посты, которые попали бы в выдачу, если бы не аномалия 2–3.
-    SELECT count(*) FILTER (WHERE %(exclude_anomalies)s AND above_norm AND level>=2)::integer AS hidden_anomalous FROM eligible
+    SELECT count(*) FILTER (WHERE %(exclude_anomalies)s AND above_norm AND level>=2)::integer AS hidden_anomalous,
+           -- Посты аккаунтов с устойчивыми находками: их убирает (или убрал бы) clean.
+           count(*) FILTER (WHERE persistent_findings AND above_norm
+                              AND (NOT %(exclude_anomalies)s OR coalesce(level,0)<2))::integer AS hidden_by_findings
+      FROM eligible
 )
-SELECT page.*,summary.hidden_anomalous,identity.external_id,identity.public_url,
+SELECT page.*,summary.hidden_anomalous,summary.hidden_by_findings,identity.external_id,identity.public_url,
        post_curve.post_curve,norm_curve.norm_curve,reactions.top_reactions
   FROM summary
   LEFT JOIN page ON true
@@ -271,6 +299,102 @@ SELECT page.*,summary.hidden_anomalous,identity.external_id,identity.public_url,
                ORDER BY breakdown.reaction_count DESC,breakdown.reaction_key
                LIMIT %(top_reactions)s) top
   ) reactions ON true
+  LEFT JOIN LATERAL (
+      SELECT value.external_id,value.public_url FROM ingest.publication_identity value
+       WHERE value.publication_id=page.publication_id AND value.role='primary'
+       ORDER BY value.id LIMIT 1) identity ON true
+ ORDER BY page.rank
+"""
+
+# «Аномальные посты»: рейтинг постов периода с выраженной аномалией (действующий
+# уровень 2–3) по силе необычной динамики. Мера — доля необычного прироста:
+# сколько от итогового значения метрики набрано в участке признака
+# (render.episodeShare, считает анализ; anomaly_analysis/v2/levels.py). Пока
+# пост не переанализирован, доли нет: такие посты идут внутри уровня последними.
+ANOMALOUS = f"""
+WITH params AS (
+    SELECT %(as_of)s::timestamptz AS as_of,
+           %(as_of)s::timestamptz-make_interval(days=>%(period_days)s) AS cutoff
+), promoted AS MATERIALIZED (
+    -- Посты с пометкой «похоже на продвижение»: участники немногих находок вида.
+    SELECT DISTINCT member AS publication_id
+      FROM analytics.account_anomaly_finding finding
+     CROSS JOIN LATERAL unnest(finding.members) member
+     WHERE finding.kind='promotion'
+), accounts AS MATERIALIZED (
+    {_ACCOUNTS}
+), published AS MATERIALIZED (
+    SELECT publication.id AS publication_id,publication.published_at,accounts.account_id,
+           publication.publication_type::text AS publication_type,
+           coalesce(recheck.effective_level,state.level) AS level,state.signals
+      FROM params
+      JOIN ingest.visible_publication publication
+        ON publication.published_at>params.cutoff AND publication.published_at<=params.as_of
+      JOIN accounts ON accounts.account_id=publication.primary_account_id
+      {_level('params.cutoff')}
+     WHERE coalesce(recheck.effective_level,state.level,0)>=%(min_level)s
+), candidates AS (
+    SELECT publication.publication_id,publication.published_at,publication.publication_type,
+           publication.level,publication.signals,accounts.*,
+           publication.publication_id IN (SELECT publication_id FROM promoted) AS promotion
+      FROM (SELECT published.*,published.publication_id AS id FROM published) publication
+      JOIN accounts ON accounts.account_id=publication.account_id
+      JOIN catalog.visible_platform_account account ON account.id=accounts.account_id
+      JOIN catalog.visible_institution institution ON institution.id=accounts.institution_id
+     WHERE (cardinality(%(types)s::text[])=0
+            OR CASE WHEN publication.publication_type IN ('text','photo','album','video')
+                    THEN publication.publication_type ELSE 'other' END = ANY(%(types)s::text[]))
+       AND {SEARCH_PREDICATE}
+), scored AS (
+    SELECT candidates.*,top.share AS anomaly_share,top.growth AS anomaly_growth,
+           top.metric AS anomaly_metric,top.pattern AS anomaly_pattern,signs.anomaly_signals,
+           CASE %(sort)s
+             WHEN 'anomaly_share' THEN top.share
+             WHEN 'anomaly_volume' THEN top.growth
+             WHEN 'published_at' THEN extract(epoch FROM candidates.published_at)::double precision
+             -- Уровень важнее доли: доля лежит в [0; 1] и упорядочивает внутри уровня.
+             ELSE candidates.level+0.999*coalesce(top.share,0) END AS sort_value
+      FROM candidates
+      LEFT JOIN LATERAL (
+          SELECT (sign->'render'->>'episodeShare')::double precision AS share,
+                 (sign->'render'->>'episodeGrowth')::double precision AS growth,
+                 sign->>'metric' AS metric,(sign->>'pattern')::integer AS pattern
+            FROM jsonb_array_elements(candidates.signals) sign
+           WHERE jsonb_typeof(sign->'render'->'episodeShare')='number'
+           ORDER BY share DESC,growth DESC NULLS LAST LIMIT 1) top ON true
+      LEFT JOIN LATERAL (
+          SELECT jsonb_agg(jsonb_build_object('pattern',(sign->>'pattern')::integer,'title',sign->>'title',
+                                              'metric',sign->>'metric','strength',(sign->>'strength')::numeric)
+                           ORDER BY (sign->>'strength')::numeric DESC) AS anomaly_signals
+            FROM jsonb_array_elements(candidates.signals) sign) signs ON true
+), visible AS (
+    SELECT * FROM scored WHERE NOT (%(clean)s AND persistent_findings)
+       AND (%(promotion)s='all' OR (%(promotion)s='only')=promotion)
+), ranked AS (
+    SELECT visible.*,
+           row_number() OVER(ORDER BY
+             CASE WHEN %(direction)s='desc' THEN sort_value END DESC NULLS LAST,
+             CASE WHEN %(direction)s='asc' THEN sort_value END ASC NULLS LAST,
+             anomaly_growth DESC NULLS LAST,published_at DESC,publication_id DESC) AS rank,
+           row_number() OVER(PARTITION BY institution_id ORDER BY
+             CASE WHEN %(direction)s='desc' THEN sort_value END DESC NULLS LAST,
+             CASE WHEN %(direction)s='asc' THEN sort_value END ASC NULLS LAST,
+             anomaly_growth DESC NULLS LAST,published_at DESC,publication_id DESC) AS institution_rank,
+           count(*) OVER(PARTITION BY institution_id)::integer AS institution_finding_count,
+           count(*) OVER()::integer AS total
+      FROM visible
+), page AS (
+    SELECT * FROM ranked
+     WHERE (%(group)s='none' AND rank<=%(cap)s) OR (%(group)s='institution' AND institution_rank<=3)
+), summary AS (
+    SELECT count(*) FILTER (WHERE persistent_findings)::integer AS hidden_by_findings FROM scored
+)
+SELECT page.*,summary.hidden_by_findings,identity.external_id,identity.public_url,
+       {MEASURED_COLUMNS}
+  FROM summary
+  LEFT JOIN page ON true
+  LEFT JOIN analytics.publication_latest latest ON latest.publication_id=page.publication_id
+   AND latest.observed_at<=%(as_of)s
   LEFT JOIN LATERAL (
       SELECT value.external_id,value.public_url FROM ingest.publication_identity value
        WHERE value.publication_id=page.publication_id AND value.role='primary'

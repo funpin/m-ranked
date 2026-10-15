@@ -9,8 +9,9 @@ anomaly_analysis/v2/account_tail.py и v2/account_findings.py.
 """
 from __future__ import annotations
 
+import argparse
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 import logging
 import os
 from pathlib import Path
@@ -21,6 +22,7 @@ from .v2.account_findings import (
     METHOD_VERSION as FINDINGS_VERSION, WINDOW_DAYS, LedgerPost, SynchronyEvent, findings, with_texts,
 )
 from .v2.account_tail import POSTS_FROM_DAYS, POSTS_UNTIL_DAYS, PostLedger, profiles, window_end
+from .v2 import reach_findings
 from .v2.store import PostgresAnomalyStore
 from .v2.tail_ledger import MOSCOW, ledger_from_payload
 
@@ -53,7 +55,7 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
         if ledger is not None:
             posts.append(LedgerPost(row["publication_id"], row["account_id"], row["platform"],
                                     row["published_at"], bool(row["is_repost"]), ledger,
-                                    row.get("institution_id")))
+                                    row.get("institution_id"), row.get("publication_type")))
     tail_status = {item.account_id: (item.platform, item.status, {**item.metrics})
                    for item in tail_profiles if item.status is not None}
     persistent = [account for account, (_, status, _) in tail_status.items() if status == 2]
@@ -61,11 +63,33 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
     synchrony = [SynchronyEvent(row["account_id"], row["platform"], row["publication_id"], row["hour"])
                  for row in store.read_synchrony_events(start, end)]
     result = [with_texts(item) for item in findings(posts, computed_for, late, tail_status, synchrony)]
+    # Находки по охватам: уровни и признаки постов окна плюс те же сводки.
+    levels = [reach_findings.PostLevel(row["publication_id"], row["account_id"], row["platform"],
+                                       row["published_at"], int(row["level"]), frozenset(row["patterns"] or ()),
+                                       bool(row["view_pack"]))
+              for row in store.read_post_levels(start, end)]
+    reach = (reach_findings.view_pack_findings(levels, computed_for)
+             + reach_findings.level3_findings(levels, computed_for)
+             + reach_findings.wave_findings(posts, computed_for)
+             + reach_findings.promotion_findings(posts, computed_for)
+             + reach_findings.early_response_findings(posts, computed_for))
+    # «Без суточного ритма» (flat_day_findings) не публикуется: на копии прода
+    # 01.09–07.10 не подтвердилась (research/reach-audit-2026-10/VALIDATION.md).
+    result += [with_texts(item) for item in reach]
     store.write_account_findings(result, FINDINGS_VERSION)
     return result
 
 
+def computed_for_from(as_of: str | None) -> date:
+    """Сутки расчёта — московская дата момента: по умолчанию сейчас."""
+    from .backfill import parse_as_of
+    return parse_as_of(as_of).astimezone(MOSCOW).date()
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Nightly account tail profiles and account findings")
+    parser.add_argument("--as-of", help="Compute as of this ISO moment with time zone (local copies only)")
+    arguments = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     dsn = os.environ.get("ANOMALY_DATABASE_URL", "").strip()
     if not dsn:
@@ -73,7 +97,7 @@ def main() -> None:
     metrics_value = os.environ.get("ANOMALY_TAIL_METRICS_FILE", "").strip()
     started = time.monotonic()
     # Окно заканчивается московской полночью: последние полные сутки — вчера.
-    computed_for = datetime.now(timezone.utc).astimezone(MOSCOW).date()
+    computed_for = computed_for_from(arguments.as_of)
     store = PostgresAnomalyStore(dsn)
     result, posts = run(store, computed_for)
     found = run_findings(store, computed_for, result)

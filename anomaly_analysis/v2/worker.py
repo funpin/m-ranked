@@ -25,11 +25,12 @@ from .norms import NormSet
 from .mature_reference import bundled_reference
 from .schedule import ScheduleConfig, plan, retry_after, stretch_for_lag
 from .series import GAP_FACTOR, HOUR, CollectionCadence
-from .store import DueRow, PostgresAnomalyStore, SeriesTarget, StateWrite
+from .store import KINDS_MILESTONES_HOURS, DueRow, PostgresAnomalyStore, SeriesTarget, StateWrite
 from .tail_ledger import build_ledger
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
 SYNCHRONY_PATTERN = 8
+STREAM_PATTERN = 17
 POLICY_REFRESH_SECONDS = 60.0
 FINAL_ANALYSIS_DAYS = (3, 3650)
 logger = logging.getLogger("anomaly.worker")
@@ -187,7 +188,9 @@ class Worker:
         due = self._postpone_waiting(due, now, stretch)
         if not due:
             return
-        series = self.store.read_series([SeriesTarget(row.publication_id, row.published_at) for row in due])
+        kinds_for = {row.publication_id for row in due if kinds_due(row, now)}
+        series = self.store.read_series([SeriesTarget(row.publication_id, row.published_at) for row in due],
+                                        kinds_for)
         accounts = sorted({item.account_id for item in series.values()}, key=str)
         window_start = now - timedelta(seconds=self.config.activity_lookback_seconds)
         # Одна граница: раньше неё признаки синхронности переносятся из прежнего
@@ -211,7 +214,8 @@ class Worker:
                     subscribers=self._subscribers.get(subject.account_id) or (), analyzed_at=now,
                     cadence=self.cadence, norm_version=self.norm_version,
                     activity=self._activity.get(subject.account_id), reference=self.reference,
-                    carried=_carried(row, detectable_from), synchrony_from=detectable_from)
+                    carried=_carried(row, detectable_from, row.publication_id not in kinds_for),
+                    synchrony_from=detectable_from)
                 writes.append(StateWrite(
                     row.publication_id, row.published_at, now, decision.next_due_at, verdict=verdict,
                     analyzed_points=len(subject.observed_at), last_point_observed_at=subject.observed_at[-1],
@@ -296,14 +300,31 @@ class Worker:
                                   missing, clock, [])
 
 
-def _carried(row: DueRow, detectable_from: datetime):
-    """Признаки синхронности прежнего вывода, которые уже нельзя найти заново."""
+def kinds_due(row: DueRow, now: datetime) -> bool:
+    """Читать ли состав реакций: первый анализ или пост перешёл отметку возраста с прошлого."""
+    if row.analyzed_at is None:
+        return True
+    return any(row.analyzed_at < row.published_at + timedelta(hours=hours) <= now
+               for hours in KINDS_MILESTONES_HOURS)
+
+
+def _carried(row: DueRow, detectable_from: datetime, stream: bool = False):
+    """Признаки прежнего вывода, которые сейчас нельзя найти заново.
+
+    Синхронность — до границы окна агрегатов; поток одной реакции (`stream`) —
+    когда состав реакций в этот раз не читался."""
     carried = []
     for payload in row.signals:
+        if stream and int(payload.get("pattern", 0)) == STREAM_PATTERN:
+            carried.append(sign_from_payload(payload))
+            continue
         if (int(payload.get("pattern", 0)) != SYNCHRONY_PATTERN
                 or payload.get("render", {}).get("measurementMode") != "exact_quality_v1"):
             continue
         sign = sign_from_payload(payload)
-        if sign.interval.start < detectable_from:
+        # Участник волны (молодой пост) сравнивается со свежими постами до
+        # волны; окно агрегатов уходит от них раньше, чем признак попадает за
+        # границу переноса, поэтому найденное участие переносится сразу.
+        if sign.interval.start < detectable_from or sign.render.get("member") == "young":
             carried.append(sign)
     return tuple(carried)

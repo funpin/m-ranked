@@ -26,7 +26,7 @@ import math
 from scipy.stats import poisson
 
 from ..domain import Family, Metric, Sign
-from ..series import PreparedSeries
+from ..series import PreparedSeries, views_ratio_unreliable
 from ..tail_ledger import build_ledger
 from .base import DetectorContext, age_text, make_sign, number
 
@@ -51,7 +51,10 @@ MAX_STRENGTH = 0.6
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
-    ledger = build_ledger(prepared.series, prepared.analyzed_at)
+    # Просмотры не аудитория поста (видео ВК): доля реакций на просмотр ничего не значит.
+    if views_ratio_unreliable(prepared.series):
+        return ()
+    ledger = build_ledger(prepared.series, prepared.analyzed_at, surges=False)
     late = ledger.late
     early = ledger.early
     # Округлённые счётчики Telegram годятся для сравнения аккаунтов, но не для признака поста.

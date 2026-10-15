@@ -14,7 +14,7 @@ from datetime import timedelta
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries
+from ..series import HOUR, PreparedSeries, views_ratio_unreliable
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "joint_cliff"
@@ -66,7 +66,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
 
 def _cliffs(prepared: PreparedSeries, metric: Metric) -> list[tuple[float, float, float, float]]:
     data = prepared.metrics.get(metric)
-    if data is None or data.source_counter or data.ages.size < 6:
+    if data is None or data.source_counter or views_ratio_unreliable(prepared.series) or data.ages.size < 6:
         return []
     ages, values = data.ages, data.values.astype(float)
     # Окно с уменьшением счётчика внутри не судится: префиксная сумма падений.

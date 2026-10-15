@@ -78,8 +78,18 @@ export function qualityLabel(value: string | null | undefined): string {
       return "оценка";
     case "missing":
       return "нет данных";
+    // Ранги analytics.observation_quality_from_rank: площадка не подтвердила
+    // точность, часть замеров неполная, похоже на сброс счётчика, брак.
+    case "unknown":
+      return "точность не подтверждена";
+    case "degraded":
+      return "часть замеров неполная";
+    case "suspected_reset":
+      return "возможен сброс счётчика";
+    case "invalid":
+      return "недостоверные данные";
     default:
-      return value || "качество не указано";
+      return "качество не указано";
   }
 }
 

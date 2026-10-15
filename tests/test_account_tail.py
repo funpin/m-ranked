@@ -111,3 +111,45 @@ def test_daily_breadth_is_described_with_its_denominator():
     assert entry["observed"] >= entry["active"] > 0 and entry["reactions"] == entry["active"]
     assert len(metrics["days"]) == 21 and metrics["windowEnd"] == (END - timedelta(days=1)).date().isoformat()
     assert isinstance(END, datetime)
+
+
+def test_computed_for_is_the_moscow_date_of_as_of():
+    from anomaly_analysis.account_tail_job import computed_for_from
+    # 21:30 UTC 07.10 — уже 08.10 в Москве.
+    assert computed_for_from("2026-10-07T21:30:00+00:00") == date(2026, 10, 8)
+
+
+def test_nightly_job_writes_reach_findings_with_the_others():
+    from datetime import timezone
+    from types import SimpleNamespace
+    from anomaly_analysis.account_tail_job import run_findings
+    published = datetime(2026, 9, 10, 9, tzinfo=timezone.utc)
+    levels = [{"publication_id": UUID(int=a * 1000 + i), "account_id": UUID(int=a), "platform": "vk",
+               "published_at": published + timedelta(hours=7 * i), "level": 3 if (a == 1 and i % 2) else 0,
+               "patterns": [9, 14] if (a == 1 and i % 2) else [], "view_pack": False}
+              for a in range(1, 12) for i in range(60)]
+    written = {}
+    store = SimpleNamespace(
+        read_finding_ledgers=lambda start, end: [], read_late_members=lambda accounts, start, end: {},
+        read_synchrony_events=lambda start, end: [], read_post_levels=lambda start, end: levels,
+        write_account_findings=lambda found, version: written.update(found=found, version=version))
+    run_findings(store, date(2026, 10, 8))
+    assert written["version"] == "account-findings-v7"
+    (finding,) = [item for item in written["found"] if item.kind == "level3_share"]
+    assert finding.account_id == UUID(int=1) and finding.metrics["summary"]
+
+
+def test_nightly_job_does_not_publish_the_unconfirmed_rhythm_finding(monkeypatch):
+    # «Без суточного ритма» на реальных данных не подтвердилась (VALIDATION.md):
+    # ночное задание её не считает.
+    from types import SimpleNamespace
+    from anomaly_analysis import account_tail_job
+    from anomaly_analysis.v2 import reach_findings
+    called = []
+    monkeypatch.setattr(reach_findings, "flat_day_findings", lambda *a, **k: called.append(1) or [])
+    store = SimpleNamespace(
+        read_finding_ledgers=lambda start, end: [], read_late_members=lambda accounts, start, end: {},
+        read_synchrony_events=lambda start, end: [], read_post_levels=lambda start, end: [],
+        write_account_findings=lambda found, version: None)
+    account_tail_job.run_findings(store, date(2026, 10, 8))
+    assert called == []

@@ -177,3 +177,24 @@ def test_analysis_group_is_implemented(contract: dict, app) -> None:
 def test_admin_group_is_implemented(contract: dict, app) -> None:
     implemented = implemented_operations(app)
     assert ADMIN_GROUP <= implemented
+
+
+def test_finding_kinds_cover_what_the_nightly_job_publishes(contract):
+    """Виды аккаунтных находок в контракте — те, что пишет ночное задание (без «ритма»)."""
+    published = {"early_pack", "regular_reactions", "late_growth", "late_engagement", "synchronous_waves",
+                 "engagement_shift", "night_reactions", "view_packs", "view_waves", "level3_share", "promotion",
+                 "early_response"}
+    enums = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            kind = node.get("properties", {}).get("kind") if isinstance(node.get("properties"), dict) else None
+            if isinstance(kind, dict) and "early_pack" in (kind.get("enum") or []):
+                enums.append(set(kind["enum"]))
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+    walk(contract)
+    assert len(enums) == 3 and all(item == published for item in enums)

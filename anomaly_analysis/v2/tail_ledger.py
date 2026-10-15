@@ -27,17 +27,23 @@ from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
+from operator import attrgetter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
+import numpy as np
+
 from .domain import Metric, PostSeries
 
-VERSION = 4
-# Сводки третьей версии читаются: в них нет только почасовой раскладки.
-READABLE_VERSIONS = (3, 4)
+VERSION = 6
+# Сводки третьей версии читаются: в них нет только почасовой раскладки;
+# четвёртой — часов притока (surges); пятой — суток ВК (days).
+READABLE_VERSIONS = (3, 4, 5, 6)
 MOSCOW = ZoneInfo("Europe/Moscow")
 HOUR = 3600
+# С этого значения Telegram показывает просмотры сокращённо («1,2K»).
+COMPACT_FROM = 1000
 DAY = 24 * HOUR
 
 # Ранняя точка — ближайший к суткам совместно точный замер.
@@ -70,6 +76,17 @@ MARKS = {"h2": (2 * HOUR, 1.5 * HOUR, 2.5 * HOUR), "h6": (6 * HOUR, 5 * HOUR, 7 
 HOURLY_FROM = DAY
 HOURLY_UNTIL = LATE_UNTIL
 HOURLY_MAX_GAP = HOUR
+# Часы притока (v5) для аккаунтной находки «волны просмотров по стене»:
+# календарный час, в который пост старше суток получил не меньше
+# max(SURGE_MIN_VIEWS, SURGE_SHARE × просмотров к суткам) по соседним замерам
+# не дальше часа друг от друга. Округлённые просмотры Telegram — по нижней
+# границе прироста. Хранится не больше SURGE_MAX самых крупных часов.
+SURGE_FROM = DAY
+SURGE_UNTIL = 30 * DAY
+SURGE_MAX_GAP = HOUR
+SURGE_MIN_VIEWS = 100
+SURGE_SHARE = 0.15
+SURGE_MAX = 48
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +113,10 @@ class TailLedger:
     # Поздний прирост (просмотры[24], реакции[24]) по часу UTC; None — нет пар
     # или сводка третьей версии.
     hours: tuple[tuple[int, ...], tuple[int, ...]] | None = None
+    # Часы притока: (час UTC от эпохи, просмотры, реакции); пусто — нет или v3/v4.
+    surges: tuple[tuple[int, int, int], ...] = ()
+    # Сутки ВК: (дата МСК, просмотры, реакции, просмотры 00–06); пусто — не ВК или до v6.
+    days: tuple[tuple[str, int, int, int], ...] = ()
 
     @property
     def late(self) -> tuple[int, int] | None:
@@ -116,6 +137,8 @@ class TailLedger:
             "rounded": self.rounded,
             "marks": {key: point.payload() for key, point in self.marks.items()},
             **({"hours": [list(self.hours[0]), list(self.hours[1])]} if self.hours else {}),
+            **({"surges": [list(item) for item in self.surges]} if self.surges else {}),
+            **({"days": [list(item) for item in self.days]} if self.days else {}),
         }
 
 
@@ -131,7 +154,10 @@ def ledger_from_payload(payload: Mapping[str, Any] | None) -> TailLedger | None:
                       {str(day): int(value) for day, value in (payload.get("growth") or {}).items()},
                       bool(payload.get("rounded", False)),
                       {str(key): point(value) for key, value in (payload.get("marks") or {}).items()},
-                      _hours_from(payload.get("hours")))
+                      _hours_from(payload.get("hours")),
+                      tuple(tuple(int(value) for value in item) for item in payload.get("surges") or ()),
+                      tuple((str(item[0]), int(item[1]), int(item[2]), int(item[3]))
+                            for item in payload.get("days") or ()))
 
 
 def _hours_from(value) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
@@ -140,11 +166,12 @@ def _hours_from(value) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
     return tuple(int(item) for item in value[0]), tuple(int(item) for item in value[1])
 
 
-def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> TailLedger:
+def build_ledger(series: PostSeries, analyzed_at: datetime | None = None, *, surges: bool = True) -> TailLedger:
     """Сводка позднего отклика по ряду поста на момент анализа.
 
     Репост получает только отметки: его просмотры собственные, но поздний
     отклик чужого содержания с профилем аккаунта не сравнивается (ADR-015).
+    `surges=False` — без часов притока (признаку поста они не нужны).
     """
     limit = analyzed_at.timestamp() if analyzed_at is not None else float("inf")
     published = series.published_at.timestamp()
@@ -175,7 +202,43 @@ def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> Tai
     covered, growth = _days(exact_r, published)
     rounded = any(point is not None and point.age in inexact for point in (early, start, end))
     return TailLedger(early, start, end, covered, growth, rounded, marks,
-                      _hours(joint, inexact, published))
+                      _hours(joint, inexact, published),
+                      _surges(series, joint, early, published) if surges else (),
+                      _post_days(joint, inexact, published) if surges and series.platform in DAYS_PLATFORMS else ())
+
+
+# Сутки поста ВК для находки «похоже на продвижение» (reach_findings): прирост
+# просмотров и реакций за московские сутки со вторых по 14-е и просмотры за
+# 00–06 МСК. Только ВК: показы рекламы записи засчитываются как её просмотры.
+# Как и `_days`, только настоящие замеры: прирост относится к суткам, в которые
+# он впервые наблюдался, сутки с разрывом замеров длиннее DAY_BRACKET — неизвестны.
+DAYS_PLATFORMS = frozenset({"vk"})
+DAYS_UNTIL = 14
+NIGHT_UNTIL_HOUR = 6
+
+
+def _post_days(points: list[Point], inexact: set[float], published: float) -> tuple[tuple[str, int, int, int], ...]:
+    exact = [point for point in points if point.age not in inexact]
+    if len(exact) < 2:
+        return ()
+    instants = [published + point.age for point in exact]
+    day = _moscow_midnight(published) + timedelta(days=1)
+    found = []
+    for _ in range(DAYS_UNTIL):
+        start, end = day.timestamp(), (day + timedelta(days=1)).timestamp()
+        if end > instants[-1]:
+            break
+        before = bisect_right(instants, start) - 1
+        through = bisect_right(instants, end) - 1
+        after = bisect_left(instants, end)
+        night = bisect_right(instants, start + NIGHT_UNTIL_HOUR * HOUR) - 1
+        if before >= 0 and all(right - left <= DAY_BRACKET
+                               for left, right in zip(instants[before:after], instants[before + 1:after + 1])):
+            found.append((day.date().isoformat(), max(0, exact[through].views - exact[before].views),
+                          max(0, exact[through].reactions - exact[before].reactions),
+                          max(0, exact[night].views - exact[before].views)))
+        day += timedelta(days=1)
+    return tuple(found)
 
 
 def _hours(points: list[Point], inexact: set[float],
@@ -192,6 +255,53 @@ def _hours(points: list[Point], inexact: set[float],
         reactions[hour] += max(0, right.reactions - left.reactions)
         counted = True
     return (tuple(views), tuple(reactions)) if counted else None
+
+
+_age, _views, _reactions = attrgetter("age"), attrgetter("views"), attrgetter("reactions")
+
+
+def _surges(series: PostSeries, points: list[Point], early: Point | None,
+            published: float) -> tuple[tuple[int, int, int], ...]:
+    """Календарные часы крупного притока просмотров поста старше суток.
+
+    Массивами: сводку строит каждый анализ поста, и цикл по парам замеров
+    стоил ~0,2 мс на пост.
+    """
+    if early is None or len(points) < 2:
+        return ()
+    threshold = max(SURGE_MIN_VIEWS, SURGE_SHARE * early.views)
+    # Пары начинаются не раньше суток. Если после суток пост набрал меньше
+    # порога одного часа, часа притока нет: прирост пары не больше разности
+    # показанных значений. Счётчик просмотров не убывает; при уменьшении проверка
+    # лишь осторожнее (пропустит час, но не добавит лишний).
+    first = max(0, bisect_left(points, SURGE_FROM, key=_age) - 1)
+    points = points[first:]
+    if len(points) < 2 or points[-1].views - points[0].views < threshold:
+        return ()
+    ages = np.fromiter(map(_age, points), dtype=np.float64, count=len(points))
+    views = np.fromiter(map(_views, points), dtype=np.int64, count=len(points))
+    reactions = np.fromiter(map(_reactions, points), dtype=np.int64, count=len(points))
+    pairs = (ages[:-1] >= SURGE_FROM) & (ages[1:] <= SURGE_UNTIL) & (np.diff(ages) <= SURGE_MAX_GAP)
+    if not pairs.any():
+        return ()
+    unit = np.zeros(views.size, dtype=np.int64)
+    if series.platform in ROUNDED_PLATFORMS:
+        # Показанное «1,2K» — коридор: прирост берётся наименьший возможный.
+        compact = views >= COMPACT_FROM
+        unit[compact] = 1
+        for _ in range(9):
+            step = compact & (views % np.maximum(unit * 10, 1) == 0) & (unit < 10**9)
+            if not step.any():
+                break
+            unit[step] *= 10
+    gained = np.maximum(0, (views[1:] - unit[1:]) - (views[:-1] + unit[:-1]))[pairs]
+    reacted = np.maximum(0, np.diff(reactions))[pairs]
+    hours, inverse = np.unique(((published + ages[1:][pairs]) // HOUR).astype(np.int64), return_inverse=True)
+    totals = np.bincount(inverse, weights=gained, minlength=hours.size)
+    responses = np.bincount(inverse, weights=reacted, minlength=hours.size)
+    found = np.flatnonzero(totals >= threshold)
+    top = found[np.argsort(-totals[found], kind="stable")[:SURGE_MAX]]
+    return tuple(sorted((int(hours[i]), int(totals[i]), int(responses[i])) for i in top))
 
 
 def _marks(points: list[Point]) -> dict[str, Point]:

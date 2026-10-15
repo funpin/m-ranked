@@ -85,7 +85,7 @@ def test_reposts_compare_with_themselves_but_skip_norms_and_late_engagement():
     _, versions = run_detectors(prepared, DetectorContext("telegram"))
     assert set(versions) == {"preparation", "aggregation", "linear_feed", "burst_plateau", "bounded_reaction_burst",
                              "reactions_before_views", "reactions_exceed_views", "engagement_regime",
-                             "reaction_write_off", "joint_cliff"}
+                             "reaction_write_off", "joint_cliff", "reaction_stream"}
     # Просмотры репоста — собственные: оговорки о чужом счётчике нет.
     assert "repost_source_counter" not in assess(prepared.series).quality.codes
 
@@ -137,7 +137,7 @@ def test_glossary_of_adr_006_holds_for_every_text_and_formula():
 
 
 def test_all_symbols_from_the_plan_are_distinct():
-    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 15
+    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 17
     assert np.all([pattern in TITLES for pattern in SYMBOLS])
     assert levels.STRONG > YOUNG_NORM_CAP >= levels.MEDIUM
 
@@ -159,3 +159,49 @@ def test_one_reaction_pack_seen_by_two_detectors_counts_once():
     # Отдельное событие через час остаётся отдельным признаком.
     later = verdict(_prepared(), DetectorContext("telegram"), [*signs, reactions(9, Family.SHAPE, .8, (90, 95))], {})
     assert len(later.signs) == 2
+
+
+def _clip(kind):
+    from uuid import UUID
+    from anomaly_analysis.v2.domain import PostSeries
+    start = datetime(2026, 9, 6, 9, tzinfo=timezone.utc)
+    at = tuple(start + timedelta(minutes=5 * i) for i in range(1, 300))
+    views = tuple(100 + 3 * i for i in range(1, 300))           # стена: ~1 000 просмотров
+    reactions = tuple(min(850, 6 * i) for i in range(1, 300))   # клип: 850 реакций
+    return PostSeries(UUID(int=1), UUID(int=2), "vk", start, False, at,
+                      {Metric.VIEWS: views, Metric.REACTIONS: reactions}, publication_type=kind)
+
+
+def test_vk_video_with_reactions_above_views_is_not_judged_by_view_ratios():
+    from anomaly_analysis.v2.levels import assess, compact
+    payload = compact(assess(_clip("video")))
+    assert "vk_video_views" in payload["quality"]["codes"]
+    assert not any(signal["pattern"] in (5, 6, 7, 10, 13, 14) for signal in payload["signals"])
+
+
+def test_the_same_photo_post_still_gets_view_ratio_signs():
+    from anomaly_analysis.v2.levels import assess, compact
+    payload = compact(assess(_clip("photo")))
+    assert any(signal["pattern"] in (5, 6, 7, 10, 13, 14) for signal in payload["signals"])
+
+
+def _reactions_without_wall_views(kind):
+    from uuid import UUID
+    from anomaly_analysis.v2.domain import PostSeries
+    start = datetime(2026, 9, 6, 9, tzinfo=timezone.utc)
+    at = tuple(start + timedelta(minutes=5 * i) for i in range(1, 200))
+    views = tuple(400 + i for i in range(1, 200))
+    # Реакции разом +60 за 15 минут на 10-м часу при почти стоящих просмотрах стены.
+    reactions = tuple(5 + (60 if i >= 120 else 0) + (i - 120) // 3 * (i >= 123) for i in range(1, 200))
+    return PostSeries(UUID(int=1), UUID(int=2), "vk", start, False, at,
+                      {Metric.VIEWS: views, Metric.REACTIONS: reactions}, publication_type=kind)
+
+
+def test_vk_video_reactions_ahead_of_wall_views_are_not_sign_six():
+    from anomaly_analysis.v2.detectors import DetectorContext, reactions_before_views
+    def six(kind):
+        series = _reactions_without_wall_views(kind)
+        return reactions_before_views.detect(prepare(series, series.observed_at[-1], CollectionCadence()),
+                                             DetectorContext("vk"))
+    assert six("photo")
+    assert six("video") == ()

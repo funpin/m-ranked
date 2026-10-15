@@ -50,7 +50,7 @@ def test_publication_types_fold_into_five_buckets() -> None:
 def _query(**overrides):
     values = {"mode": None, "institution": None, "platform": None, "period": None,
               "types": None, "sort": None, "direction": None, "group": None,
-              "q": None, "anomalies": None}
+              "q": None, "anomalies": None, "clean": None}
     values.update(overrides)
     return findings_query(**values)
 
@@ -82,6 +82,8 @@ def test_findings_query_normalizes_aliases_and_type_order() -> None:
     ({"mode": "institution", "institution": "12", "group": "institution"}, "группировка"),
     ({"group": "platform"}, "группировка"),
     ({"anomalies": "hide"}, "anomalies"),
+    ({"clean": "yes"}, "clean"),
+    ({"sort": "anomaly"}, "сортировка"),
     ({"q": "a" * 201}, "200"),
 ])
 def test_findings_query_rejects_unknown_values(overrides, message) -> None:
@@ -112,7 +114,8 @@ def _row(number: int, institution: int = 1, **overrides) -> dict:
         "interaction_norm": 20.0, "view_norm": 1000.0, "norm_sample": 12, "interactions": 50,
         "reactions": 40, "comments": 10, "shares": None, "views": 1200, "erv": Decimal("4.1666"),
         "level": None, "rank": number, "institution_rank": number,
-        "institution_finding_count": 3, "total": 3, "hidden_anomalous": 2,
+        "institution_finding_count": 3, "total": 3, "hidden_anomalous": 2, "hidden_by_findings": 1,
+        "account_findings": [{"kind": "late_growth", "status": 2}], "persistent_findings": True,
     }
     row.update(overrides)
     return row
@@ -135,6 +138,8 @@ def test_findings_body_pages_list_and_reports_summary() -> None:
     assert [item["externalId"] for item in body["items"]] == ["-1_1", "-1_2"]
     assert body["hasMore"] is True and body["nextCursor"]
     assert (body["total"], body["hiddenAnomalous"], body["groups"]) == (3, 2, [])
+    assert body["hiddenByFindings"] == 1 and body["clean"] is False
+    assert body["items"][0]["accountFindings"] == [{"kind": "late_growth", "status": 2}]
 
 
 def test_findings_body_groups_by_institution_in_rank_order() -> None:
@@ -147,7 +152,7 @@ def test_findings_body_groups_by_institution_in_rank_order() -> None:
 
 
 def test_findings_body_handles_summary_only_row() -> None:
-    empty = {key: None for key in _row(1)} | {"hidden_anomalous": 4}
+    empty = {key: None for key in _row(1)} | {"hidden_anomalous": 4, "hidden_by_findings": 0}
     body = findings_body(_query(), [empty], [], 50, None, 9, datetime(2026, 9, 27, tzinfo=timezone.utc), "d")
     assert body["items"] == [] and body["total"] == 0 and body["hiddenAnomalous"] == 4
 
@@ -202,3 +207,44 @@ def test_norms_cache_does_not_keep_a_failed_load() -> None:
         assert await cache.get(good) == []
 
     asyncio.run(scenario())
+
+
+def test_findings_query_promotion_filter() -> None:
+    assert _query().promotion == "all"
+    assert _query(promotion="only").promotion == "only" and _query(promotion="hide").promotion == "hide"
+    assert len({_query(promotion=value).dimensions for value in ("all", "only", "hide")}) == 3
+    assert _query(promotion="all").dimensions == _query().dimensions
+    with pytest.raises(BadRequest):
+        _query(promotion="yes")
+
+
+def test_findings_query_clean_and_anomalous_view() -> None:
+    assert _query(clean="1").clean is True and _query(clean="0").clean is False
+    assert _query(clean="1").dimensions != _query().dimensions
+    anomalous = _query(view="anomalous")
+    assert anomalous.sort == "anomaly" and anomalous.dimensions != _query().dimensions
+    assert _query(view="anomalous", sort="anomaly_volume").sort == "anomaly_volume"
+    with pytest.raises(BadRequest):
+        _query(view="anomalous", sort="interaction_index")
+
+
+def _anomalous_row(number: int, **overrides) -> dict:
+    row = {key: value for key, value in _row(number).items() if key not in {
+        "age_hours", "preliminary", "interaction_index", "view_index", "interaction_norm",
+        "view_norm", "norm_sample", "interactions", "erv", "hidden_anomalous"}}
+    row.update({"level": 3, "anomaly_share": 0.83333, "anomaly_growth": 1000.4, "anomaly_metric": "views",
+                "anomaly_pattern": 1, "anomaly_signals": [
+                    {"pattern": 1, "title": "Линейная подача", "metric": "views", "strength": Decimal("0.95")}]})
+    row.update(overrides)
+    return row
+
+
+def test_anomalous_body_has_its_own_rows_and_no_norm_fields() -> None:
+    query = _query(view="anomalous")
+    body = findings_body(query, [_anomalous_row(1), _anomalous_row(2, anomaly_share=None, anomaly_growth=None)],
+                         [], 50, None, 9, datetime(2026, 9, 27, tzinfo=timezone.utc), "d")
+    first, second = body["items"]
+    assert first["anomalyLevel"] == 3 and first["anomalyShare"] == 0.8333 and first["anomalyGrowth"] == 1000
+    assert first["signals"] == [{"pattern": 1, "title": "Линейная подача", "metric": "views", "strength": 0.95}]
+    assert second["anomalyShare"] is None and second["anomalyGrowth"] is None
+    assert "hiddenAnomalous" not in body and "anomalies" not in body and body["sort"] == "anomaly"

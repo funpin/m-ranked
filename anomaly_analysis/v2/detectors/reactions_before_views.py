@@ -13,7 +13,7 @@ from datetime import timedelta
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import DAY, HOUR, PreparedSeries, views_belong_to_source
+from ..series import DAY, HOUR, PreparedSeries, views_ratio_unreliable
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "reactions_before_views"
@@ -44,7 +44,9 @@ ENDPOINT_MODE = "observed_gap_endpoints_v1"
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
-    if reactions is None or views is None:
+    # Просмотры не аудитория поста (видео ВК): реакции из ленты клипов
+    # «обгоняют» просмотры стены без всякой аномалии.
+    if reactions is None or views is None or views_ratio_unreliable(prepared.series):
         return ()
     grid = reactions.grids.get(SCALE)
     if grid is None or not grid.rates.size:
@@ -89,7 +91,7 @@ def _gap_endpoints(prepared: PreparedSeries, context: DetectorContext) -> tuple[
     observed negative correction make the whole comparison unavailable.
     """
     series = prepared.series
-    if series.platform != "max" or views_belong_to_source(series):
+    if series.platform != "max" or views_ratio_unreliable(series):
         return ()
     reactions = prepared.metrics.get(Metric.REACTIONS)
     if reactions is None or Metric.VIEWS not in prepared.metrics:

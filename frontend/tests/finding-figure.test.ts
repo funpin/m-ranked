@@ -13,3 +13,11 @@ test("a spread of zero is not divided by: it is said to be at the level of chanc
   assert.equal(figureComparison({ value: 0, typical: 0.29, unit: "decimal", label: "", direction: "lower" }),
     "не больше случайного");
 });
+
+test("shares are compared as a ratio, not in percentage points", () => {
+  assert.equal(figureComparison({ value: 0.5, typical: 0.06, unit: "percent", label: "постов в волнах реакций", direction: "higher" }),
+    "в 8,3 раза чаще");
+  assert.equal(figureComparison({ value: 0.35, typical: 0, unit: "percent", label: "постов на уровне 3", direction: "higher" }),
+    "у типичного — почти нет");
+  assert.equal(figureComparison({ value: 0.12, typical: 0.1, unit: "percent", label: "постов на уровне 3", direction: "higher" }), null);
+});

@@ -1,0 +1,243 @@
+"""Пакеты и подача просмотров: короткая с публикации, поздняя сквозь «1.2K»."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
+
+from anomaly_analysis.v2.detectors import DetectorContext, linear_feed
+from anomaly_analysis.v2.domain import Metric, PostSeries
+from anomaly_analysis.v2.series import CollectionCadence, prepare
+
+MSK_NOON = datetime(2026, 10, 1, 9, tzinfo=timezone.utc)   # 12:00 МСК
+
+
+def tg_display(value: int) -> int:
+    """Как Telegram показывает просмотры: три значащие цифры с тысячи."""
+    if value < 1000:
+        return value
+    unit = 10 ** (len(str(value)) - 3)
+    return value // unit * unit
+
+
+def build(platform, rates, *, start=MSK_NOON, step=5, reactions=None, kind="photo", rounded=False,
+          per_view=None):
+    """Ряд по почасовым темпам просмотров; замер каждые `step` минут."""
+    at, views, total = [], [], 0.0
+    for minute in range(step, 60 * len(rates) + 1, step):
+        total += rates[(minute - 1) // 60] * step / 60
+        at.append(start + timedelta(minutes=minute))
+        views.append(int(total))
+    shown = [tg_display(value) for value in views] if rounded else views
+    quality = tuple("rounded" if rounded and value >= 1000 else "exact" for value in views)
+    reacts = (reactions if reactions is not None else
+              [int(v * per_view) for v in views] if per_view is not None else
+              [min(40 + i // 6, 400) for i in range(len(views))])
+    return PostSeries(UUID(int=7), UUID(int=8), platform, start, False, tuple(at),
+                      {Metric.VIEWS: tuple(shown), Metric.REACTIONS: tuple(reacts[:len(views)])},
+                      qualities={Metric.VIEWS: quality, Metric.REACTIONS: ("exact",) * len(views)},
+                      publication_type=kind)
+
+
+def feed_signs(series):
+    prepared = prepare(series, series.observed_at[-1], CollectionCadence())
+    return [sign for sign in linear_feed.detect(prepared, DetectorContext(series.platform))
+            if sign.metric is Metric.VIEWS]
+
+
+def test_telegram_drip_through_rounded_views_is_found():
+    # МИСИС 01.10: ~300/ч к шестому часу, затем ровно 1 200/ч ещё 30 часов
+    # (ступенька вверх в 4 раза; конец ряда — подача ещё идёт).
+    rates = [600, 400, 320, 300, 300, 300] + [1200] * 30
+    signs = [s for s in feed_signs(build("telegram", rates, step=15, rounded=True))
+             if s.render.get("mode") != "short_views"]
+    assert signs and all(s.render["measurementMode"] == "bounded_views" for s in signs)
+
+
+def test_organic_decay_through_rounding_is_not_a_feed():
+    # Крупный пост: 3 000 → 300/ч плавно; «13.2K» и т. п. — без ступеньки и обрыва.
+    rates = [3000, 2500, 2000, 1500, 1200, 1000, 800] + [300] * 10
+    assert feed_signs(build("telegram", rates, step=15, rounded=True)) == []
+
+
+def short(series):
+    return [s for s in feed_signs(series) if s.render.get("mode") == "short_views"]
+
+
+def kosygin(start=MSK_NOON, platform="vk", reactions=None, rounded=False, after=15, per_view=None, kind="photo"):
+    # ~400/ч три часа с публикации, затем `after`/ч: пакет ~1 200 при органике в десятки.
+    return build(platform, [420, 400, 380] + [after] * 21, start=start, reactions=reactions,
+                 rounded=rounded, per_view=per_view, kind=kind)
+
+
+def pack_then_rest(pack_reactions, rest_reactions):
+    """Реакции: `pack_reactions` за первые 3 ч, затем ровно до `rest_reactions` сверху."""
+    return [round(pack_reactions * min(i, 36) / 36) + round(rest_reactions * max(0, i - 36) / 252)
+            for i in range(288)]
+
+
+def test_view_pack_from_publication_is_pronounced():
+    # Обрыв в 6,7 раза (60/ч после), в пакете 2,5 реакции на 1 000, у остального поста ~24.
+    (sign,) = short(kosygin(after=60, reactions=pack_then_rest(3, 30)))
+    assert 0.75 <= sign.strength < 0.95
+    assert 1000 <= sign.render["packViews"] <= 1300
+
+
+def test_silent_pack_with_hard_stop_is_explicit():
+    # Обрыв в 26 раз, в пакете ни одной реакции, остальной пост отвечает как обычно.
+    (sign,) = short(kosygin(reactions=pack_then_rest(0, 30)))
+    assert sign.strength >= 0.95
+
+
+def test_pack_without_reactions_to_compare_is_not_a_sign():
+    # Реакций на посте нет вовсе: отклик не проверить — свидетельства нет
+    # (на карточках 22.09–07.10 такие слабые сигналы ложились и на органику).
+    assert short(kosygin(reactions=[0] * 288)) == []
+
+
+def test_organic_decay_is_not_a_pack():
+    # Живой пост ВК: 400 → 200 → 120 → 80 … — без ровного участка и обрыва.
+    assert short(build("vk", [400, 200, 120, 80, 60, 50, 40, 30, 25, 20] + [15] * 14)) == []
+
+
+def test_pack_with_ordinary_response_is_not_flagged():
+    # Попадание в рекомендации: темп ровный, но реакции идут как у остального поста.
+    # После пакета 60/ч: у остального поста хватает реакций для сравнения,
+    # и отклик в участке обычный — признака нет.
+    assert short(kosygin(after=60, per_view=0.012)) == []
+
+
+def test_stop_at_night_is_not_evidence():
+    late = datetime(2026, 10, 1, 18, tzinfo=timezone.utc)   # 21:00 МСК, обрыв ~00:00
+    assert short(kosygin(start=late, reactions=pack_then_rest(0, 30))) == []
+
+
+def test_vk_feed_limit_is_not_a_stop():
+    # Ровные 400/ч с 12-го по 22-й час и спад на 22-м: это граница ленты ВК (22–26 ч).
+    # Короткая ветка проверяется напрямую: поздняя ветка того же участка сильнее
+    # и при сборке вытесняет короткий признак.
+    series = build("vk", [60] * 12 + [400] * 10 + [5] * 6, reactions=pack_then_rest(0, 30) + [30] * 48)
+    assert linear_feed._short_views(prepare(series, series.observed_at[-1], CollectionCadence())) is None
+
+
+def test_collection_gap_inside_the_pack_gives_no_sign():
+    series = kosygin(reactions=pack_then_rest(0, 30))
+    keep = [i for i, at in enumerate(series.observed_at)
+            if not timedelta(hours=1) <= at - series.published_at <= timedelta(hours=2, minutes=30)]
+    gapped = PostSeries(series.publication_id, series.account_id, series.platform, series.published_at, False,
+                        tuple(series.observed_at[i] for i in keep),
+                        {m: tuple(col[i] for i in keep) for m, col in series.values.items()},
+                        qualities={m: tuple(col[i] for i in keep) for m, col in series.qualities.items()},
+                        publication_type="photo")
+    assert short(gapped) == []
+
+
+def test_rounded_telegram_pack_is_found_through_bounds():
+    (sign,) = short(build("telegram", [1500, 1450, 1500] + [30] * 21, rounded=True,
+                          reactions=pack_then_rest(1, 30)))
+    assert sign.render["measurementMode"] == "bounded_views"
+
+
+def test_vk_video_keeps_view_shape_checks():
+    # Просмотры стены у клипа можно накрутить так же, как у фото: форма просмотров
+    # проверяется, отключаются только сравнения реакций с просмотрами.
+    (sign,) = short(kosygin(kind="video", reactions=pack_then_rest(0, 30)))
+    assert sign.strength >= 0.95
+
+
+def batched(series, pattern=(0.4, 2.2, 0.5, 0.9)):
+    """Как ВК обновляет просмотры порциями: 15-минутные приросты неровные, часовые — те же."""
+    views = list(series.values[Metric.VIEWS])
+    out, carried = [], 0.0
+    for index in range(len(views)):
+        if index == 0:
+            out.append(views[0])
+            continue
+        step = views[index] - views[index - 1]
+        carried += step * pattern[(index // 3) % len(pattern)]
+        out.append(max(out[-1], min(views[index], int(views[0] + carried))))
+    out[-1] = views[-1]
+    return PostSeries(series.publication_id, series.account_id, series.platform, series.published_at, False,
+                      series.observed_at, {**series.values, Metric.VIEWS: tuple(out)},
+                      qualities=series.qualities, publication_type=series.publication_type)
+
+
+def test_pack_with_batched_counter_updates_is_found():
+    # Темпы по 15 минутам от 200 до 700, по часам ровные: Косыгин 22.09.
+    (sign,) = short(batched(kosygin(reactions=pack_then_rest(0, 30))))
+    assert sign.strength >= 0.75
+
+
+def test_short_collection_gap_inside_the_pack_is_tolerated():
+    # Полчаса без замеров внутри трёхчасового пакета: сумма участка известна по краям.
+    series = kosygin(reactions=pack_then_rest(0, 30))
+    keep = [i for i, at in enumerate(series.observed_at)
+            if not timedelta(hours=1) < at - series.published_at < timedelta(hours=1, minutes=30)]
+    gapped = PostSeries(series.publication_id, series.account_id, series.platform, series.published_at, False,
+                        tuple(series.observed_at[i] for i in keep),
+                        {m: tuple(col[i] for i in keep) for m, col in series.values.items()},
+                        qualities={m: tuple(col[i] for i in keep) for m, col in series.qualities.items()},
+                        publication_type="photo")
+    (sign,) = short(gapped)
+    assert sign.strength >= 0.75
+
+
+def test_pack_polled_every_twenty_minutes_is_found():
+    # Косыгин в ВК опрашивается раз в 20 минут: ячейки по 15 минут без своего
+    # замера, но сумма за час известна — пакет судится по фактическим замерам.
+    series = build("vk", [420, 400, 380] + [15] * 21, step=20, reactions=pack_then_rest(0, 30)[::4])
+    (sign,) = short(series)
+    # Первые 20 минут до первого замера не видны: сумма участка чуть меньше пакета.
+    assert sign.strength >= 0.75 and 900 <= sign.render["packViews"] <= 1300
+
+
+def test_pack_with_hour_long_holes_in_polling_gives_no_sign():
+    # Замер раз в час: внутри часа формы участка не видно — признака нет.
+    series = build("vk", [420, 400, 380] + [15] * 21, step=60, reactions=pack_then_rest(0, 30)[::12])
+    assert short(series) == []
+
+
+def by_minute(rate_at, minutes=24 * 60, step=5, reactions=None):
+    """Ряд ВК с темпом просмотров rate_at(минута) в час; замер каждые `step` минут."""
+    at, views, total = [], [], 0.0
+    for minute in range(step, minutes + 1, step):
+        total += rate_at(minute) * step / 60
+        at.append(MSK_NOON + timedelta(minutes=minute))
+        views.append(int(total))
+    reacts = (reactions or pack_then_rest(0, 30))[:len(views)]
+    return PostSeries(UUID(int=7), UUID(int=8), "vk", MSK_NOON, False, tuple(at),
+                      {Metric.VIEWS: tuple(views), Metric.REACTIONS: tuple(reacts)}, publication_type="photo")
+
+
+def test_pack_of_an_hour_and_three_quarters_is_found():
+    # Косыгин 16.09, 16:00: ~400/ч 1 ч 45 мин с публикации, затем 25–60/ч.
+    (sign,) = short(by_minute(lambda minute: 400 if minute <= 105 else 25))
+    assert sign.strength >= 0.75
+
+
+def test_hour_long_pack_is_too_short_to_judge():
+    assert short(by_minute(lambda minute: 400 if minute <= 60 else 25)) == []
+
+
+def test_old_post_gives_the_same_pack_as_a_young_one():
+    # Пакет ищется в первые сутки; хвост в 30 суток на вывод не влияет.
+    young = kosygin(reactions=pack_then_rest(0, 30))
+    old = build("vk", [420, 400, 380] + [15] * 21 + [5] * (29 * 24), step=15,
+                reactions=pack_then_rest(0, 30)[::3] + [30] * (29 * 24 * 4))
+    (a,), (b,) = short(young), short(old)
+    assert abs(a.render["packViews"] - b.render["packViews"]) < 60 and b.strength >= 0.75
+
+
+def test_telegram_fine_bounded_grid_covers_only_the_first_day():
+    series = build("telegram", [1500, 1450, 1500] + [30] * 21 + [10] * (10 * 24), step=15, rounded=True,
+                   reactions=pack_then_rest(1, 30)[::3] + [31] * (10 * 24 * 4))
+    grid = prepare(series, series.observed_at[-1], CollectionCadence()).bounded_views.data.grids[
+        linear_feed.VIEW_SHORT_SCALE]
+    assert grid.edges[-1] <= 27 * 3600
+
+
+def test_hourly_polled_platform_skips_the_pack_search_early(monkeypatch):
+    # Шаг сбора RuTube — час: пакет не судится, и сетка даже не читается.
+    series = build("rutube", [420, 400, 380] + [15] * 21, step=60, reactions=pack_then_rest(0, 30)[::12])
+    prepared = prepare(series, series.observed_at[-1], CollectionCadence())
+    monkeypatch.setattr(linear_feed, "_spaced", lambda *a: (_ for _ in ()).throw(AssertionError("grid read")))
+    assert linear_feed._short_views(prepared) is None

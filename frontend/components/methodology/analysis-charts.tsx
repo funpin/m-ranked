@@ -150,9 +150,9 @@ function LevelsChart() {
   );
 }
 
-const FAMILIES = [["velocity", "скорость"], ["shape", "форма"], ["cross_metric", "согласие метрик"], ["synchrony", "синхронность"]] as const;
+const FAMILIES = [["velocity", "скорость"], ["shape", "форма"], ["cross_metric", "согласие метрик"], ["synchrony", "синхронность"], ["composition", "состав реакций"]] as const;
 
-const FAMILY_COLORS = { velocity: "var(--chart-2)", shape: "var(--chart-3)", cross_metric: "var(--chart-1)", synchrony: "var(--chart-4)" } as const;
+const FAMILY_COLORS = { velocity: "var(--chart-2)", shape: "var(--chart-3)", cross_metric: "var(--chart-1)", synchrony: "var(--chart-4)", composition: "var(--chart-5)" } as const;
 
 function FamiliesChart() {
   const platforms = ["telegram", "vk", "max", "rutube"] as const;

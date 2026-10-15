@@ -142,6 +142,57 @@ test("account page explains late engagement against the platform without waiting
   await expect(card).not.toContainText(/накрут|мошен/);
 });
 
+test("an account with many findings shows three in full and folds the rest into one line",async({page})=>{
+  await page.goto("/channels/2");
+  const card=page.getByTestId("account-analysis-card");
+  await expect(card.getByTestId("account-analysis-summary")).toContainText("5");
+  await expect(card.getByTestId("account-finding").filter({visible:true})).toHaveCount(3);
+  const more=card.getByTestId("account-findings-more");
+  await expect(more.locator("summary")).toContainText("Ещё 3: Находка 4, Находка 5, Отклик на старые посты");
+  await more.locator("summary").click();
+  await expect(card.getByTestId("account-finding").filter({visible:true})).toHaveCount(6);
+  // Свёрнутые строки — без линейки: она в «подробнее».
+  await expect(more.getByRole("figure")).toHaveCount(0);
+  await more.getByTestId("account-finding").first().getByRole("button",{name:"подробнее"}).click();
+  await expect(page.getByTestId("account-finding-details")).toContainText("Находка 4");
+  await page.keyboard.press("Escape");
+  // «Слишком ровный отклик» — коридор случайности вместо линейки.
+  await more.getByTestId("account-finding").nth(1).getByRole("button",{name:"подробнее"}).click();
+  const details=page.getByTestId("account-finding-details").filter({has:page.getByTestId("reaction-corridor")});
+  await expect(details.getByTestId("reaction-corridor")).toBeVisible();
+  await expect(details.getByRole("img",{name:/0 из 30 постов вне коридора/})).toBeVisible();
+  await expect(details.getByRole("figure").filter({hasText:"типично для"})).toHaveCount(0);
+  // Окно не растягивается на весь экран: высота — по содержимому.
+  const box=await details.boundingBox();
+  const viewport=page.viewportSize()!;
+  expect(box!.height).toBeLessThan(viewport.height-40);
+});
+
+test("each account finding kind has its own chart with labelled values",async({page})=>{
+  await page.goto("/accounts/00000002-0000-4000-8000-000000000002");
+  const card=page.getByTestId("account-analysis-card");
+  const early=card.locator('[data-kind="early_pack"]');
+  // В строке — две полосы от нуля с числами, а не точка на шкале без делений.
+  const bars=early.getByTestId("compare-bars");
+  await expect(bars).toHaveAttribute("aria-label",/этот аккаунт — 53×, типичный аккаунт ВК — 3,2×/);
+  await early.getByRole("button",{name:"подробнее"}).click();
+  let details=page.getByTestId("account-finding-details").filter({hasText:"early_pack"});
+  await expect(details.getByRole("img",{name:/Реакций на 1 000 просмотров: в первые часы 124, за остаток суток 4,2/})).toBeVisible();
+  await page.keyboard.press("Escape");
+  const night=card.locator('[data-kind="night_reactions"]');
+  await expect(night.getByTestId("compare-bars")).toHaveAttribute("aria-label",/поздних реакций — 31 %, поздних просмотров — 5 %/);
+  await card.getByTestId("account-findings-more").locator("summary").click();
+  await card.locator('[data-kind="promotion"]').getByRole("button",{name:"подробнее"}).click();
+  details=page.getByTestId("account-finding-details").filter({hasText:"promotion"});
+  await expect(details.getByTestId("finding-stats")).toContainText("24 641");
+  await page.keyboard.press("Escape");
+  await page.goto("/channels/2");
+  const waves=page.getByTestId("account-analysis-card").locator('[data-kind="synchronous_waves"]');
+  await waves.getByRole("button",{name:"подробнее"}).click();
+  details=page.getByTestId("account-finding-details").filter({has:page.getByTestId("wave-calendar")});
+  await expect(details.getByRole("img",{name:"Дни с волной реакций: 5 из 31"})).toBeVisible();
+});
+
 test("a post without signals reads calmly and an unanalyzed post says so",async({page})=>{
   await page.goto("/posts/3");
   await expect(page.getByTestId("anomaly-toggle")).toContainText("Нет признаков");

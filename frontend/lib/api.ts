@@ -1,6 +1,7 @@
 import createClient from "openapi-fetch";
 import type { paths } from "../../contracts/openapi/m-ranked-v1-client";
 import type { ApiProblem, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection, FindingsRequest } from "./types";
+import type { AboveNormSort, AnomalousSort } from "./findings";
 import type { OverviewSort } from "./params";
 import { revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
 import { publicResponseCacheFromEnv } from "./bounded-response-cache";
@@ -152,8 +153,25 @@ export function createApiClient(options: ApiClientOptions = {}) {
         mode: input.mode, platform: input.platform, period: input.period,
         ...(input.institution !== null ? { institution: input.institution } : {}),
         ...(input.types.length ? { types: input.types } : {}),
-        sort: input.sort, direction: input.direction, group: input.group,
+        sort: input.sort as AboveNormSort, direction: input.direction, group: input.group,
         q: q || undefined, anomalies: input.anomalies,
+        ...(input.clean ? { clean: "1" as const } : {}),
+        ...(input.promotion && input.promotion !== "all" ? { promotion: input.promotion } : {}),
+        limit: Math.min(50, Math.max(1, input.limit ?? 50)),
+        ...(input.cursor ? { cursor: input.cursor } : {}),
+      } } }).then(unwrap);
+    },
+    anomalousFindings(input: FindingsRequest) {
+      const q = (input.q ?? "").trim();
+      if ([...q].length > 200) throw new RangeError("q must contain at most 200 characters");
+      return client.GET("/api/v1/findings/anomalous", { params: { query: {
+        mode: input.mode, platform: input.platform, period: input.period,
+        ...(input.institution !== null ? { institution: input.institution } : {}),
+        ...(input.types.length ? { types: input.types } : {}),
+        sort: input.sort as AnomalousSort,
+        direction: input.direction, group: input.group, q: q || undefined,
+        ...(input.clean ? { clean: "1" as const } : {}),
+        ...(input.promotion && input.promotion !== "all" ? { promotion: input.promotion } : {}),
         limit: Math.min(50, Math.max(1, input.limit ?? 50)),
         ...(input.cursor ? { cursor: input.cursor } : {}),
       } } }).then(unwrap);

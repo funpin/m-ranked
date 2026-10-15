@@ -33,14 +33,19 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
     example: "/api/v1/overview?platform=vk&period=7d&limit=10",
   },
   getStatistics: {
-    section: "overview", title: "Статистика публикаций и вузов",
-    text: "Устарел, используйте /api/v1/findings. Накопленные показатели публикаций (view=publications) или вузов (view=entities) за период с сортировками и поиском.",
+    section: "overview", title: "Накопленные показатели (устарел)",
+    text: "Устарел, используйте /api/v1/findings; к странице «Находки» не относится. Накопленные показатели публикаций (view=publications) или вузов (view=entities) за период с сортировками и поиском.",
     example: "/api/v1/statistics?platform=telegram&period=30d&limit=20",
   },
   getFindings: {
-    section: "overview", title: "Находки: посты выше нормы",
-    text: "Данные страницы /statistics: посты, сработавшие лучше обычного для своего аккаунта, с индексом к норме на возрасте до 24 часов. Все вузы или один вуз, группировка по вузам, курсор.",
+    section: "overview", title: "Находки: выше нормы",
+    text: "Раздел «Выше нормы» страницы /findings: посты, сработавшие лучше обычного для своего аккаунта, с индексом к норме на возрасте до 24 часов. Все вузы или один вуз, группировка по вузам, скрытие аккаунтов с устойчивыми находками (clean=1), курсор.",
     example: "/api/v1/findings?platform=vk&period=7d&limit=20",
+  },
+  getAnomalousFindings: {
+    section: "overview", title: "Находки: аномальные посты",
+    text: "Раздел «Аномальные посты» (страница /findings/anomalous): посты периода с выраженной аномалией (уровни 2–3), упорядоченные по уровню и доле необычного прироста — какая часть итогового значения набрана в участке признака. Те же фильтры, что у «Выше нормы».",
+    example: "/api/v1/findings/anomalous?platform=vk&period=7d&limit=20",
   },
   getComparisonDashboard: {
     section: "comparison", title: "Панель сравнения",

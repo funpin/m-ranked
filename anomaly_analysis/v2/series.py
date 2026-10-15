@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import datetime, timedelta
 from enum import IntFlag
 from typing import Mapping
@@ -16,7 +16,7 @@ import numpy as np
 
 from .domain import Metric, PostSeries
 
-PREPARATION_VERSION = "2.4.0"
+PREPARATION_VERSION = "2.5.0"
 
 MINUTE, HOUR, DAY = 60, 3600, 86400
 
@@ -33,6 +33,18 @@ GAP_FACTOR = 3.0
 RESET_FRACTION = 0.2
 RESET_MIN_DROP = 10
 
+# Накопленный счётчик не убывает. Промежуток без замеров с равными краями —
+# доказанное плато: внутри него прироста нет, и он пригоден как обычный
+# участок. До 07.10.2026 сборщик хранил только изменения, и простой клипа
+# МИФИ ВК №35481 был пробелом — у рывка +78 лайков после него не было фона.
+# Промежуток с малым приростом (до 0,2 % значения, не меньше двух) остаётся
+# пробелом: форма роста внутри неизвестна, и интерполяция рисовала бы ровный
+# темп, которого не было (ложные «поздний скачок» и «линейная подача» на
+# слепых карточках 13.10). Он даёт только верхнюю границу темпа —
+# `Grid.quiet_upper`: этого хватает, чтобы доказать тишину до и после рывка.
+PLATEAU_FRACTION = 0.002
+PLATEAU_MIN = 2
+
 # Площадки, где счётчик просмотров репоста принадлежит источнику. Замеры
 # 1 100 репостов MAX и Telegram (12.09–05.10.2026) показали обратное: в первом
 # замере у репоста столько же просмотров, сколько у собственного поста
@@ -42,9 +54,34 @@ RESET_MIN_DROP = 10
 REPOST_SOURCE_VIEW_PLATFORMS: frozenset[str] = frozenset()
 
 
+# Видеозаписи ВК (клипы): просмотры записи на стене не включают ленту клипов,
+# где их и смотрят; клип МАИ 06.09 — 850 реакций при 1 140 просмотрах записи.
+# Сравнения «реакции против просмотров» у них ни о чём не говорят.
+NOT_AUDIENCE_TYPES = {"vk": frozenset({"video"})}
+
+
+def views_not_audience_reason(series: PostSeries) -> str | None:
+    """Почему просмотры поста — не его аудитория; None — его."""
+    if series.is_repost and series.platform in REPOST_SOURCE_VIEW_PLATFORMS:
+        return "repost_source_counter"
+    if series.publication_type in NOT_AUDIENCE_TYPES.get(series.platform, ()):
+        return "vk_video_views"
+    return None
+
+
 def views_belong_to_source(series: PostSeries) -> bool:
     """Просмотры поста — чужая аудитория (репост на площадке из списка выше)."""
-    return series.is_repost and series.platform in REPOST_SOURCE_VIEW_PLATFORMS
+    return views_not_audience_reason(series) == "repost_source_counter"
+
+
+def views_ratio_unreliable(series: PostSeries) -> bool:
+    """Доля реакций на просмотр у поста ничего не значит: просмотры источника или видео ВК.
+
+    Форма самих просмотров при этом проверяется (у видео ВК просмотры стены
+    растут и от купленного притока), отключаются только сравнения реакций с
+    просмотрами.
+    """
+    return views_not_audience_reason(series) is not None
 
 
 # Возрастные интервалы таблицы расписания анализа: 0–24 ч, 1–3 сут, 3–7 сут,
@@ -135,6 +172,13 @@ class Grid:
     usable: np.ndarray
     in_gap: np.ndarray
     negative: np.ndarray
+    # Границы темпа ячейки: у пригодной — сам темп; у задевающей только
+    # промежутки с малым приростом — по замерам вокруг ячейки (счётчик не
+    # убывает): сверху весь прирост задетых промежутков, снизу прирост между
+    # замерами внутри неё. NaN — границы неизвестны; None — таких промежутков
+    # нет, границы совпадают с темпом пригодных ячеек.
+    quiet_upper: np.ndarray | None = None
+    quiet_lower: np.ndarray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +208,9 @@ class PreparedSeries:
     truncated_start: bool
     stale_seconds: float
     quality_codes: tuple[str, ...] = ()
+    # Просмотры Telegram с коридором показа «1,2K» (BoundedViews); None — у
+    # площадки нет округлённых просмотров или у поста их не было.
+    bounded_views: "BoundedViews | None" = None
 
 
 def age_band(ages: np.ndarray) -> np.ndarray:
@@ -176,6 +223,12 @@ def age_band(ages: np.ndarray) -> np.ndarray:
     return np.clip(bands, 0, AGE_BAND_EDGES.size - 1)
 
 
+def _has_non_exact(column: tuple[int | None, ...], qualities: tuple[str, ...], keep: np.ndarray) -> bool:
+    """Есть ли среди замеров до момента анализа полученное, но не точное значение."""
+    candidates = np.flatnonzero((np.asarray(qualities) != "exact") & keep)
+    return any(column[index] is not None for index in candidates)
+
+
 def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadence,
             scales: tuple[timedelta, ...] = SCALES) -> PreparedSeries:
     published = series.published_at.timestamp()
@@ -185,14 +238,20 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
     columns = {metric: np.asarray(series.exact_values(metric), dtype=np.float64)[keep]
                for metric in series.values}
     quality_codes = []
-    if any(value is not None and quality != "exact" for metric, column in series.values.items()
-           for value, quality, active in zip(column, series.qualities[metric], keep) if active):
+    # Массивами: проход генератором по каждому замеру стоил ~1,5 мс на пост.
+    if any(_has_non_exact(column, series.qualities[metric], keep) for metric, column in series.values.items()):
         quality_codes.append("non_exact_counters")
-    if any(flag for flag, active in zip(series.interval_uncertain, keep) if active):
+    if (np.asarray(series.interval_uncertain, dtype=bool) & keep).any():
         quality_codes.append("uncertain_observations")
-    collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64,
-                            count=len(series.collected))
-    collected = collected[collected <= analyzed_at.timestamp()] - published
+    # Журнал циклов сбора читается только там, где цикл подтверждает чтение
+    # поста (confirm_unchanged): у остальных площадок перевод тысяч отметок
+    # аккаунта в числа стоил ~1 мс на пост впустую.
+    if series.platform in CYCLES_CONFIRM_READS:
+        collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64,
+                                count=len(series.collected))
+        collected = collected[collected <= analyzed_at.timestamp()] - published
+    else:
+        collected = np.zeros(0)
     raw_ages, rows, covered = confirm_unchanged(instants[keep] - published, collected, cadence, series.platform)
     ages = _frozen(raw_ages)
     steps = _frozen(cadence.expected_step_seconds(series.platform, ages))
@@ -212,7 +271,88 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
         truncated_start=bool(ages.size) and float(ages[0]) > first_step,
         stale_seconds=float(analyzed_at.timestamp() - published - ages[-1]) if ages.size else 0.0,
         quality_codes=tuple(quality_codes),
+        bounded_views=_bounded_views(series, keep, ages, rows, cadence, scales, covered),
     )
+
+
+# Поздняя подача по коридору судится на часовой сетке: шестичасовая и суточная
+# не строятся (каждая сетка — заметная доля подготовки ряда Telegram).
+BOUNDED_MAX_SCALE = timedelta(hours=1)
+BOUNDED_FINE_SCALE = timedelta(minutes=15)
+# Пакет начинается не позже 12 ч и длится не дольше 10 ч, плюс 2 ч после и запас.
+BOUNDED_FINE_UNTIL = 26 * HOUR
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedViews:
+    """Просмотры с коридором: точные и показанные «1,2K». Середины коридоров — в `data`.
+
+    `low`/`high` выровнены с `data.ages`; у точной точки они равны.
+    """
+
+    data: MetricSeries
+    low: np.ndarray
+    high: np.ndarray
+
+
+def _bounded_views(series: PostSeries, keep: np.ndarray, ages: np.ndarray, rows: np.ndarray,
+                   cadence: CollectionCadence, scales: tuple[timedelta, ...],
+                   covered: np.ndarray) -> BoundedViews | None:
+    column = series.values.get(Metric.VIEWS)
+    if series.platform not in COMPACT_PLATFORMS or column is None or views_belong_to_source(series):
+        return None
+    quality = np.asarray(series.qualities[Metric.VIEWS])[keep]
+    rounded = quality == "rounded"
+    if not rounded.any():
+        return None
+    # Те же границы, что у counter_bounds, но массивом: шаг показа — наибольшая
+    # степень десяти, на которую делится значение (не больше 10⁹).
+    values = np.array([np.nan if value is None else value for value in column], dtype=np.float64)[keep]
+    uncertain = np.asarray(series.interval_uncertain, dtype=bool)[keep]
+    usable = ~np.isnan(values) & ~uncertain & ((quality == "exact") | (rounded & (values > 0)))
+    unit = np.ones(values.size)
+    whole = np.where(usable, values, 1.0).astype(np.int64)
+    for _ in range(9):
+        step = (whole % (unit.astype(np.int64) * 10) == 0) & (unit < 10**9)
+        if not step.any():
+            break
+        unit = np.where(step, unit * 10, unit)
+    unit = np.where(rounded, unit, 0.0)
+    low = np.where(usable, np.maximum(values - unit, 0.0), np.nan)[rows]
+    high = np.where(usable, values + unit, np.nan)[rows]
+    # Сетки только тех масштабов, что читает линейная подача: суточные не нужны.
+    # Мелкая сетка нужна лишь пакетам первых суток — строится по первым суткам.
+    middle = (low + high) / 2
+    wanted = tuple(scale for scale in scales if BOUNDED_FINE_SCALE < scale <= BOUNDED_MAX_SCALE)
+    data = _metric(Metric.VIEWS, ages, middle, series, cadence, wanted, covered)
+    if data is None:
+        return None
+    if BOUNDED_FINE_SCALE in scales:
+        early = ages <= BOUNDED_FINE_UNTIL
+        fine = _metric(Metric.VIEWS, ages[early], middle[early], series, cadence, (BOUNDED_FINE_SCALE,),
+                       covered[early] if covered.size == ages.size else covered)
+        if fine is not None:
+            data = replace(data, grids={**data.grids, BOUNDED_FINE_SCALE: fine.grids[BOUNDED_FINE_SCALE]})
+    present = ~np.isnan(low)
+    return BoundedViews(data, _frozen(low[present]), _frozen(high[present]))
+
+
+def growth_bounds(bounded: BoundedViews, start_age: float, end_age: float) -> tuple[float, float] | None:
+    """Наименьший и наибольший прирост на [start_age; end_age] при любых значениях в коридорах.
+
+    Счётчик не убывает: в момент t он не ниже нижней границы любой точки до t
+    и не выше верхней любой точки после t. None — по краю нет замеров.
+    """
+    ages = bounded.data.ages
+    before_start = int(np.searchsorted(ages, start_age, side="right")) - 1
+    after_start = int(np.searchsorted(ages, start_age, side="left"))
+    before_end = int(np.searchsorted(ages, end_age, side="right")) - 1
+    after_end = int(np.searchsorted(ages, end_age, side="left"))
+    if before_start < 0 or before_end < 0 or after_start >= ages.size or after_end >= ages.size:
+        return None
+    lowest = max(0.0, float(bounded.low[before_end]) - float(bounded.high[after_start]))
+    highest = max(0.0, float(bounded.high[after_end]) - float(bounded.low[before_start]))
+    return lowest, highest
 
 
 def value_at(data: MetricSeries | None, age: float) -> float | None:
@@ -309,6 +449,12 @@ def counter_estimate_at(prepared: PreparedSeries, metric: Metric, age: float) ->
         return None
     low = float(max(bounds[0] for _, bounds in rows[:left]))
     high = float(min(bounds[1] for _, bounds in rows[right:]))
+    if high < low:
+        # Реакцию сняли: 197 когда-то раньше, но 196 по обе стороны конца
+        # интервала (Пермский Политех в Telegram, 09.10). Дальние замеры тогда
+        # коридор не сужают; судят ближайшие, и только их расхождение — снятый
+        # счётчик без оценки.
+        low, high = float(before[1][0]), float(after[1][1])
     if high < low or high > low * (1 + COUNTER_BRACKET_MAX_WIDTH):
         return None
     middle = [(bounds[0] + bounds[1]) / 2 for _, bounds in (before, after)]
@@ -450,6 +596,10 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
     expected = np.maximum(cadence.expected_step_seconds(series.platform, ages[:-1]),
                           cadence.expected_step_seconds(series.platform, ages[1:]))
     gap = elapsed > GAP_FACTOR * expected
+    quiet = None
+    if gap.any():
+        quiet = gap & (delta > 0) & (delta <= np.maximum(PLATEAU_MIN, PLATEAU_FRACTION * values[:-1]))
+        gap &= delta != 0
     if covered is not None and covered.size == all_ages.size:
         # Подтверждение журналом годится только для соседних точек: метрика,
         # пропавшая в замерах между ними, — это отсутствие данных именно по ней.
@@ -465,7 +615,9 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
                      count_change_trusted=not bool(missing[index])) for index in gap_index)
     span = float(all_ages[-1] - all_ages[0])
     coverage = 1.0 if span <= 0 else float(elapsed[~unusable].sum()) / span
-    grids = {scale: _grid(scale, ages, values, unusable, reset, negative) for scale in scales}
+    if quiet is not None:
+        quiet &= ~missing
+    grids = {scale: _grid(scale, ages, values, unusable, reset, negative, quiet) for scale in scales}
     return MetricSeries(
         metric, _frozen(ages), _frozen(values), _frozen(flags), gaps, grids, coverage,
         source_counter=views_belong_to_source(series) and metric is Metric.VIEWS,
@@ -473,7 +625,7 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
 
 
 def _grid(scale: timedelta, ages: np.ndarray, values: np.ndarray, gap: np.ndarray,
-          reset: np.ndarray, negative: np.ndarray) -> Grid:
+          reset: np.ndarray, negative: np.ndarray, quiet: np.ndarray | None = None) -> Grid:
     width = scale.total_seconds()
     first, last = np.ceil(ages[0] / width), np.floor(ages[-1] / width)
     edges = np.arange(first, last + 1, dtype=np.float64) * width
@@ -497,8 +649,19 @@ def _grid(scale: timedelta, ages: np.ndarray, values: np.ndarray, gap: np.ndarra
 
     in_gap = touched(gap)
     usable = ~(in_gap | touched(reset))
+    if quiet is None or not quiet.any():
+        return Grid(scale, _frozen(edges), _frozen(cumulative), _frozen(rates), _frozen(usable),
+                    _frozen(in_gap), _frozen(touched(negative)))
+    bounded = ~usable & ~touched(gap & ~quiet) & ~touched(reset)
+    span = values[np.minimum(stop, last_segment + 1)] - values[start]
+    inner_first = np.searchsorted(ages, edges[:-1], side="left")
+    inner_last = np.searchsorted(ages, edges[1:], side="right") - 1
+    inner = np.where(inner_last > inner_first,
+                     values[np.clip(inner_last, 0, ages.size - 1)] - values[np.clip(inner_first, 0, ages.size - 1)], 0.0)
+    quiet_upper = np.where(usable, rates, np.where(bounded, span / width, np.nan))
+    quiet_lower = np.where(usable, rates, np.where(bounded, np.maximum(inner, 0.0) / width, np.nan))
     return Grid(scale, _frozen(edges), _frozen(cumulative), _frozen(rates), _frozen(usable),
-                _frozen(in_gap), _frozen(touched(negative)))
+                _frozen(in_gap), _frozen(touched(negative)), _frozen(quiet_upper), _frozen(quiet_lower))
 
 
 def _frozen(array: np.ndarray) -> np.ndarray:

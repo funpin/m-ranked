@@ -18,12 +18,12 @@ from math import log2
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries, views_belong_to_source
+from ..series import HOUR, PreparedSeries, views_belong_to_source, views_ratio_unreliable
 from .base import DetectorContext, age_text, make_sign, number
 from .bounded_reaction_burst import _candidate_pairs, _views
 
 ID = "burst_plateau"
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 PATTERN = 9
 FAMILY = Family.SHAPE
 NEEDS_NORM = False
@@ -69,8 +69,17 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
             continue
         rates = grid.rates * HOUR
         usable = grid.usable
-        floors = _floors(rates, usable)
-        candidates = usable & (grid.edges[:-1] >= MIN_ONSET_AGE) & (rates >= BURST_FACTOR * floors)
+        # Фон и хвост судятся по верхней границе темпа: промежуток с малым
+        # приростом (сборщик до 07.10 хранил только изменения) доказывает
+        # тишину, хотя форма роста внутри неизвестна. Сам рывок — только по
+        # пригодным ячейкам.
+        upper = rates if grid.quiet_upper is None else grid.quiet_upper * HOUR
+        lower = np.where(usable, rates, np.nan) if grid.quiet_lower is None else grid.quiet_lower * HOUR
+        bounded = ~np.isnan(upper)
+        floors = _floors(np.where(bounded, upper, 0.0), bounded)
+        known = ~np.isnan(lower)
+        lower = np.where(known, lower, 0.0)
+        candidates = known & (grid.edges[:-1] >= MIN_ONSET_AGE) & (lower >= BURST_FACTOR * floors)
         candidates[:BACKGROUND_HOURS] = False
         candidates[rates.size - AFTER_HOURS:] = False
         resume = 0
@@ -80,9 +89,9 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
                 continue
             floor = float(floors[index])
             end = index
-            while end < rates.size and usable[end] and rates[end] >= BURST_FACTOR * floor:
+            while end < rates.size and known[end] and lower[end] >= BURST_FACTOR * floor:
                 end += 1
-            sign = _judge(prepared, metric, grid, rates, usable, index, end, floor)
+            sign = _judge(prepared, metric, grid, lower, known, index, end, floor, upper)
             if sign is not None:
                 signs.append(sign)
             resume = end
@@ -96,7 +105,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
 
 def _early(prepared: PreparedSeries) -> Sign | None:
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
-    if reactions is None or views is None or views.source_counter:
+    if reactions is None or views is None or views.source_counter or views_ratio_unreliable(prepared.series):
         return None
     # Anchor to the first actual readings, never an invented publication-time
     # zero. A pack already present there is checked by the endpoint detector.
@@ -165,19 +174,23 @@ def _floors(rates: np.ndarray, usable: np.ndarray) -> np.ndarray:
     return floors
 
 
-def _judge(prepared, metric, grid, rates, usable, begin, end, floor):
+def _judge(prepared, metric, grid, rates, usable, begin, end, floor, upper=None):
     peak = float(rates[begin:end].max())
     body = np.flatnonzero(rates[begin:end] >= BODY_SHARE * peak)
     end = begin + int(body[-1]) + 1
     after = slice(end, end + AFTER_HOURS)
-    # Плато, совпавшее с пробелом или отказом метрики, — не обрыв, а отсутствие данных.
-    if end - begin > MAX_BURST_HOURS or end + AFTER_HOURS > rates.size or not usable[after].all():
+    upper = rates if upper is None else upper
+    # Плато, совпавшее с пробелом или отказом метрики, — не обрыв, а отсутствие
+    # данных; промежуток с малым приростом годится с наибольшим возможным темпом.
+    if end - begin > MAX_BURST_HOURS or end + AFTER_HOURS > rates.size or np.isnan(upper[after]).any():
         return None
-    burst = float(grid.cumulative[end] - grid.cumulative[begin])
+    # Ячейки, задевшие промежуток с малым приростом, входят в объём наименьшим
+    # возможным приростом (ячейка — час, темп — в час).
+    burst = min(float(grid.cumulative[end] - grid.cumulative[begin]), float(rates[begin:end].sum()))
     start_value = float(grid.cumulative[begin])
     if burst < max(MIN_DELTA[metric], MIN_SHARE * start_value):
         return None
-    tail = float(rates[after].mean())
+    tail = float(upper[after].mean())
     share = tail / peak
     if share > MAX_AFTER_SHARE:
         return None

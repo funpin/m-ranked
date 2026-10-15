@@ -110,3 +110,14 @@ def test_dropped_leading_and_trailing_reads_reduce_coverage():
     p=prepare(s,s.observed_at[-1],CollectionCadence())
     assert p.metrics[V].coverage==pytest.approx(10/12)
     assert p.metrics[R].coverage==1
+
+
+def test_a_young_wave_member_is_carried_before_the_boundary():
+    # Участие молодого поста в волне доказано сравнением со свежими постами до
+    # волны; окно агрегатов уходит от них раньше границы переноса.
+    sign=Sign(8,Family.SYNCHRONY,R,.75,Interval(T,T+timedelta(hours=6)),timedelta(hours=6),'test')
+    payload=sign_payload(sign);payload['render']['measurementMode']='exact_quality_v1'
+    row=SimpleNamespace(signals=[payload])
+    assert _carried(row,T-timedelta(hours=1))==()
+    payload['render']['member']='young'
+    assert len(_carried(row,T-timedelta(hours=1)))==1

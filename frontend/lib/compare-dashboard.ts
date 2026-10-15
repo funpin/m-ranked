@@ -75,6 +75,11 @@ export const FINDING_TITLES: Record<InstitutionFinding["kind"], string> = {
   synchronous_waves: "Волны реакций сразу на многих постах",
   engagement_shift: "Скачок доли реакций на просмотр",
   night_reactions: "Реакции приходят ночью, когда просмотров нет",
+  view_packs: "Повторяющиеся пакеты просмотров",
+  view_waves: "Волны просмотров по стене",
+  level3_share: "Много постов с признаками искусственной активности",
+  promotion: "Похоже на продвижение записей",
+  early_response: "Ранний отклик выше площадки",
 };
 
 export type InstitutionRow = {

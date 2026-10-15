@@ -59,7 +59,7 @@ from uuid import UUID
 
 from .tail_ledger import MOSCOW, Point, TailLedger
 
-METHOD_VERSION = "account-findings-v3"
+METHOD_VERSION = "account-findings-v7"
 WINDOW_DAYS = 30
 STATUS_LABELS = {1: "необычный", 2: "устойчиво необычный"}
 TITLES = {
@@ -108,6 +108,7 @@ REGULAR_HALF_EXTRA = 0.10
 # ~95 реакций на пост до 19.09 и ~250 после) раздувает разброс за окно, хотя
 # посты одного дня по-прежнему получают почти одно и то же число реакций.
 REGULAR_DAY_MIN_POSTS = 3
+REGULAR_POINTS_MAX = 240
 REGULAR_MIN_DAYS = 8
 REGULAR_HALF_MIN_DAYS = 4
 # Недоразброс: χ² разброса внутри дней ниже 1-го перцентиля (z = −2,326) при
@@ -187,6 +188,7 @@ class LedgerPost:
     is_repost: bool
     ledger: TailLedger
     institution_id: UUID | None = None
+    publication_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,7 +214,13 @@ class AccountFinding:
 
     @property
     def title(self) -> str:
-        return TITLES[self.kind]
+        return TITLES.get(self.kind) or _reach().TITLES[self.kind]
+
+
+def _reach():
+    """Находки по охватам (v2/reach_findings.py) ссылаются на этот модуль — импорт ленивый."""
+    from . import reach_findings
+    return reach_findings
 
 
 def pack_ratio(ledger: TailLedger) -> tuple[float, int, int, int, int] | None:
@@ -384,6 +392,11 @@ def _regular_stats(items: Sequence[LedgerPost], min_posts: int = REGULAR_MIN_POS
         "sdLogViews": round(math.sqrt(sum((value - view_mean) ** 2 for value in view_logs) / len(view_logs)), 4),
         "medianReactions": median(reactions), "medianViews": median(views),
         "p10Reactions": ordered[len(ordered) // 10], "p90Reactions": ordered[(9 * len(ordered)) // 10],
+        # Реакции к 72 ч по постам в порядке публикации — для графика «коридор
+        # случайности» на странице аккаунта (сутки МСК, реакции).
+        "points72": [[post.published_at.astimezone(MOSCOW).date().isoformat(), mark.reactions]
+                     for post, mark in sorted(rows, key=lambda row: row[0].published_at)][-REGULAR_POINTS_MAX:],
+        "dayMinPosts": REGULAR_DAY_MIN_POSTS,
         "members": [post.publication_id for post, _ in rows],
     }
 
@@ -600,6 +613,13 @@ def _halves(items: Sequence[LedgerPost]) -> tuple[list[LedgerPost], list[LedgerP
     return ordered[:middle], ordered[middle:]
 
 
+def _halves_by_time(items: Sequence[Any], start: date, end: date) -> tuple[list[Any], list[Any]]:
+    """Посты первой и второй половины окна по дате публикации (по 15 суток)."""
+    middle = start + (end - start) / 2
+    return ([post for post in items if post.published_at.date() < middle],
+            [post for post in items if post.published_at.date() >= middle])
+
+
 def _public(stats: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in stats.items() if key != "members"}
 
@@ -619,6 +639,8 @@ def _ru(value: float, digits: int = 1) -> str:
 
 def summary(finding: AccountFinding) -> str:
     """Одна фраза с числами — для карточки аккаунта и ссылки со страницы поста."""
+    if finding.kind in _reach().REACH_KINDS:
+        return _reach().summary(finding)
     data = finding.metrics
     if finding.kind == "early_pack":
         cohort = data.get("cohort", {})
@@ -697,6 +719,8 @@ def _days(count: int) -> str:
 
 def headline(finding: AccountFinding) -> str:
     """Короткая строка для свёрнутого вида: что происходит, одним предложением."""
+    if finding.kind in _reach().REACH_KINDS:
+        return _reach().headline(finding)
     data = finding.metrics
     if finding.kind == "early_pack":
         return f"Пакет реакций в первые часы у {round(100 * data['share'])} % постов"
@@ -722,6 +746,8 @@ def headline(finding: AccountFinding) -> str:
 
 def figure(finding: AccountFinding) -> dict[str, Any] | None:
     """Аккаунт против типичного аккаунта площадки — одна мера для инфографики."""
+    if finding.kind in _reach().REACH_KINDS:
+        return _reach().figure(finding)
     data = finding.metrics
     typical = (data.get("cohort") or {}).get("median")
     if finding.kind == "early_pack":
@@ -752,4 +778,6 @@ def with_texts(finding: AccountFinding) -> AccountFinding:
     return replace(finding, metrics={**finding.metrics, "title": finding.title, "summary": summary(finding),
                                      "headline": headline(finding), "figure": figure(finding),
                                      "statusLabel": STATUS_LABELS[finding.status],
-                                     "alternatives": ALTERNATIVES[finding.kind], "members": len(finding.members)})
+                                     "alternatives": ALTERNATIVES.get(finding.kind)
+                                     or _reach().ALTERNATIVES[finding.kind],
+                                     "members": len(finding.members)})

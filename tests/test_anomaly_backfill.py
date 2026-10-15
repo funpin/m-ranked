@@ -32,7 +32,7 @@ class Store:
     def read_subscribers(self, *args):
         return {}
 
-    def read_series(self, targets):
+    def read_series(self, targets, kinds_for=None):
         return {} if self.missing else {self.subject.publication_id: self.subject}
 
     def write_states(self, writes):
@@ -76,3 +76,15 @@ def test_failure_stops_before_next_account_without_completed_cursor(monkeypatch,
     assert "backfill account incomplete" in caplog.text
     assert "backfill account 1/" not in caplog.text
     assert "backfill finished" not in caplog.text
+
+
+def test_as_of_defaults_to_now_and_parses_iso():
+    from datetime import datetime, timezone
+    before = datetime.now(timezone.utc)
+    assert backfill.parse_as_of(None) >= before
+    assert backfill.parse_as_of("2026-10-08T00:00:00+00:00") == datetime(2026, 10, 8, tzinfo=timezone.utc)
+
+
+def test_as_of_requires_time_zone():
+    with pytest.raises(SystemExit):
+        backfill.parse_as_of("2026-10-08T00:00:00")

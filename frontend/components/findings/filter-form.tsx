@@ -39,7 +39,8 @@ export function FindingsFilterForm(props: ComponentProps<"form">) {
     });
     const replace = replacing.delete(form);
     beginNavigation();
-    const href = `/statistics?${query}`;
+    // Раздел — свой адрес (/findings или /findings/anomalous): он в action формы.
+    const href = `${typeof props.action === "string" ? props.action : "/findings"}?${query}`;
     startTransition(() => replace ? router.replace(href, { scroll: false }) : router.push(href, { scroll: false }));
   }
 

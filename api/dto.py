@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import json
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -505,6 +506,47 @@ def finding(row: dict[str, Any]) -> dict[str, Any]:
         "topReactions": [{"reaction": entry["reaction"], "count": int(entry["count"])}
                          for entry in (row.get("top_reactions") or [])],
         "curve": _finding_curve(row.get("post_curve"), row.get("norm_curve")),
+        "accountFindings": account_findings(row.get("account_findings")),
+        "promotion": bool(row.get("promotion")),
+    }
+
+
+def account_findings(value: Any) -> list[dict[str, Any]]:
+    """Аккаунтные находки аккаунта поста: вид и статус (2 — устойчиво)."""
+    rows = json.loads(value) if isinstance(value, str) else (value or [])
+    return [{"kind": item["kind"], "status": int(item["status"])} for item in rows]
+
+
+def anomalous_post(row: dict[str, Any]) -> dict[str, Any]:
+    """Строка рейтинга «Аномальные посты»: пост, уровень и мера необычной динамики."""
+    supported = PLATFORM_METRIC_CAPABILITIES[row["platform"]]
+    return {
+        "publicationId": str(row["publication_id"]),
+        "institutionId": str(row["institution_id"]),
+        "institutionLegacyId": row["institution_legacy_id"],
+        "institutionShortName": row["institution_short_name"],
+        "institutionCanonicalName": row["institution_canonical_name"],
+        "accountId": str(row["account_id"]),
+        "platform": row["platform"],
+        "publicationType": row["publication_type"],
+        "externalId": row["external_id"],
+        "publicUrl": row["public_url"],
+        "publishedAt": iso(row["published_at"]),
+        "anomalyLevel": int(row["level"]),
+        "anomalyShare": None if row["anomaly_share"] is None else round(float(row["anomaly_share"]), 4),
+        "anomalyGrowth": None if row["anomaly_growth"] is None else max(0, round(float(row["anomaly_growth"]))),
+        "anomalyMetric": row["anomaly_metric"],
+        "anomalyPattern": row["anomaly_pattern"],
+        "signals": [{"pattern": int(item["pattern"]), "title": item["title"], "metric": item["metric"],
+                     "strength": None if item["strength"] is None else float(item["strength"])}
+                    for item in (json.loads(row["anomaly_signals"]) if isinstance(row["anomaly_signals"], str)
+                                 else row["anomaly_signals"] or [])],
+        "views": row["views"],
+        "reactions": row["reactions"],
+        "comments": row["comments"] if "comments" in supported else None,
+        "shares": row["shares"] if "shares" in supported else None,
+        "accountFindings": account_findings(row.get("account_findings")),
+        "promotion": bool(row.get("promotion")),
     }
 
 

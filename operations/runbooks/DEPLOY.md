@@ -178,6 +178,20 @@ bootstrap по населённой базе не проигрывается н�
 Он не копирует таблицы с историей. Очистку outbox и ревизий включают только
 после отдельных индексов и замера нагрузки.
 
+Миграция `0080_account_finding_promotion.sql` («похоже на продвижение», ВК)
+только расширяет перечень видов аккаунтных находок и применяется до кода.
+Новый код пишет сводки постов версии 6 (сутки ВК): каждый отслеживаемый пост
+получает один дополнительный анализ в свой обычный срок, без всплеска. Находка
+появится после ближайшего ночного `account_tail_job`; для полного окна —
+`backfill --days 40`, затем ночное задание вручную.
+
+Миграция `0081_account_finding_early_response.sql` («ранний отклик выше
+площадки», ВК без видео) так же только расширяет перечень видов и применяется
+до кода. Находка читает отметку первого замера из уже хранимых сводок постов и
+появится после ближайшего ночного `account_tail_job`. Признак 18 («реакции
+сквозь ночь», клипы ВК) таблиц не меняет: клипы получают его при очередном
+анализе или после `backfill --days 40`.
+
 Исключение — миграция `0033_remove_csv_exports.sql`: она удаляет таблицу,
 в которую старые collectors ещё пишут. Для неё сначала остановите все четыре
 `m-ranked-target-collector@*.service`, переключите API, web и collectors на
@@ -452,7 +466,7 @@ curl -fsS http://127.0.0.1:8080/api/v1/health/live
 curl -fsS http://127.0.0.1:8080/api/v1/health/ready
 curl -fsS http://127.0.0.1:8080/api/v1/health/freshness
 # публичные страницы и публичный API — снаружи, не с петли
-curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/statistics?platform=telegram'
+curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/findings?platform=telegram'
 curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/api/v1/statistics?platform=telegram'
 # старые namespace свободны для будущего рейтинга
 test "$(curl -sS -o /dev/null -w '%{http_code}' 'https://m.funpin.org/rating')" = 404

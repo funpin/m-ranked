@@ -96,6 +96,24 @@ def test_payload_round_trip_and_unknown_versions():
     assert ledger_from_payload({"v": 99}) is None and ledger_from_payload(None) is None
 
 
+def test_vk_ledger_keeps_moscow_days_with_night_views():
+    """Сутки ВК для находки «похоже на продвижение»: со вторых московских суток, прирост за сутки и за 00–06."""
+    # Публикация в 12:00 МСК: первые полные сутки начинаются через 12 ч. Замеры каждые 3 часа.
+    points, views, reactions = [], 0, 0
+    for step in range(0, 6 * 8 + 1):
+        age = 12 * HOUR + step * 3 * HOUR
+        hour = (age // HOUR + 12) % 24
+        views += 0 if hour < 6 else 120
+        reactions += 1
+        points.append((age, views, reactions))
+    ledger = build_ledger(_series(points, platform="vk"))
+    assert ledger.days and ledger.days[0][0] == "2026-09-02"
+    day, day_views, day_reactions, night_views = ledger.days[0]
+    assert day_views == 120 * 6 and day_reactions == 8 and night_views <= 120
+    assert ledger_from_payload(ledger.payload()).days == ledger.days
+    assert not build_ledger(_series(points, platform="max")).days
+
+
 def _detect(subject):
     prepared = prepare(subject, subject.observed_at[-1], CollectionCadence())
     return late_engagement.detect(prepared, DetectorContext(subject.platform))
@@ -175,4 +193,93 @@ def test_version_three_ledgers_are_still_readable_without_hours():
     payload.pop("hours", None)
     old = ledger_from_payload(payload)
     assert old is not None and old.hours is None and old.early.views == 1000
-    assert build_ledger(_series(points)).payload()["v"] == 4
+    assert build_ledger(_series(points)).payload()["v"] == 6
+
+
+def _old_post_with_wave(rounded=False):
+    from datetime import datetime, timedelta, timezone
+    from uuid import UUID
+    from anomaly_analysis.v2.domain import Metric, PostSeries
+    start = datetime(2026, 9, 20, 9, tzinfo=timezone.utc)
+    at, views, reactions = [], [], []
+    for minute in range(5, 4 * 24 * 60, 30):
+        at.append(start + timedelta(minutes=minute))
+        base = min(1500, minute)                       # ~1 500 к суткам, потом почти стоит
+        wave = 0 if minute < 50 * 60 else min(3, (minute - 50 * 60) // 60 + 1) * 1300
+        views.append(base + wave)
+        reactions.append(min(60, minute // 30))
+    quality = tuple("rounded" if rounded and v >= 1000 else "exact" for v in views)
+    shown = tuple(v // 100 * 100 if rounded and v >= 1000 else v for v in views)
+    return PostSeries(UUID(int=1), UUID(int=2), "telegram" if rounded else "vk", start, False, tuple(at),
+                      {Metric.VIEWS: shown, Metric.REACTIONS: tuple(reactions)},
+                      qualities={Metric.VIEWS: quality, Metric.REACTIONS: ("exact",) * len(at)})
+
+
+def test_wave_hours_of_an_old_post_are_recorded():
+    from anomaly_analysis.v2.tail_ledger import build_ledger, ledger_from_payload
+    ledger = build_ledger(_old_post_with_wave())
+    assert len(ledger.surges) == 3 and all(views >= 1000 for _, views, _ in ledger.surges)
+    assert ledger_from_payload(ledger.payload()).surges == ledger.surges
+
+
+def test_first_day_hours_are_not_surges():
+    from anomaly_analysis.v2.tail_ledger import build_ledger
+    series = _old_post_with_wave()
+    first_day = int((series.published_at.timestamp() + 86400) // 3600)
+    assert all(hour >= first_day for hour, _, _ in build_ledger(series).surges)
+
+
+def test_version_four_payload_is_read_without_surges():
+    from anomaly_analysis.v2.tail_ledger import build_ledger, ledger_from_payload
+    payload = {**build_ledger(_old_post_with_wave()).payload(), "v": 4}
+    payload.pop("surges", None)
+    assert ledger_from_payload(payload).surges == ()
+
+
+def test_rounded_telegram_surges_use_the_lower_bound():
+    from anomaly_analysis.v2.tail_ledger import build_ledger
+    ledger = build_ledger(_old_post_with_wave(rounded=True))
+    assert ledger.surges and all(views < 1300 for _, views, _ in ledger.surges)
+
+
+def _reference_surges(series, points, early, published):
+    """Прежний расчёт циклом — эталон для векторного."""
+    from anomaly_analysis.v2.series import max_display_unit
+    from anomaly_analysis.v2 import tail_ledger as t
+    if early is None:
+        return ()
+    threshold = max(t.SURGE_MIN_VIEWS, t.SURGE_SHARE * early.views)
+    compact = series.platform in t.ROUNDED_PLATFORMS
+    hours = {}
+    for left, right in zip(points, points[1:]):
+        if left.age < t.SURGE_FROM or right.age > t.SURGE_UNTIL or right.age - left.age > t.SURGE_MAX_GAP:
+            continue
+        unit_left = max_display_unit(left.views) if compact and left.views >= t.COMPACT_FROM else 0
+        unit_right = max_display_unit(right.views) if compact and right.views >= t.COMPACT_FROM else 0
+        bucket = hours.setdefault(int((published + right.age) // t.HOUR), [0, 0])
+        bucket[0] += max(0, (right.views - unit_right) - (left.views + unit_left))
+        bucket[1] += max(0, right.reactions - left.reactions)
+    found = [(hour, views, reactions) for hour, (views, reactions) in hours.items() if views >= threshold]
+    return tuple(sorted(sorted(found, key=lambda item: -item[1])[:t.SURGE_MAX]))
+
+
+def test_vector_surges_equal_the_loop_on_random_walls():
+    import random
+    from anomaly_analysis.v2 import tail_ledger as t
+    from anomaly_analysis.v2.tail_ledger import Point
+    rng = random.Random(7)
+    for case in range(300):
+        platform = rng.choice(["vk", "telegram"])
+        start = 1_758_000_000 + rng.randint(0, 3600)
+        points, views, reactions, age = [], rng.randint(0, 3000), 0, rng.randint(60, 600)
+        early = None
+        while age < 20 * 86400:
+            views += rng.choice([0, 1, 5, 40, 300, 2000]) if rng.random() < 0.7 else 0
+            reactions += rng.choice([0, 0, 1, 3])
+            shown = views // 100 * 100 if platform == "telegram" and views >= 1000 else views
+            points.append(Point(float(age), shown, reactions))
+            if early is None and age >= 86400:
+                early = points[-1]
+            age += rng.choice([300, 900, 1800, 3600, 5400])
+        series = type("S", (), {"platform": platform})()
+        assert t._surges(series, points, early, float(start)) == _reference_surges(series, points, early, float(start)), case

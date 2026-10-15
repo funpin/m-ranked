@@ -151,6 +151,7 @@ test("findings client sends every dimension and bounds the limit", async () => {
   });
 
   await client.findings({
+    view: "above_norm", clean: false, promotion: "all",
     mode: "institution", institution: 12, platform: "vk", period: "30d", types: ["photo", "video"],
     sort: "view_index", direction: "asc", group: "none", q: "  мгу ", anomalies: "include", limit: 500,
   });
@@ -162,4 +163,17 @@ test("findings client sends every dimension and bounds the limit", async () => {
   assert.equal(url.searchParams.get("q"), "мгу");
   assert.equal(url.searchParams.get("anomalies"), "include");
   assert.equal(url.searchParams.get("limit"), "50");
+  assert.equal(url.searchParams.has("clean"), false);
+  assert.equal(url.searchParams.has("promotion"), false);
+
+  await client.anomalousFindings({
+    view: "anomalous", clean: true, promotion: "only", mode: "all", institution: null, platform: "vk", period: "7d", types: [],
+    sort: "anomaly_share", direction: "desc", group: "none", q: "", anomalies: "exclude",
+  });
+  const anomalous = new URL(seenUrl);
+  assert.equal(anomalous.pathname, "/api/v1/findings/anomalous");
+  assert.equal(anomalous.searchParams.get("clean"), "1");
+  assert.equal(anomalous.searchParams.get("promotion"), "only");
+  assert.equal(anomalous.searchParams.get("sort"), "anomaly_share");
+  assert.equal(anomalous.searchParams.has("anomalies"), false);
 });

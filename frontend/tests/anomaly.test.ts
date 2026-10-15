@@ -59,7 +59,7 @@ test("interval boundaries become the nearest saved points and markers keep their
   const [marker] = signalMarkers(analysis());
   assert.equal(marker!.pattern, 1);
   assert.equal(marker!.to - marker!.from, 24 * 3600_000);
-  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 15);
+  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 17);
 });
 
 test("linear signal draws its fitted line only inside the interval", () => {
@@ -89,6 +89,12 @@ test("cross-metric signals overlay reactions and views, ERV and synchrony are ba
   assert.deepEqual(erv.type === "bars" ? erv.bars.map((bar) => bar.value) : [], [0.13, 0.037]);
   const sync = miniChart(signal({ pattern: 8, render: { kind: "synchrony", startAge: 0, endAge: 3600, posts: 5, quiet: 2 } }), rows, PUBLISHED);
   assert.deepEqual(sync.type === "bars" ? sync.bars.map((bar) => bar.value) : [], [5, 2]);
+  // Поток одной реакции: доля вида среди новых реакций окна против доли вне окна.
+  const stream = miniChart(signal({ pattern: 17, metric: "reactions", family: "composition", render: {
+    kind: "stream", startAge: 1080, endAge: 12480, reaction: "🙈", keyDelta: 115, allDelta: 130, outsideShare: 0.42,
+  } } as unknown as Partial<AnomalySignal>), rows, PUBLISHED);
+  assert.deepEqual(stream.type === "bars" ? stream.bars.map((bar) => [bar.label, Number(bar.value.toFixed(3))]) : [],
+    [["в окне", 0.885], ["вне окна", 0.42]]);
 });
 
 test("a production late-engagement signal renders saved rates without age fields", () => {
@@ -151,9 +157,24 @@ test("initial plateau shows the actual first count and highest status even witho
   const chart = miniChart(initial, [], PUBLISHED);
   assert.equal(chart.type, "bars");
   if (chart.type === "bars") {
-    assert.deepEqual(chart.bars.map(item => item.value), [105,117,122,136]);
-    assert.match(chart.bars[0].label, /первый замер/);
-    assert.match(chart.bars[2].label, /плато/);
+    assert.deepEqual(chart.bars.map(item => item.value), [0,105,117,122,136]);
+    assert.equal(chart.bars[0].label, "публикация");
+    assert.match(chart.bars[1].label, /первый замер · 6 мин: минимум/);
+    assert.equal(chart.bars[1].highlight, true);
+    assert.match(chart.bars[3].label, /плато · 3 ч/);
+  }
+});
+
+test("initial plateau with exact counts starts from zero at publication and keeps one bar per reading", () => {
+  const exact = signal({ pattern: 9, metric: "reactions", render: {
+    kind: "bounded_burst", mode: "initial_plateau", startAge: 240, endAge: 11340,
+    beforeRange: [100,100], afterRange: [105,105], timingUnknown: true,
+  } });
+  const chart = miniChart(exact, [], PUBLISHED);
+  assert.equal(chart.type, "bars");
+  if (chart.type === "bars") {
+    assert.deepEqual(chart.bars.map(item => [item.label, item.value, item.highlight]),
+      [["публикация", 0, false], ["первый замер · 4 мин", 100, true], ["плато · 3 ч", 105, false]]);
   }
 });
 

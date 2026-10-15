@@ -35,7 +35,10 @@ from .detectors.linear_feed import STEADY_STOP_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
-from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare, views_belong_to_source
+from .series import (
+    DAY, PREPARATION_VERSION, CollectionCadence, CounterEstimate, PreparedSeries, counter_estimate_at, prepare,
+    views_not_audience_reason,
+)
 
 # Пороги силы. Сильный признак — тот, что один даёт выраженную аномалию: у
 # детекторов это пуассоновский z в районе десяти и выше или физически
@@ -48,7 +51,7 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
-AGGREGATION_VERSION = "2.5.0"
+AGGREGATION_VERSION = "2.7.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
@@ -72,7 +75,7 @@ RUTUBE_VIEW_SHAPES = frozenset({2, 9})
 RUTUBE_WAVE_SCALE = timedelta(minutes=30)
 
 SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻",
-           14: "⊓", 15: "↧", 16: "⌐"}
+           14: "⊓", 15: "↧", 16: "⌐", 17: "❖", 18: "☾"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -89,6 +92,8 @@ TITLES = {
     14: "Пакет реакций, оторванный от просмотров",
     15: "Площадка списала реакции",
     16: "Одновременный обрыв просмотров и реакций",
+    17: "Поток одной реакции",
+    18: "Реакции сквозь ночь",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
@@ -121,6 +126,13 @@ ALTERNATIVES = {
     "external_link_wave": "видео посмотрели по ссылке из соцсети или с сайта: на RuTube такие волны обычны",
     "platform_write_off": "площадка удалила реакции аккаунтов, которые сочла недостоверными",
     "post_edited_reactions_reset": "пост пересоздали или изменили так, что площадка сбросила часть реакций",
+    "paid_promotion": "запись продвигали платно: показы рекламы площадка засчитывает как просмотры",
+    "site_embed": "запись встроили на сайт или в приложение, и её показывали посетителям",
+    "mailing_link": "ссылку на запись разослали подписчикам рассылки или в чаты сразу после выхода",
+    "single_reaction_call": "в посте попросили поставить определённую реакцию (голосование, призыв)",
+    "content_invites_reaction": "пост переслали в чат, где его встретили одной и той же реакцией",
+    "night_audience_abroad": "клип смотрели в другом часовом поясе: иностранные студенты, филиалы, выпускники за рубежом",
+    "clip_feed_recommendation": "лента клипов показывала видео и ночью, а счётчик просмотров записи этих показов не видит",
 }
 QUALITY_TEXTS = {
     "reported_reaction_shape": "форма сохранённых реакций отмечена слабым сигналом без подтверждения точности или сопоставимой аудитории",
@@ -132,6 +144,7 @@ QUALITY_TEXTS = {
     "uncertain_observations": "замеры с неопределённым интервалом исключены из точных проверок",
     "truncated_start": "начало истории отсутствует: рост до первого замера не оценивается",
     "repost_source_counter": "пост — репост: просмотры принадлежат источнику, проверяются только реакции",
+    "vk_video_views": "видео ВК: просмотры записи не включают ленту клипов, проверяются только реакции",
     "no_norm": "нормы ещё нет: признаки относительно нормы не сильнее слабого сигнала",
     "young_norm": "норма молодая: признаки относительно нормы не сильнее слабого сигнала",
     "gaps": "в замерах есть пробелы: форма роста недоступной метрики внутри них неизвестна; прирост между пригодными замерами проверяется отдельно",
@@ -241,12 +254,14 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         # внутри лишь укрупняет отрезок. Губкинский в MAX: +265 реакций за 6 ч
         # с пробелом сбора 2,6 ч внутри снимались целиком.
         episode = sign.pattern == 14
+        # Поток одной реакции сравнивает состав по концам окна.
+        stream = sign.pattern == 17
         # Медленная волна (признак 8) складывает только покрытые часы окна:
         # пробел уменьшает сумму, а не придумывает её. У MAX окно в шесть
         # часов почти всегда задевает пробел сбора.
         wave = sign.pattern == 8 and sign.render.get("kind") == "synchrony_wave"
         if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_counts
-                and not endpoint_comparison and not late_endpoints and not episode and not wave
+                and not endpoint_comparison and not late_endpoints and not episode and not wave and not stream
                 and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:
@@ -265,6 +280,9 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
             families.add(sign.family)
     chosen = (required + [i for i in range(len(unique)) if i not in required])[:MAX_SIGNS]
     ordered = [unique[i] for i in sorted(chosen)]
+    # Доля необычного прироста нужна только рейтингу постов уровня 2–3.
+    if level >= Level.PRONOUNCED_ANOMALY:
+        ordered = [_with_episode(prepared, sign) for sign in ordered]
     quality = _quality(prepared, context, unanalyzable)
     if any(sign.render.get("measurementMode") == BOUNDED_REACTION_MODE for sign in ordered):
         quality = replace(quality, codes=(*quality.codes, "bounded_reaction_counts"))
@@ -276,6 +294,41 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         quality = replace(quality, codes=(*quality.codes, "reported_reaction_shape"))
     return PostVerdict(prepared.series.publication_id, level, tuple(ordered) if level else (),
                        quality, versions, norm_version)
+
+
+def _with_episode(prepared: PreparedSeries, sign: Sign) -> Sign:
+    """Сколько метрики признака пришло в его участке и какая это доля итога.
+
+    Мера для рейтинга «Аномальные посты»: пост, у которого 900 из 1 000
+    просмотров пришли пакетом, необычнее поста, где скачок дал десятую часть.
+    Концы участка — точные значения или середины коридоров округления
+    (series.counter_estimate_at); итог — последний замер метрики. Начало до
+    первого замера и у публикации — ноль. Нет оценки — нет меры, признак
+    остаётся без неё.
+    """
+    published = prepared.series.published_at
+    start = (sign.interval.start - published).total_seconds()
+    end = (sign.interval.end - published).total_seconds()
+    column = prepared.series.values.get(sign.metric)
+    if column is None:
+        return sign
+    last = None
+    for at, value in zip(reversed(prepared.series.observed_at), reversed(column)):
+        if value is not None and at <= prepared.analyzed_at:
+            last = (at - published).total_seconds()
+            break
+    if last is None:
+        return sign
+    final = counter_estimate_at(prepared, sign.metric, last)
+    finish = counter_estimate_at(prepared, sign.metric, min(end, last))
+    begin = (CounterEstimate(0.0, 0.0, 0.0) if start <= 0
+             else counter_estimate_at(prepared, sign.metric, start))
+    if final is None or finish is None or begin is None or final.value <= 0:
+        return sign
+    growth = max(0.0, finish.value - begin.value)
+    share = min(1.0, growth / final.value)
+    return replace(sign, render={**sign.render, "episodeGrowth": round(growth),
+                                 "episodeShare": round(share, 4)})
 
 
 def _rutube_waves(prepared: PreparedSeries, signs: Sequence[Sign]) -> list[Sign]:
@@ -492,8 +545,9 @@ def _quality(prepared: PreparedSeries, context: DetectorContext,
     codes = list(prepared.quality_codes)
     if prepared.truncated_start:
         codes.append("truncated_start")
-    if views_belong_to_source(prepared.series):
-        codes.append("repost_source_counter")
+    reason = views_not_audience_reason(prepared.series)
+    if reason is not None:
+        codes.append(reason)
     if context.norm is None:
         codes.append("no_norm")
     elif context.norm.young:

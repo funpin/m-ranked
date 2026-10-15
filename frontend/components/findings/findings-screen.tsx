@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { ArrowRight, Search, X } from "lucide-react";
 import Link from "@/components/native-link";
+import { CleanToggle } from "@/components/findings/clean-toggle";
+import { PromotionFilter } from "@/components/findings/promotion-filter";
 import { FindingsFilterForm } from "@/components/findings/filter-form";
-import { FindingsResults } from "@/components/findings/findings-results";
+import { FindingsViewTabs } from "@/components/findings/view-tabs";
 import { InstitutionPicker } from "@/components/findings/institution-picker";
 import { TypesPopover } from "@/components/findings/types-popover";
 import { FILTER_PLATFORM_OPTIONS, FILTER_SELECT_CLASS } from "@/components/filter-toolbar";
@@ -14,7 +16,7 @@ import { MethodNote } from "@/components/method-note";
 import { NativeSegments } from "@/components/native-field";
 import { SortDirection } from "@/components/sort-direction";
 import { NavigationBoundary } from "@/components/navigation-boundary";
-import { StatisticsSkeleton } from "@/components/skeletons";
+import { FindingsSkeleton } from "@/components/skeletons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
@@ -22,31 +24,39 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { anomalyReportVisible } from "@/lib/anomaly-visibility";
 import { api, ApiError } from "@/lib/api";
-import { DEFAULT_FINDINGS_QUERY, FINDINGS_PERIOD_OPTIONS, findingsHrefQuery, normalizeFindingsQuery, periodRange, sortOptionsFor } from "@/lib/findings";
+import {
+  DEFAULT_FINDINGS_QUERY, FINDINGS_PERIOD_OPTIONS, findingsHrefQuery, findingsPath, normalizeFindingsQuery, periodRange,
+  sortOptionsFor, viewHrefQuery, type FindingsView, type ParsedFindingsQuery,
+} from "@/lib/findings";
 import { formatDate } from "@/lib/format";
 import { first, queryHref, type SearchParams } from "@/lib/params";
-import type { FindingInstitution, FindingsPage, FindingsRequest } from "@/lib/types";
+import type { AnomalousFindingsPage, FindingInstitution, FindingsPage, FindingsRequest } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
-  title: "Находки: посты выше нормы",
-  description: "Посты вузов, сработавшие лучше обычного для своего аккаунта: индекс к норме на одном возрасте поста.",
-};
 
 const MODE_OPTIONS = [
   { value: "all", label: "Все вузы", title: "Лучшие посты всех вузов" },
   { value: "institution", label: "Мой вуз", title: "Посты одного вуза" },
 ] as const;
 
-export default async function FindingsPageRoute({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const raw = await searchParams;
-  const query = normalizeFindingsQuery(raw);
+/** Общая страница двух разделов «Находок». Раздел — адрес (/findings и
+ *  /findings/anomalous): у каждого свой бандл, и лента «Выше нормы» не грузит
+ *  код рейтинга. Результаты рисует страница раздела через `results`. */
+export async function FindingsScreen({ raw, view, results }: {
+  raw: SearchParams; view: FindingsView;
+  results: (page: FindingsPage | AnomalousFindingsPage, query: ParsedFindingsQuery, key: string, anomaliesVisible: boolean) => ReactNode;
+}) {
+  const anomaliesVisible = anomalyReportVisible();
+  const parsed = normalizeFindingsQuery(raw, view);
+  // Без отчёта об аномалиях раздела «Аномальные посты» и пометок находок нет.
+  if (!anomaliesVisible && view === "anomalous") redirect(queryHref("/findings", viewHrefQuery(parsed)));
+  const query = anomaliesVisible ? parsed : { ...parsed, clean: false, promotion: "all" as const };
+  const anomalous = query.view === "anomalous";
+  const path = findingsPath(query.view);
   // «Мой вуз» без выбранного вуза — пустое состояние с выбором, без запроса постов.
   const choosing = first(raw.mode) === "institution" && query.mode === "all";
-  const anomaliesVisible = anomalyReportVisible();
   const anomalies: FindingsRequest["anomalies"] = anomaliesVisible ? "exclude" : "include";
   const cursor = first(raw.cursor);
-  let page: FindingsPage | null = null;
+  let page: FindingsPage | AnomalousFindingsPage | null = null;
   let institutions: FindingInstitution[] = [];
   let failed = false;
   let staleCursor = false;
@@ -56,7 +66,9 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
   // кэша, поэтому выбор вуза не запускает отдельный тяжёлый запрос.
   const defaultListing = { ...DEFAULT_FINDINGS_QUERY, anomalies, limit: 50 };
   try {
-    page = await api.findings(choosing ? defaultListing : { ...query, anomalies, limit: 50, cursor });
+    page = choosing ? await api.findings(defaultListing)
+      : anomalous ? await api.anomalousFindings({ ...query, anomalies, limit: 50, cursor })
+        : await api.findings({ ...query, anomalies, limit: 50, cursor });
     institutions = page.institutions;
   } catch (error) {
     // Курсор при выборе вуза не отправляется: 400 тогда — обычная ошибка.
@@ -68,7 +80,7 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
   }
   // Курсор устарел (сменилась ревизия): начинаем список заново. redirect()
   // бросает собственное исключение, поэтому вызывается вне try.
-  if (staleCursor) redirect(queryHref("/statistics", findingsHrefQuery(query)));
+  if (staleCursor) redirect(queryHref(path, findingsHrefQuery(query)));
 
   const institutionMode = query.mode === "institution" || choosing || unknownInstitution;
   // «Мой вуз» без вуза нормализуется в тот же запрос, что и «Все вузы»: режим
@@ -78,16 +90,20 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
 
   return <>
     <PageHeader
-      title="Находки: посты выше нормы"
-      titleNote={<MethodNote title="Как считается индекс"><p>Индекс — взаимодействия поста на 24-м часу (у свежих — на последнем замере), делённые на типичное значение его аккаунта на том же часу за 30 дней.</p>{anomaliesVisible ? <p>Посты с выраженной аномалией не входят ни в норму, ни в выдачу.</p> : null}<p><Link href="/methodology/findings" prefetch={false} className="underline underline-offset-4">Подробнее о методике</Link></p></MethodNote>}
-      description="Посты, которые сработали лучше обычного для своего аккаунта."
+      title="Находки"
+      titleNote={anomalous
+        ? <MethodNote title="Как строится рейтинг"><p>В рейтинг входят посты периода с уровнем «выраженная аномалия» и выше. Порядок — уровень, затем доля необычного прироста: какая часть итогового значения метрики набрана в участке признака.</p><p>Это необычность счётчиков, а не доказательство накрутки: у каждого признака на странице поста названы честные объяснения.</p><p><Link href="/methodology/findings" prefetch={false} className="underline underline-offset-4">Подробнее о методике</Link></p></MethodNote>
+        : <MethodNote title="Как считается индекс"><p>Индекс — взаимодействия поста на 24-м часу (у свежих — на последнем замере), делённые на типичное значение его аккаунта на том же часу за 30 дней.</p>{anomaliesVisible ? <p>Посты с выраженной аномалией не входят ни в норму, ни в выдачу.</p> : null}<p><Link href="/methodology/findings" prefetch={false} className="underline underline-offset-4">Подробнее о методике</Link></p></MethodNote>}
+      description={anomalous ? "Посты с самой необычной динамикой счётчиков: сильнейшие признаки первыми."
+        : "Посты, которые сработали лучше обычного для своего аккаунта."}
       meta={page ? <span className="text-muted-foreground text-xs" title={`${formatDate(page.asOf)} · datasetRevision ${page.datasetRevision}`}>
         Обновлено {updated}<span className="block sm:inline"><span className="hidden sm:inline"> · </span>период {periodRange(page.asOf, query.period)}</span>
       </span> : null}
     />
     {!anomaliesVisible ? <Alert className="mb-4"><AlertDescription>Проверка аномалий временно недоступна — посты не отфильтрованы.</AlertDescription></Alert> : null}
+    {anomaliesVisible ? <FindingsViewTabs query={query} /> : null}
 
-    <FindingsFilterForm key={selectionKey} id="findings-filters" action="/statistics" method="get" aria-label="Фильтры находок"
+    <FindingsFilterForm key={selectionKey} id="findings-filters" action={path} method="get" aria-label="Фильтры находок"
       data-testid="filter-toolbar" className={FINDINGS_TOOLBAR_CLASS}>
       <div className={FINDINGS_MODE_CLASS}><NativeSegments name="mode" legend="Режим" value={institutionMode ? "institution" : "all"}
         options={MODE_OPTIONS} labelled={false} stretch /></div>
@@ -100,7 +116,7 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
       <div className={FINDINGS_DIRECTION_CLASS}><SortDirection name="direction" value={query.direction} legend="Направление сортировки" /></div>
       <div className={FINDINGS_SORT_CLASS}>
         <NativeSelect name="sort" defaultValue={query.sort} aria-label="Сортировка" className={FILTER_SELECT_CLASS}>
-          {sortOptionsFor(query.platform).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
+          {sortOptionsFor(query.platform, query.view).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
         </NativeSelect>
       </div>
       <div className={FINDINGS_FILTERS_CLASS}><TypesPopover value={query.types} group={query.group} groupAvailable={!institutionMode} /></div>
@@ -110,22 +126,26 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
           <InputGroupInput name="q" type="search" defaultValue={query.q} maxLength={200} placeholder="Номер, URL или аккаунт" aria-label="Поиск публикаций" className="text-sm md:text-sm" />
           <InputGroupAddon align="inline-end">
             {query.q ? <InputGroupButton size="icon-sm" className="size-6" nativeButton={false} aria-label="Очистить поиск" title="Очистить поиск"
-              render={<Link role="link" href={queryHref("/statistics", { ...findingsHrefQuery(query), q: undefined })} prefetch={false} />}><X className="size-3.5" aria-hidden="true" /></InputGroupButton> : null}
+              render={<Link role="link" href={queryHref(path, { ...findingsHrefQuery(query), q: undefined })} prefetch={false} />}><X className="size-3.5" aria-hidden="true" /></InputGroupButton> : null}
             <InputGroupButton type="submit" variant="secondary" size="icon-sm" className="size-6" aria-label="Применить фильтры" title="Применить фильтры"><ArrowRight className="size-3.5" aria-hidden="true" /></InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
       </div>
     </FindingsFilterForm>
+    {anomaliesVisible && page && !choosing && (page.hiddenByFindings > 0 || query.clean)
+      ? <CleanToggle key={String(query.clean)} form="findings-filters" clean={query.clean} count={page.hiddenByFindings} /> : null}
+    {anomaliesVisible && page && !choosing && (query.platform === "all" || query.platform === "vk")
+      ? <PromotionFilter key={query.promotion} form="findings-filters" value={query.promotion} /> : null}
 
-    <NavigationBoundary fallback={<StatisticsSkeleton chrome={false} />}>
-      {failed ? <ApiFailureState retryHref={queryHref("/statistics", findingsHrefQuery(query))} />
+    <NavigationBoundary fallback={<FindingsSkeleton chrome={false} />}>
+      {failed ? <ApiFailureState retryHref={queryHref(path, findingsHrefQuery(query))} />
         : choosing || unknownInstitution || !page ? <Empty key={selectionKey} role="status" className="bg-card border py-10">
             <EmptyHeader><EmptyTitle><h2 className="font-heading text-lg font-semibold">{unknownInstitution ? "Вуз не найден — выберите другой" : "Выберите вуз, чтобы увидеть его посты"}</h2></EmptyTitle></EmptyHeader>
             {choosing || unknownInstitution ? <EmptyContent className="w-full max-w-64">
               <InstitutionPicker institutions={institutions} value={query.institution} form="findings-filters" />
             </EmptyContent> : null}
           </Empty>
-        : <FindingsResults key={selectionKey} page={page} query={query} anomaliesVisible={anomaliesVisible} />}
+        : results(page, query, selectionKey, anomaliesVisible)}
     </NavigationBoundary>
   </>;
 }

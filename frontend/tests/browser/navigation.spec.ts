@@ -23,8 +23,8 @@ test("переход по меню и открытие карточки не п�
   await page.goto("/review?platform=telegram");
   await stamp(page);
 
-  await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
-  await expect(page).toHaveURL(/\/statistics\?platform=telegram/);
+  await page.getByTestId("main-nav").getByRole("link", { name: "Находки" }).click();
+  await expect(page).toHaveURL(/\/findings\?platform=telegram/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   expect(await kept(page)).toBe("kept");
 
@@ -60,8 +60,8 @@ test.describe("без JavaScript", () => {
     await expect(page.getByRole("link", { name: "Исходный код на GitHub" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Тема:/ })).toBeVisible();
 
-    await page.getByTestId("main-nav-fallback").getByRole("link", { name: "Статистика" }).click();
-    await expect(page).toHaveURL(/\/statistics\?platform=telegram/);
+    await page.getByTestId("main-nav-fallback").getByRole("link", { name: "Находки" }).click();
+    await expect(page).toHaveURL(/\/findings\?platform=telegram/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
     await page.goto("/review?platform=telegram");
@@ -77,22 +77,22 @@ test("заготовка при переходе принадлежит той �
   await page.goto("/review?platform=telegram");
   // Ответ задерживается, чтобы заготовка успела показаться и её можно было
   // разглядеть: без задержки переход завершается за один кадр.
-  await page.route("**/statistics**", async (route) => {
+  await page.route("**/findings**", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1200));
     await route.continue();
   });
-  await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
-  // На экране адаптивная заготовка статистики, а не сетка карточек обзора и
+  await page.getByTestId("main-nav").getByRole("link", { name: "Находки" }).click();
+  // На экране адаптивная заготовка находок, а не сетка карточек обзора и
   // не её заголовок с фильтрами.
-  await expect(page.getByText("Загрузка статистики")).toBeVisible();
+  await expect(page.getByText("Загрузка находок")).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "Поиск вуза" })).toHaveCount(0);
-  await expect(page).toHaveURL(/\/statistics/);
+  await expect(page).toHaveURL(/\/findings/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
 test("локальные заготовки не дублируют постоянную шапку страницы", async ({ page }) => {
   await page.goto("/review?platform=telegram");
-  await delayMatchingNavigation(page, (url) => ["/review", "/statistics"].includes(url.pathname) && url.searchParams.get("period") === "7d");
+  await delayMatchingNavigation(page, (url) => ["/review", "/findings"].includes(url.pathname) && url.searchParams.get("period") === "7d");
 
   await page.locator('label:has(input[name="period"][value="7d"])').click();
 
@@ -100,10 +100,10 @@ test("локальные заготовки не дублируют постоя
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
   await expect(page).toHaveURL(/period=7d/);
-  await page.goto("/statistics?platform=telegram&period=30d");
+  await page.goto("/findings?platform=telegram&period=30d");
   await page.locator('label:has(input[name="period"][value="7d"])').click();
 
-  await expect(page.getByText("Загрузка статистики")).toBeVisible();
+  await expect(page.getByText("Загрузка находок")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 });
 

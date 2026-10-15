@@ -185,7 +185,7 @@ def test_backfill_finds_old_synchrony_with_whole_window_activity(monkeypatch):
         def read_subscribers(self, accounts, since, until):
             return {}
 
-        def read_series(self, targets):
+        def read_series(self, targets, kinds_for=None):
             return {subject.publication_id: subject}
 
         def write_states(self, writes):

@@ -212,10 +212,87 @@ def test_exact_views_are_taken_as_they_are():
 
 def test_a_collection_gap_over_the_band_end_is_bridged_by_equal_reads():
     # Пробел сбора 22,7–25,9 ч: реакции на обоих концах 195, значит, и на
-    # 24-м часу ровно 195, хотя интерполяции через пробел нет.
+    # 24-м часу ровно 195. Счётчик не убывает, поэтому такой промежуток —
+    # доказанное плато, а не пробел.
     ages = list(np.arange(0, 22.7 * H, 15 * M)) + [22.7 * H, 25.9 * H]
     reactions = [min(195, int(age // 300)) for age in ages[:-2]] + [195, 195]
     prepared = prepare(post(ages, {"reactions": reactions}), later(26), CADENCE)
-    assert prepared.metrics[Metric.REACTIONS].gaps
+    assert not prepared.metrics[Metric.REACTIONS].gaps
     estimate = engagement_estimate_at(prepared, 24 * H)
     assert (estimate.value, estimate.low, estimate.high) == (195, 195, 195)
+
+
+def test_a_withdrawn_reaction_does_not_empty_the_bracket():
+    # Пермский Политех в Telegram, 09.10: реакций было 197, одну сняли, и по обе
+    # стороны конца трёх суток (пробел 69,4–75,1 ч) счётчик точно 196.
+    ages = list(np.arange(0, 60 * H, 15 * M)) + [60.5 * H, 69.2 * H, 69.4 * H, 75.1 * H]
+    reactions = [min(197, int(age // 300)) for age in ages[:-4]] + [196, 196, 196, 196]
+    prepared = prepare(post(ages, {"reactions": reactions}), later(76), CADENCE)
+    estimate = counter_estimate_at(prepared, Metric.REACTIONS, 72 * H)
+    assert (estimate.value, estimate.low, estimate.high) == (196, 196, 196)
+
+
+def test_neighbours_that_disagree_still_give_no_estimate():
+    # Снятие между ближайшими замерами: где был счётчик на конце, неизвестно.
+    ages = [60 * H, 69 * H, 75 * H]
+    prepared = prepare(post(ages, {"reactions": [197, 197, 150]}), later(76), CADENCE)
+    assert counter_estimate_at(prepared, Metric.REACTIONS, 72 * H) is None
+
+
+def _typed(platform="vk", kind="video", repost=False):
+    from anomaly_analysis.v2.domain import Metric as M, PostSeries as PS
+    start = datetime(2026, 9, 10, 9, tzinfo=timezone.utc)
+    at = tuple(start + timedelta(minutes=5 * i) for i in range(1, 4))
+    return PS(UUID(int=1), UUID(int=2), platform, start, repost, at,
+              {M.VIEWS: (10, 20, 30), M.REACTIONS: (5, 9, 12)}, publication_type=kind)
+
+
+def test_vk_video_views_are_not_a_base_for_reaction_ratios():
+    from anomaly_analysis.v2.series import views_belong_to_source, views_not_audience_reason, views_ratio_unreliable
+    assert views_not_audience_reason(_typed()) == "vk_video_views"
+    assert views_ratio_unreliable(_typed())
+    # Просмотры стены — собственные: их форма проверяется, как у любого поста.
+    assert not views_belong_to_source(_typed())
+
+
+def test_other_vk_types_and_other_platforms_keep_their_views():
+    from anomaly_analysis.v2.series import views_ratio_unreliable
+    assert not views_ratio_unreliable(_typed(kind="photo"))
+    assert not views_ratio_unreliable(_typed(platform="telegram"))
+    assert not views_ratio_unreliable(_typed(kind=None))
+
+
+def _tg(views, qualities, step_minutes=30):
+    start = datetime(2026, 10, 1, 10, tzinfo=timezone.utc)
+    at = tuple(start + timedelta(minutes=step_minutes * (i + 1)) for i in range(len(views)))
+    return PostSeries(UUID(int=1), UUID(int=2), "telegram", start, False, at,
+                      {Metric.VIEWS: tuple(views), Metric.REACTIONS: tuple(20 for _ in views)},
+                      qualities={Metric.VIEWS: tuple(qualities), Metric.REACTIONS: ("exact",) * len(views)})
+
+
+def test_rounded_telegram_views_get_a_bounded_series():
+    from anomaly_analysis.v2.series import CollectionCadence, prepare
+    series = _tg([800, 950, 1200, 1800, 2400, 3000], ["exact", "exact", "rounded", "rounded", "rounded", "rounded"])
+    prepared = prepare(series, series.observed_at[-1], CollectionCadence())
+    bounded = prepared.bounded_views
+    assert bounded is not None and bounded.data.values.size == 6
+    assert (bounded.low[0], bounded.high[0]) == (800, 800)
+    assert (bounded.low[2], bounded.high[2]) == (1100, 1300)   # шаг «1.2K» — сотня в обе стороны
+    # Точные просмотры прежние: округлённые в них не попадают.
+    assert prepared.metrics[Metric.VIEWS].values.size == 2
+
+
+def test_growth_bounds_are_conservative_and_monotone():
+    from anomaly_analysis.v2.series import CollectionCadence, growth_bounds, prepare
+    series = _tg([800, 950, 1200, 1800, 2400, 3000], ["exact", "exact"] + ["rounded"] * 4)
+    bounded = prepare(series, series.observed_at[-1], CollectionCadence()).bounded_views
+    ages = bounded.data.ages
+    low, high = growth_bounds(bounded, ages[1], ages[5])
+    assert low == 3000 - 1000 - 950 and high == 3000 + 1000 - 950   # шаг «3K» — тысяча
+    assert growth_bounds(bounded, ages[0] - 60, ages[1]) is None    # до первого замера коридора нет
+
+
+def test_exact_only_telegram_has_no_bounded_series():
+    from anomaly_analysis.v2.series import CollectionCadence, prepare
+    exact = _tg([100, 200, 300], ["exact"] * 3)
+    assert prepare(exact, exact.observed_at[-1], CollectionCadence()).bounded_views is None

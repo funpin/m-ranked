@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass
 
 from .errors import BadRequest
-from .findings import FINDING_TYPES, FINDINGS_PERIOD_DAYS
+from .findings import ANOMALOUS_SORTS, FINDING_TYPES, FINDINGS_PERIOD_DAYS
 
 PLATFORMS = ("all", "telegram", "vk", "max", "rutube")
 PERIODS = ("3h", "1d", "7d", "30d")
@@ -129,18 +129,26 @@ class FindingsQuery:
     group: str
     search: str
     anomalies: str
+    # Скрыть посты аккаунтов с устойчивыми (статус 2) аккаунтными находками.
+    clean: bool = False
+    # «above_norm» — посты выше нормы, «anomalous» — рейтинг аномальных постов.
+    view: str = "above_norm"
+    # Посты с пометкой «похоже на продвижение»: all — все, only — только они, hide — без них.
+    promotion: str = "all"
 
     @property
     def dimensions(self) -> str:
-        return ":".join((self.mode, str(self.institution or ""), self.platform, self.period,
+        return ":".join((self.view, self.mode, str(self.institution or ""), self.platform, self.period,
                          ",".join(self.types), self.sort, self.direction, self.group,
-                         self.search, self.anomalies))
+                         self.search, self.anomalies, "clean" if self.clean else "")) \
+            + ("" if self.promotion == "all" else f":promotion={self.promotion}")
 
 
 def findings_query(mode: str | None, institution: str | None, platform: str | None,
                    period: str | None, types: list[str] | None, sort: str | None,
                    direction: str | None, group: str | None, q: str | None,
-                   anomalies: str | None) -> FindingsQuery:
+                   anomalies: str | None, clean: str | None = None,
+                   view: str = "above_norm", promotion: str | None = None) -> FindingsQuery:
     resolved_mode = mode or "all"
     if resolved_mode not in ("all", "institution"):
         raise BadRequest("режим должен быть all или institution")
@@ -155,9 +163,10 @@ def findings_query(mode: str | None, institution: str | None, platform: str | No
     requested_types = set(types or ())
     if requested_types - set(FINDING_TYPES):
         raise BadRequest(f"тип публикации должен быть одним из {', '.join(FINDING_TYPES)}")
-    resolved_sort = sort or "interaction_index"
-    if resolved_sort not in FINDINGS_SORTS:
-        raise BadRequest(f"сортировка должна быть одной из {', '.join(sorted(FINDINGS_SORTS))}")
+    sorts = frozenset(ANOMALOUS_SORTS) if view == "anomalous" else FINDINGS_SORTS
+    resolved_sort = sort or ("anomaly" if view == "anomalous" else "interaction_index")
+    if resolved_sort not in sorts:
+        raise BadRequest(f"сортировка должна быть одной из {', '.join(sorted(sorts))}")
     resolved_direction = direction or "desc"
     if resolved_direction not in ("asc", "desc"):
         raise BadRequest("направление должно быть asc или desc")
@@ -175,6 +184,11 @@ def findings_query(mode: str | None, institution: str | None, platform: str | No
         resolved_institution = int(institution)
         if resolved_group != "none":
             raise BadRequest("группировка по вузам доступна только в режиме all")
+    if clean not in (None, "", "0", "1"):
+        raise BadRequest("значение clean должно быть 0 или 1")
+    resolved_promotion = promotion or "all"
+    if resolved_promotion not in ("all", "only", "hide"):
+        raise BadRequest("значение promotion должно быть all, only или hide")
     text = (q or "").strip()
     if len(text) > 200:
         raise BadRequest("поисковый фрагмент длиннее 200 символов")
@@ -182,6 +196,7 @@ def findings_query(mode: str | None, institution: str | None, platform: str | No
         resolved_mode, resolved_institution, resolved_platform, resolved_period,
         tuple(value for value in FINDING_TYPES if value in requested_types),
         resolved_sort, resolved_direction, resolved_group, text, resolved_anomalies,
+        clean == "1", view, resolved_promotion,
     )
 
 

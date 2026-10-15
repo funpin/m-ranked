@@ -26,7 +26,7 @@ from typing import Mapping
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries, counter_bounds, max_display_unit, views_belong_to_source
+from ..series import HOUR, PreparedSeries, counter_bounds, max_display_unit, views_ratio_unreliable
 from .base import DetectorContext, age_text, make_sign, number, strongest
 
 ID = "bounded_reaction_burst"
@@ -117,6 +117,12 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         if after >= len(rows) or ages[after] - ages[end] > AFTER_HOURS + BOUNDARY_TOLERANCE_HOURS:
             continue
         before = int(np.searchsorted(ages, ages[begin] - BACKGROUND_HOURS, side="right")) - 1
+        if before < 0 or ages[begin] - ages[before] > BACKGROUND_HOURS + BOUNDARY_TOLERANCE_HOURS:
+            # Замера ровно за шесть часов может не быть, когда сборщик хранил
+            # только изменения: фон тогда — от последнего замера не позже чем
+            # за пять часов (МИФИ ВК №35481: 5 ч 55 мин тишины перед +78).
+            before = int(np.searchsorted(
+                ages, ages[begin] - (BACKGROUND_HOURS - BOUNDARY_TOLERANCE_HOURS), side="right")) - 1
         if (before < 0 or ages[begin] - ages[before] > BACKGROUND_HOURS + BOUNDARY_TOLERANCE_HOURS
                 or ages[first_after] - ages[end] > 1.5 or prefix[after+1] != prefix[before]):
             continue
@@ -131,9 +137,9 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         immediate = max(0, bounds[first_after][1] - high[0]) / (ages[first_after] - ages[end])
         if rate < 10 * max(background, 1) or max(tail, immediate) > .05 * rate:
             continue
-        if view_bounds is None and not views_belong_to_source(series):
+        if view_bounds is None and not views_ratio_unreliable(series):
             view_bounds = _views(prepared, count)
-        if view_bounds and not views_belong_to_source(series):
+        if view_bounds and not views_ratio_unreliable(series):
             v0, v1 = view_bounds[begin], view_bounds[end]
             if v0 is not None and v1 is not None:
                 # A new audience with a compatible reaction fraction is a
@@ -166,7 +172,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         signs.extend(_reported_plateau(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
     # Without own comparable views or attested precision only the saved shape
     # can be shown; with own exact views engagement_regime judges the pack.
-    if not signs and (views_belong_to_source(series) or Metric.VIEWS not in series.values
+    if not signs and (views_ratio_unreliable(series) or Metric.VIEWS not in series.values
                       or series.platform == "telegram" and any(
             row[2] in {"rounded", "unknown"} or row[4] and any(k.startswith("paid:") for k in row[4])
             for row in rows)):
@@ -234,7 +240,7 @@ def _reported_own_shape(prepared, ages, rows):
         if (burst / (burst + tail) < MIN_PACK_SHARE or tail / (ages[after] - ages[end]) > .05 * burst / duration
                 or ages[first_after] - ages[end] > 1.5 or immediate / (ages[first_after] - ages[end]) > .1 * burst / duration):
             continue
-        if views_belong_to_source(prepared.series) or Metric.VIEWS not in prepared.series.values:
+        if views_ratio_unreliable(prepared.series) or Metric.VIEWS not in prepared.series.values:
             reason = "Сопоставимых просмотров нет, поэтому отклик с аудиторией не сравнивается."
         else:
             reason = "Точность сохранённых счётчиков не подтверждена, поэтому величина рывка не доказывается расчётом."
@@ -291,7 +297,7 @@ def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, view
     Source views of reposts are not a comparable audience and abstain here.
     """
     series = prepared.series
-    if views_belong_to_source(series) or Metric.VIEWS not in series.values:
+    if views_ratio_unreliable(series) or Metric.VIEWS not in series.values:
         return []
     count = len(ages)
     candidates = tuple(_candidate_pairs(ages, bounds, (0, 1/6, .25, .5, 1, 2), max_duration=2, min_delta=MIN_EARLY_DELTA))
@@ -412,7 +418,7 @@ def _reported_plateau(prepared, ages, bounds, validity_prefix, withdrawals):
     lower/upper growth claims and highest-severity evidence are discarded.
     """
     series = prepared.series
-    if views_belong_to_source(series) or Metric.VIEWS not in series.values:
+    if views_ratio_unreliable(series) or Metric.VIEWS not in series.values:
         return []
     count = len(ages)
     views = _views(prepared, count)

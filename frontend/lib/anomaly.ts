@@ -29,11 +29,14 @@ export const SIGNAL_LEGEND = [
   { pattern: 14, title: "пакет реакций, оторванный от просмотров" },
   { pattern: 15, title: "площадка списала реакции" },
   { pattern: 16, title: "одновременный обрыв просмотров и реакций" },
+  { pattern: 17, title: "поток одной реакции" },
+  { pattern: 18, title: "реакции сквозь ночь" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;
 export const FAMILY_NAMES = {
   velocity: "скорость", shape: "форма", cross_metric: "согласие метрик", synchrony: "синхронность",
+  composition: "состав реакций",
 } as const;
 
 export type Tone = "neutral" | "amber" | "red";
@@ -150,12 +153,28 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
       const item = (render as Record<string, unknown>)[key];
       return Array.isArray(item) && typeof item[index] === "number" ? item[index] : 0;
     };
-    const initial = render.mode === "initial_plateau";
+    if (render.mode === "initial_plateau") {
+      // Счётчик начинается с нуля в момент публикации: скачок — от нуля до
+      // первого замера, а не от первого замера к плато (МИРЭА ВК: 100 реакций
+      // через 4 минуты, затем +5 за три часа). Равные границы — один столбец.
+      const span = (key: string, label: string, highlight: boolean) => {
+        const low = range(key, 0), high = range(key, 1);
+        return low === high ? [{ label, value: low, highlight }]
+          : [{ label: `${label}: минимум`, value: low, highlight }, { label: `${label}: максимум`, value: high, highlight }];
+      };
+      const first = numberAt(render, "startAge");
+      const plateau = numberAt(render, "endAge");
+      return { type: "bars", percent: false, bars: [
+        { label: "публикация", value: 0, highlight: false },
+        ...span("beforeRange", first ? `первый замер · ${scaleText(first)}` : "первый замер", true),
+        ...span("afterRange", plateau ? `плато · ${scaleText(plateau)}` : "плато", false),
+      ] };
+    }
     return { type: "bars", percent: false, bars: [
-      { label: initial ? "первый замер: минимум" : "до: минимум", value: range("beforeRange", 0), highlight: false },
-      { label: initial ? "первый замер: максимум" : "до: максимум", value: range("beforeRange", 1), highlight: false },
-      { label: initial ? "плато: минимум" : "после: минимум", value: range("afterRange", 0), highlight: true },
-      { label: initial ? "плато: максимум" : "после: максимум", value: range("afterRange", 1), highlight: true },
+      { label: "до: минимум", value: range("beforeRange", 0), highlight: false },
+      { label: "до: максимум", value: range("beforeRange", 1), highlight: false },
+      { label: "после: минимум", value: range("afterRange", 0), highlight: true },
+      { label: "после: максимум", value: range("afterRange", 1), highlight: true },
     ] };
   }
   if (render.kind === "reference") {
@@ -200,6 +219,14 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
     return { type: "bars", percent: true, bars: [
       { label: "просмотры: скорость после", value: kept("viewsBefore", "viewsAfter"), highlight: true },
       { label: "реакции: скорость после", value: kept("reactionsBefore", "reactionsAfter"), highlight: true },
+    ] };
+  }
+  if (render.kind === "stream") {
+    // Доля одного вида реакции среди новых реакций окна против его доли вне окна.
+    const all = numberAt(render, "allDelta") ?? 0;
+    return { type: "bars", percent: true, bars: [
+      { label: "в окне", value: all > 0 ? (numberAt(render, "keyDelta") ?? 0) / all : 0, highlight: true },
+      { label: "вне окна", value: numberAt(render, "outsideShare") ?? 0, highlight: false },
     ] };
   }
   if (render.kind === "erv") {

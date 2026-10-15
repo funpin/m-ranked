@@ -3,7 +3,7 @@
  *  передавать только компоненты, но не обычные значения. */
 export const NAV_LINKS = [
   { href: "/review", label: "Обзор" },
-  { href: "/statistics", label: "Статистика" },
+  { href: "/findings", label: "Находки" },
   { href: "/compare", label: "Сравнение" },
   // Методология одна на все площадки: параметр площадки ей не передаётся.
   { href: "/methodology", label: "Методология", platformless: true },
