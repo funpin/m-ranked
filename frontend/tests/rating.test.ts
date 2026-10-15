@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hasActual, normalizeCategory, normalizeMonth, rankDelta, rankLabel, rowsFor, scatterPoints, statusLine } from "../lib/rating";
+import { hasActual, monthLabel, normalizeCategory, normalizeMonth, rankDelta, rankLabel, rowsFor, scatterPoints, statusLine, stripPosition } from "../lib/rating";
 import type { RatingForecastCell, RatingForecastRow } from "../lib/types";
 
 const cell = (rank: number, extra: Partial<RatingForecastCell> = {}): RatingForecastCell => ({
@@ -51,4 +51,15 @@ test("status line speaks plain Russian", () => {
     "Ретроспективный расчёт, не прогноз до публикации");
   assert.equal(hasActual({ status: "retrospective" }), true);
   assert.equal(hasActual({ status: "final" }), false);
+});
+
+test("month switcher reads as a Russian month name", () => {
+  assert.equal(monthLabel("2026-10"), "Октябрь 2026");
+  assert.equal(monthLabel("2027-01"), "Январь 2027");
+});
+
+test("place strip positions stay inside the scale", () => {
+  assert.deepEqual(stripPosition(1, 233), 0);
+  assert.deepEqual(stripPosition(233, 233), 100);
+  assert.equal(stripPosition(300, 233), 100);
 });

@@ -65,3 +65,18 @@ export function scatterPoints(rows: RatingForecastRow[], category: RatingCategor
     return cell.actualRank === null ? [] : [{ name: row.shortName ?? row.name, predicted: cell.rank, actual: cell.actualRank }];
   });
 }
+
+const MONTH_NAMES = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август",
+  "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"] as const;
+
+/** «2026-10» → «Октябрь 2026»: так же называет месяцы официальный рейтинг. */
+export function monthLabel(month: string): string {
+  const [year, number] = month.split("-");
+  return `${MONTH_NAMES[Number(number) - 1]} ${year}`;
+}
+
+/** Положение места на шкале 1…total в процентах слева: первое место — край шкалы. */
+export function stripPosition(rank: number, total: number): number {
+  if (total <= 1) return 0;
+  return Math.min(100, Math.max(0, ((rank - 1) / (total - 1)) * 100));
+}

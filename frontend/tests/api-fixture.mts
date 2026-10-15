@@ -184,15 +184,14 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
 // рейтинг, карта и выделение имели что показывать.
 function ratingForecast(month: string): Schema["RatingForecast"] {
   const retrospective = month === "2026-09";
-  const cell = (rank: number, source: Schema["RatingForecastCell"]["source"] = "formula", actual: number | null = null) => ({
+  const base = (rank: number, source: Schema["RatingForecastCell"]["source"] = "formula") => ({
     score: 70 - rank, rank, rankBest: Math.max(1, rank - 3), rankWorst: rank + 6, baseRank: rank + 2, source,
-    actualRank: retrospective ? (actual ?? rank + 1) : null, actualScore: retrospective ? 69 - rank : null,
-    metrics: { posts: 90, postsExtrapolated: 120, avgViews: 800, students: 12000, erv: 0.02 },
+    actualRank: retrospective ? rank + 1 : null, actualScore: retrospective ? 69 - rank : null,
   });
-  const social = (rank: number, source: Schema["RatingForecastCell"]["source"] = "formula") => {
-    const { metrics: _metrics, ...rest } = cell(rank, source);
-    return rest;
-  };
+  const cell = (rank: number, source: Schema["RatingForecastCell"]["source"] = "formula") => ({
+    ...base(rank, source), metrics: { posts: 90, postsExtrapolated: 120, avgViews: 800, students: 12000, erv: 0.02 },
+  });
+  const social = base;
   const rows = [
     { institutionId: uuid(9, 1), legacyId: 1, name: "Северо-Кавказский федеральный университет", shortName: "СКФУ", baseConsolidatedRank: null,
       categories: { social: social(8), max: cell(27), vk: cell(38), rutube: cell(13) } },
