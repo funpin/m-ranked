@@ -26,10 +26,14 @@ services:
       - ./postgres/init/002-apply-schema.sh:/docker-entrypoint-initdb.d/002-apply-schema.sh:ro
       - ../db/migrations:/m-ranked-schema:ro
     healthcheck:
+      # По TCP: на время init-скриптов docker-entrypoint поднимает временный
+      # сервер только на unix-сокете (listen_addresses=''). Проверка через сокет
+      # проходила на нём, CI шёл дальше, а сервер тут же останавливался:
+      # «the database system is shutting down» (run 38666255627, 15.10.2026).
       test:
         - CMD-SHELL
         - >-
-          pg_isready --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
+          pg_isready --host 127.0.0.1 --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
           && psql --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
           --no-psqlrc --tuples-only --command 'SELECT 1' >/dev/null
       interval: 5s
