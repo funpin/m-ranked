@@ -20,6 +20,7 @@
 | ретенция после ACK, метрики и алерты обеих сторон | реализовано |
 | пороги диска 70/80/90 %, приостановка низкоприоритетного сбора | реализовано (P2.2) |
 | replay в отдельное пространство имён outbox | не реализовано, P4 |
+| справочник Сервер 2 → Сервер 1 (`GET /catalog/v1/snapshot`) | реализовано (0082), см. ниже |
 
 ## Decision
 
@@ -143,3 +144,21 @@ uses TLS verification and 3/30/30 second bounds. P2.1 implemented the receiver a
 full-jitter scheduler; P2.2 implemented guarded working-set retention; P2.4 adds hardened
 units, credential boundaries, firewall procedure and the live switch runbook. Certificate
 issuance and the switch to a real second host remain explicit production operations.
+
+## Catalog in the opposite direction (0082)
+
+Catalog commands write only Server 2, while Server 1 collectors read
+`catalog.platform_account` from their own database. The transfer sender
+therefore also pulls `GET /catalog/v1/snapshot` from the same receiver over the
+same mTLS client every `COLLECTOR_CATALOG_SYNC_INTERVAL_SECONDS` (300 s). The
+receiver serves it only to certificates allowed to send batches and answers
+with the snapshot digest alone while the sender already holds it.
+
+`catalog.catalog_sync_snapshot()` reads the catalog in one statement;
+`catalog.apply_catalog_sync(jsonb)` applies it on Server 1 in one transaction.
+Institutions, institution codes, accounts and catalog aliases keep their ids;
+administrator-made identity versions are appended without ids and only when
+newer than anything Server 1 already knows about the account, so a collector
+observation is never overwritten. The apply takes the collector's per-account
+identity advisory locks first and in id order. Procedure:
+`operations/runbooks/DEPLOY.md`, section 2.

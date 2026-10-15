@@ -499,6 +499,17 @@ class HttpsMtlsTransport:
         if client is not None:
             client.close()
 
+    def get_bytes(self, url: str, *, params: Mapping[str, str], limit: int) -> bytes:
+        """GET к тому же приёмнику по тому же клиенту; тело не больше ``limit``."""
+        with self._http().stream("GET", url, params=params) as response:
+            response.raise_for_status()
+            body = bytearray()
+            for chunk in response.iter_bytes():
+                body += chunk
+                if len(body) > limit:
+                    raise ValueError("response exceeds its size limit")
+        return bytes(body)
+
     def send(self, envelope: TransferEnvelope) -> TransferAck:
         validate_envelope(envelope)
         response = self._http().post(
