@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import os
 import re
@@ -12,6 +13,26 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .max_api import MaxChannel, MaxPost
+
+# Версия Android-клиента MAX, которой представляется сборщик. 13.10.2026 MAX
+# перестал принимать 26.25.0, последнюю версию каталога PyMax 2.4.1: вход
+# отвечал login.token, а запрос SMS — client.unsupported-version. Отпечаток
+# APK (хеши dex и so, сертификат подписи) взят из каталога PyMax
+# hashes.pymax.org/versions.json и лежит рядом, чтобы старт сборщика не
+# зависел от сети; сертификат совпадает со всеми встроенными версиями MAX.
+MAX_APP_VERSION = "26.35.1"
+_FINGERPRINTS = Path(__file__).with_name("max_app_fingerprints.json")
+
+
+def max_version_catalog() -> Any:
+    """Каталог PyMax с отпечатками из репозитория поверх встроенных."""
+    from pymax.fingerprint.models import ApkBuildFingerprint
+    from pymax.versions.catalog import VersionCatalog
+
+    catalog = VersionCatalog()
+    for version, data in json.loads(_FINGERPRINTS.read_text(encoding="utf-8")).items():
+        catalog.add(version, ApkBuildFingerprint.model_validate(data), override=True)
+    return catalog
 
 
 class MaxHistoryRateLimited(RuntimeError):
@@ -309,6 +330,8 @@ class MaxUserClient:
             work_dir=str(self.session_path.parent),
             session_name=self.session_path.name,
             password_provider=ConsolePasswordProvider(),
+            app_version=MAX_APP_VERSION,
+            catalog=max_version_catalog(),
             extra_config=ExtraConfig(
                 device_type=DeviceType.DESKTOP,
                 reconnect=True,
