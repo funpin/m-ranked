@@ -81,7 +81,21 @@ FLAT_WINDOW = 4
 # всегда 1 (аккаунт не скрывается фильтром устойчивых находок), признаки
 # поста остаются как есть.
 PROMOTION_PLATFORMS = frozenset({"vk"})
-PROMOTION_EXCESS = 5.0
+# Порог ×5 на всех постах ВК 13.09–13.10.2026 (копия прода 13.10) пометил 90
+# постов у 38 из 85 аккаунтов: двое суток по ×5–10 и 700–4 000 просмотров —
+# обычный разброс. По силе слабые серии от настоящей рекламы не отличить: у
+# двух постов МФТИ из пяти подтверждённых ×11–18 и 1,7–2,3 тыс. просмотров.
+# Отличает кампания: в рекламе крутят несколько постов аккаунта в одни и те же
+# сутки. Поэтому серия засчитывается, если у поста не меньше двух общих суток
+# продвижения с другим постом аккаунта, или если она сама сильная: от трёх
+# суток, медиана превышения от ×20 и от 5 000 просмотров. С ×10 и этими
+# условиями — 24 поста у 11 аккаунтов, все пять постов МФТИ и ни одного его
+# непродвигаемого соседа.
+PROMOTION_EXCESS = 10.0
+PROMOTION_CAMPAIGN_SHARED_DAYS = 2
+PROMOTION_STRONG_DAYS = 3
+PROMOTION_STRONG_EXCESS = 20.0
+PROMOTION_STRONG_VIEWS = 5_000
 # Отклик — по всей серии суток, а не по каждым: реакций в сутки у такого поста
 # единицы, и одна случайная реакция рвала серию (МФТИ №58974: 1 реакция на
 # 903 просмотра — 1,19 нормы аккаунта на 11-е сутки). У пяти постов МФТИ
@@ -308,6 +322,20 @@ def _longest_run(days: list[tuple[int, str, int, int, float, float]]) -> list[tu
     return best
 
 
+def _in_campaign(publication: UUID, run: list, runs: dict[UUID, list]) -> bool:
+    """Другой пост аккаунта продвигался в те же сутки — не меньше двух общих."""
+    own = {item[1] for item in run}
+    return any(len(own & {item[1] for item in other}) >= PROMOTION_CAMPAIGN_SHARED_DAYS
+               for key, other in runs.items() if key != publication)
+
+
+def _strong_run(run: list) -> bool:
+    """Одиночная серия, которой хватает самой: долгая, крупная и с большим превышением."""
+    excess = sorted(item[4] for item in run)
+    return (len(run) >= PROMOTION_STRONG_DAYS and sum(item[2] for item in run) >= PROMOTION_STRONG_VIEWS
+            and excess[len(excess) // 2] >= PROMOTION_STRONG_EXCESS)
+
+
 def promotion_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[AccountFinding]:
     """Посты ВК, у которых не меньше двух суток подряд просмотры как у продвигаемой записи."""
     start = computed_for - timedelta(days=WINDOW_DAYS)
@@ -325,9 +353,10 @@ def promotion_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[
     result = []
     for account, found in candidates.items():
         members, days_all, views_in, reactions_in, excesses = set(), set(), 0, 0, []
-        for publication, days in found.items():
-            run = _longest_run([item for item in days if busy[item[1]] < limit])
-            if len(run) < PROMOTION_MIN_DAYS:
+        runs = {publication: run for publication, days in found.items()
+                if len(run := _longest_run([item for item in days if busy[item[1]] < limit])) >= PROMOTION_MIN_DAYS}
+        for publication, run in runs.items():
+            if not (_in_campaign(publication, run, runs) or _strong_run(run)):
                 continue
             members.add(publication)
             days_all |= {item[1] for item in run}

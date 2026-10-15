@@ -59,7 +59,7 @@ from uuid import UUID
 
 from .tail_ledger import MOSCOW, Point, TailLedger
 
-METHOD_VERSION = "account-findings-v6"
+METHOD_VERSION = "account-findings-v7"
 WINDOW_DAYS = 30
 STATUS_LABELS = {1: "необычный", 2: "устойчиво необычный"}
 TITLES = {

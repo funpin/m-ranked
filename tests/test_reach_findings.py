@@ -238,7 +238,7 @@ def test_every_reach_kind_has_words_for_the_api():
 
 def test_findings_method_version_is_bumped():
     from anomaly_analysis.v2.account_findings import METHOD_VERSION
-    assert METHOD_VERSION == "account-findings-v6"
+    assert METHOD_VERSION == "account-findings-v7"
 
 
 def early(account, count=20, quick=(), platform="vk", publication_type="photo", views=60):
@@ -282,3 +282,17 @@ def test_early_response_is_judged_against_the_platform():
     assert not of(early_response_findings(early(1, quick=set(range(0, 20, 2))) + others, TODAY))
     telegram = [p for a in range(2, 12) for p in early(a, platform="telegram")]
     assert not of(early_response_findings(early(1, quick=set(range(20)), platform="telegram") + telegram, TODAY))
+
+
+def test_a_lone_moderate_run_is_not_promotion_but_a_campaign_of_them_is():
+    """×12 на одном посте — обычный разброс; то же у двух постов в одни сутки — кампания (МФТИ)."""
+    others = [p for a in range(2, 12) for p in campaign(a)]
+    assert not of(promotion_findings(campaign(1, promoted={30}, excess=12.0) + others, TODAY))
+    (finding,) = of(promotion_findings(campaign(1, promoted={5, 6}, excess=12.0) + others, TODAY))
+    assert {member.int % 10_000 for member in finding.members} == {5, 6}
+
+
+def test_a_long_strong_lone_run_is_promotion():
+    others = [p for a in range(2, 12) for p in campaign(a)]
+    (finding,) = of(promotion_findings(campaign(1, promoted={30}, excess=30.0) + others, TODAY))
+    assert {member.int % 10_000 for member in finding.members} == {30}
