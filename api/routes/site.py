@@ -13,7 +13,7 @@ from ..sql import site as sql
 
 router = APIRouter(tags=["Query"])
 
-# Сводные метрики обновляет обслуживание; покрытие читается из каталога.
+# Публикации и замеры обновляет обслуживание; вузы, аккаунты и покрытие читаются из каталога.
 # Изменения каталога сбрасывают ответ; поступление замеров не пересчитывает каталог.
 SITE_TAGS = frozenset({"site-summary", "catalog", "rating"})
 
@@ -23,6 +23,7 @@ async def site_summary(request: Request) -> Response:
     async def build(revision: int, committed_at: Any) -> dict[str, Any]:
         db: Database = request.app.state.db
         row = await db.fetch_one(sql.SUMMARY, {})
+        catalog = await db.fetch_one(sql.CATALOG_COUNTS, {})
         coverage = await db.fetch_one(sql.COVERAGE, {})
         counts = {"trackedInstitutions": coverage["tracked_institutions"],
                   "ratedInstitutions": coverage["rated_institutions"],
@@ -34,8 +35,8 @@ async def site_summary(request: Request) -> Response:
         return {
             **counts,
             "available": True,
-            "institutions": row["institutions"], "accounts": row["accounts"],
-            "accountsByPlatform": dict(row["accounts_by_platform"] or {}),
+            "institutions": catalog["institutions"], "accounts": catalog["accounts"],
+            "accountsByPlatform": dict(catalog["accounts_by_platform"] or {}),
             "publications": row["publications"], "snapshots": row["snapshots"],
             "computedAt": dto.iso(row["computed_at"]),
         }
