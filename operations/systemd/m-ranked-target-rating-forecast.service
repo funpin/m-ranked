@@ -1,7 +1,7 @@
 [Unit]
 Description=M-Ranked M-Rating social forecast nightly snapshot
 Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
-After=network-online.target m-ranked-target-api.service m-ranked-target-official-rating.service
+After=network-online.target m-ranked-target-api.service
 Wants=network-online.target
 
 [Service]

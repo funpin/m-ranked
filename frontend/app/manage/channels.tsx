@@ -16,11 +16,12 @@ function RatingSection({ status, outcome, csrf, canEdit }: {
   const period = status ? status.mRating.period || "ещё не загружен" : "статус не получен";
   return (
     <Section title="Официальный М‑Рейтинг · соцсети"
-      description={<>Для каждого вуза загружаются общий рейтинг соцсетей и отдельные места в Telegram, VK, MAX и Rutube. Последний период: <b>{period}</b>{status?.mRating.updatedAt ? ` · обновлено ${legacyDate(status.mRating.updatedAt, true)}` : ""}.</>}
+      description={<>Для каждого вуза загружаются общий рейтинг соцсетей и отдельные места в Telegram, VK, MAX и Rutube. Последний период: <b>{period}</b>{status?.mRating.updatedAt ? ` · обновлено ${legacyDate(status.mRating.updatedAt, true)}` : ""}. Обновляется только этой кнопкой; покрытие вузов на главной она пересчитывает не чаще раза в две недели.</>}
       action={<form method="post" action="/manage/m-rating/update">{fields(csrf)}
         <Button type="submit" variant="outline" disabled={!canEdit}><RefreshCw data-icon="inline-start" aria-hidden="true" />Загрузить свежий М‑Рейтинг</Button>
       </form>}>
-      {outcome === "updated" ? <p className="text-success">Пять срезов М‑Рейтинга обновлены.</p>
+      {outcome === "updated" ? <p className="text-success">Пять срезов М‑Рейтинга и покрытие вузов на главной обновлены.</p>
+        : outcome === "coverage-kept" ? <p className="text-success">Пять срезов М‑Рейтинга обновлены. Покрытие вузов на главной пересчитывается не чаще раза в две недели, поэтому осталось прежним.</p>
         : outcome === "error" ? <p className="text-destructive">Не удалось обновить М‑Рейтинг: {status?.mRating.error || "неизвестная ошибка"}</p>
           : status?.mRating.error ? <p className="text-destructive">Последняя попытка: {status.mRating.error}</p> : null}
     </Section>

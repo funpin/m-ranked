@@ -21,6 +21,9 @@ CATEGORIES = {"social": "social", "telegram": "tg", "vk": "vk", "max": "ok",
 # Сводный балл в места категорий не входит; хранится в evidence справкой для
 # прогноза (сводное место прошлого месяца на вкладке «Рейтинг»).
 EVIDENCE_EXTRA = ("consolidated",)
+# Решение владельца: покрытие на главной пересчитывается не чаще раза в две
+# недели, и только кнопкой панели.
+COVERAGE_INTERVAL_DAYS = 14
 
 
 def _allow(url: str) -> bool:
@@ -111,11 +114,13 @@ def _parse_month(config: str, selected: dict[str, Any], source: bytes,
             "evidence": {"year": int(year_match.group(1)), "month": name, "items": evidence}}
 
 
-async def refresh(request, actor: str, correlation: uuid.UUID, *, update_coverage: bool = False) -> None:
+async def refresh(request, actor: str, correlation: uuid.UUID, *,
+                  update_coverage: bool = False) -> bool | None:
     """Забирает официальный рейтинг и записывает все новые для базы периоды.
 
-    Проверка идёт ежедневно, а источник обновляется раз в месяц, поэтому почти
-    каждый прогон не находит ничего нового и заканчивается отметкой о проверке.
+    Запускается только кнопкой панели: всё, что связано с М-Рейтингом,
+    обновляется вручную. Возвращает, пересчитано ли покрытие (None — его не
+    просили или это повтор уже выполненной команды).
     """
     enabled = os.environ.get("MRANKED_ADMIN_OFFICIAL_RATING_ENABLED", "true").lower()
     if enabled not in ("true", "1", "yes"):
@@ -127,7 +132,7 @@ async def refresh(request, actor: str, correlation: uuid.UUID, *, update_coverag
     if previous and previous["result"] is not None:
         if previous["result"].get("outcome") == "idempotency_conflict":
             raise ApiProblem(409, "Conflict", "Корреляционный идентификатор уже использован")
-        return
+        return None
     try:
         async with httpx.AsyncClient(timeout=30, headers={"User-Agent": "m-ranked-api/1"}) as client:
             config_bytes, _ = await _fetch(client, urljoin(BASE, "js/config.js"), 1_000_000)
@@ -158,7 +163,8 @@ async def refresh(request, actor: str, correlation: uuid.UUID, *, update_coverag
             await _import_month(database, missing, month, actor,
                                 uuid.uuid5(correlation, month["period"]))
         if update_coverage:
-            await _update_coverage(database, parsed[-1], actor, correlation)
+            return await _update_coverage(database, parsed[-1], actor, correlation)
+        return None
     except ApiProblem:
         raise
     except Exception:
@@ -167,17 +173,34 @@ async def refresh(request, actor: str, correlation: uuid.UUID, *, update_coverag
 
 
 async def _update_coverage(database: Any, parsed: dict[str, Any], actor: str,
-                           correlation: uuid.UUID) -> None:
-    """Only the admin button updates coverage, including an already imported month."""
+                           correlation: uuid.UUID) -> bool:
+    """Снимает покрытие: вузы раздела «Социальные сети» и наши вузы с кодом.
+
+    Only the admin button updates coverage, including an already imported
+    month, and not more often than every COVERAGE_INTERVAL_DAYS: a newer
+    snapshot is kept and False is returned. The first snapshot with our count
+    (0086) is taken regardless of the age of the older reference-only one.
+    """
+    from .sql.site import RATED_INSTITUTIONS
+
     count = len(parsed["rankings"]["social"])
     if not 1 <= count <= 9999:
         raise ValueError("invalid official coverage count")
-    value = json.dumps({"institutions": count, "period": parsed["period"],
-                        "sourceUrl": parsed["sourceUrl"],
-                        "updatedAt": parsed["fetchedAt"].isoformat()})
     async with database.admin() as connection:
         async with connection.transaction():
             await connection.execute("SELECT pg_advisory_xact_lock(782194601)")
+            recent = await (await connection.execute("""
+                SELECT 1 FROM ops_and_admin.operational_checkpoint
+                 WHERE checkpoint_key='admin.m_rating.coverage' AND scope_type='system'
+                   AND scope_id IS NULL AND platform IS NULL AND value ? 'ratedInstitutions'
+                   AND updated_at > transaction_timestamp() - make_interval(days => %(days)s)
+                """, {"days": COVERAGE_INTERVAL_DAYS})).fetchone()
+            if recent:
+                return False
+            rated = (await (await connection.execute(RATED_INSTITUTIONS)).fetchone())["rated_institutions"]
+            value = json.dumps({"institutions": count, "ratedInstitutions": rated,
+                                "period": parsed["period"], "sourceUrl": parsed["sourceUrl"],
+                                "updatedAt": parsed["fetchedAt"].isoformat()})
             await connection.execute("""
                 INSERT INTO ops_and_admin.operational_checkpoint(
                   checkpoint_key,scope_type,value,source_observed_at,correlation_id)
@@ -191,6 +214,7 @@ async def _update_coverage(database: Any, parsed: dict[str, Any], actor: str,
                   after_state,outcome) VALUES(%(actor)s,'official_rating.coverage.refresh',
                   'official_rating_coverage',%(id)s,%(value)s::jsonb,'success')
                 """, {"actor": actor, "id": correlation, "value": value})
+    return True
 
 
 async def _institution_codes(database: Any, items: list[dict[str, Any]]) -> dict[str, str]:

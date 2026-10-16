@@ -36,7 +36,6 @@ def test_profile_a_target_is_complete_single_host_runtime() -> None:
         "m-ranked-target-ops-sample.timer",
         "m-ranked-target-contributors.timer",
         "m-ranked-target-maintenance.timer",
-        "m-ranked-target-official-rating.timer",
         "m-ranked-target-rating-forecast.timer",
         "m-ranked-target-overview-metrics.timer",
     } <= dependencies("m-ranked-target.target")
@@ -66,7 +65,6 @@ def test_profile_b_targets_split_collection_and_presentation() -> None:
         "m-ranked-target-ops-sample.timer",
         "m-ranked-target-contributors.timer",
         "m-ranked-target-maintenance.timer",
-        "m-ranked-target-official-rating.timer",
         "m-ranked-target-rating-forecast.timer",
         "m-ranked-target-overview-metrics.timer",
     } <= server2

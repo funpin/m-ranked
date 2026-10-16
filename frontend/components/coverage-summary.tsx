@@ -23,7 +23,7 @@ export function CoverageSummary({ items, trackedInstitutions, ratedInstitutions,
           <span className="text-muted-foreground text-[11px] leading-snug">покрытие вузов</span>
           <MethodNote title="Покрытие вузов М‑Рейтинга">
             <p>Число вузов М‑Рейтинга, у которых мы отслеживаем хотя бы одну официальную соцсеть, делённое на {referenceInstitutions} вузов раздела «Социальные сети» М‑Рейтинга. Вузы каталога, которых нет в М‑Рейтинге (он оценивает подведомственные Минобрнауки), в покрытие не входят. Фильтры, поиск и страницы не меняют этот показатель.</p>
-            <p className="mt-2">Число вузов М‑Рейтинга обновляется только кнопкой «Обновить М‑Рейтинг» в админке.</p>
+            <p className="mt-2">Оба числа — снимок: их пересчитывает только кнопка «Загрузить свежий М‑Рейтинг» в админке, и не чаще раза в две недели.</p>
             <a href="https://m-rating.ru/#rating" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block underline underline-offset-2">Официальный М‑Рейтинг</a>
           </MethodNote>
         </div>

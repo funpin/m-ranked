@@ -211,8 +211,6 @@ UNITS_COMMON_PRESENTATION = [
     "m-ranked-target-ops-sample.timer",
     "m-ranked-target-contributors.service",
     "m-ranked-target-contributors.timer",
-    "m-ranked-target-official-rating.service",
-    "m-ranked-target-official-rating.timer",
     "m-ranked-target-rating-forecast.service",
     "m-ranked-target-rating-forecast.timer",
     "m-ranked-target-overview-metrics.service",

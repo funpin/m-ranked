@@ -11,6 +11,11 @@ SQLite-контура, Spring и reverse-sync в текущем релизе н�
 - `m-ranked-target-anomaly-analysis.service` — анализ аномалий;
 - maintenance, backup и restore timers из `operations/systemd/`.
 - `m-ranked-target-rating-forecast.timer` — ночной снимок прогноза М-Рейтинга по соцсетям (см. ниже).
+- Официальный М-Рейтинг загружается только кнопкой «Загрузить свежий М‑Рейтинг»
+  в панели (`/manage`), ночного задания нет. Та же кнопка снимает покрытие вузов
+  на главной (вузы раздела «Социальные сети» и наши вузы с кодом m-rating.ru),
+  но не чаще раза в 14 дней; более ранние нажатия загружают срезы и оставляют
+  прежнее покрытие.
 
 API использует отдельные роли `api_read`, `api_write_admin` и
 `outbox_worker`. Сборщики используют только `collector_ingest`.

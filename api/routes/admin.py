@@ -572,8 +572,10 @@ async def _legacy_execute(body: LegacyCommand, request: Request, user: Principal
     if path == "/manage/m-rating/update":
         from ..official_rating import refresh
         try:
-            await refresh(request, user.username, correlation, update_coverage=True)
-            return "/manage?m_rating_status=updated"
+            recounted = await refresh(request, user.username, correlation, update_coverage=True)
+            # Покрытие пересчитывается не чаще раза в две недели: срезы
+            # загружены, а число вузов на главной осталось прежним.
+            return "/manage?m_rating_status=" + ("coverage-kept" if recounted is False else "updated")
         except ApiProblem:
             raise
         except Exception:
