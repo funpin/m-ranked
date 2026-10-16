@@ -55,7 +55,11 @@ AUTHORITATIVE_MISSING_REASONS = {
     }),
     "vk": frozenset({"vk_wall_get_by_id_not_found_or_deleted"}),
     "max": frozenset({"max_get_messages_not_found_or_deleted"}),
-    "rutube": frozenset({"rutube_video_http_404", "rutube_video_http_410"}),
+    "rutube": frozenset({
+        "rutube_video_http_404",
+        "rutube_video_http_410",
+        "rutube_video_deleted",
+    }),
 }
 
 
@@ -455,4 +459,8 @@ class CanonicalNormalizer:
             ),
             quality_flags=flags,
             snapshot=snapshot,
+            uploaded_at=(
+                utc(raw.uploaded_at, "uploaded_at")
+                if raw.uploaded_at is not None else None
+            ),
         )
