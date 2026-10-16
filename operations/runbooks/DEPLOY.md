@@ -15,15 +15,15 @@ backup/restore, выдача credentials и сертификатов, firewall, 
 ## Профили и один набор units
 
 - **A, один хост:** `m-ranked-target.target` — API, web, четыре collector
-  instance, slice, watchdog, cache GC, anomaly, maintenance, official rating и
-  overview metrics. Файлов `api-profile.env` и `collector-profile.env` нет;
+  instance, slice, watchdog, cache GC, anomaly, maintenance и overview
+  metrics. Файлов `api-profile.env` и `collector-profile.env` нет;
   остаются `API_DEPLOYMENT_PROFILE=a`, in-process LRU и transfer.
 - **B, Сервер 1:** `m-ranked-target-profile-b-server1.target` — четыре
   collector instance, общий slice и watchdog. Установлен
   `collector-profile.env` из `collector-profile-b.env.example`.
 - **B, Сервер 2:** `m-ranked-target-profile-b-server2.target` — API, web,
-  cache GC, transfer-ingest, cache warmer, Redis, anomaly, maintenance,
-  official rating и overview metrics. Установлен `api-profile.env` из
+  cache GC, transfer-ingest, cache warmer, Redis, anomaly, maintenance и
+  overview metrics. Установлен `api-profile.env` из
   `api-profile-b.env.example`.
 
 Base service-файлы не копируются по профилям. Отличия B — два env overlay и
@@ -381,7 +381,14 @@ SECRET
 3. **Коды вузов в М-Рейтинге живут в базе** (`catalog.institution_external_id`,
    namespace `m-rating`, миграция 0078), а не в файле релиза. Релиз с новым
    `api/official_rating.py` выкатывается только после миграции 0078: без неё
-   ежедневное задание официального рейтинга упадёт на отсутствующей функции.
+   кнопка «Загрузить свежий М‑Рейтинг» упадёт на отсутствующей функции.
+   Ночного задания официального рейтинга больше нет: М-Рейтинг обновляется
+   только этой кнопкой (решение владельца 2026-10-16). На хосте, где таймер
+   остался от старого релиза, выключите его: `systemctl disable --now
+   m-ranked-target-official-rating.timer`, затем удалите оба unit-файла
+   `m-ranked-target-official-rating.*` и выполните `systemctl daemon-reload`.
+   Релиз с миграцией 0086 (снимок покрытия) выкатывается после неё: без неё
+   `/api/v1/site/summary` не находит `analytics.official_rated_institution_count()`.
 4. **Прогноз М-Рейтинга требует миграции 0084** (`rating_run.parameters`,
    функции записи снимков). Релиз с `api/routes/rating.py` и
    `m-ranked-target-rating-forecast.timer` выкатывается после неё: без неё
