@@ -248,3 +248,22 @@ def test_anomalous_body_has_its_own_rows_and_no_norm_fields() -> None:
     assert first["signals"] == [{"pattern": 1, "title": "Линейная подача", "metric": "views", "strength": 0.95}]
     assert second["anomalyShare"] is None and second["anomalyGrowth"] is None
     assert "hiddenAnomalous" not in body and "anomalies" not in body and body["sort"] == "anomaly"
+
+
+def test_level_join_reads_only_columns_of_the_covering_index() -> None:
+    # На проде строка состояния анализа весит ~2 КБ (признаки, качество,
+    # хвост), а таблица — 441 МБ: полный проход по ней занимал половину
+    # холодного запроса «Находок». Нормы и выдача берут из неё пять узких
+    # полей; пока все они в индексе 0085, чтение идёт только по индексу.
+    import re
+    from pathlib import Path
+
+    from api.sql import findings as sql
+
+    migration = Path(__file__).resolve().parents[1] / "db/migrations/0085_post_anomaly_state_level_index.sql"
+    definition = re.search(r"ON analytics\.post_anomaly_state\s*\((\w+)\)\s*INCLUDE\s*\(([^)]*)\)",
+                           migration.read_text())
+    assert definition is not None
+    covered = {definition[1], *(column.strip() for column in definition[2].split(","))}
+    for query in (sql.NORMS, sql.FINDINGS):
+        assert set(re.findall(r"\bstate\.(\w+)", query)) <= covered
