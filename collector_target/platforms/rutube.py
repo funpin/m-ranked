@@ -43,6 +43,30 @@ from ._shared import (
 )
 
 
+# Удалённое видео RUTUBE отдаёт не 404, а 403 с телом
+# {"message": "Видео удалено", "code": "2042002", ...}. Остальные 403
+# (закрытое, гео, авторизация) удалением не считаются: missing авторитетен.
+_DELETED_VIDEO_CODE = "2042002"
+_DELETED_VIDEO_MESSAGE = "видео удалено"
+
+
+def _deleted_video_response(response: Any) -> bool:
+    try:
+        payload = response.json()
+    except Exception:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    code = payload.get("code")
+    if isinstance(code, (str, int)) and not isinstance(code, bool):
+        if str(code).strip() == _DELETED_VIDEO_CODE:
+            return True
+    message = payload.get("message")
+    return (
+        isinstance(message, str)
+        and message.strip().casefold() == _DELETED_VIDEO_MESSAGE
+    )
+
 
 def rutube_batch(
     *,
@@ -111,6 +135,7 @@ def rutube_batch(
                 sampling_interval_seconds, video.published_at,
             ),
             quality_flags={"engagement_request_degraded": engagement is None},
+            uploaded_at=video.uploaded_at,
         ))
     return RawCollectionBatch(
         account,
@@ -204,13 +229,21 @@ class RutubeGatewayCollector:
                     video = await self.client.video(publication.external_id)
                 return video, None
             except Exception as error:
-                status = getattr(getattr(error, "response", None), "status_code", None)
+                response = getattr(error, "response", None)
+                status = getattr(response, "status_code", None)
                 if status in {404, 410}:
                     return None, missing_probe(
                         publication,
                         observed,
                         self.settings,
                         f"rutube_video_http_{status}",
+                    )
+                if status == 403 and _deleted_video_response(response):
+                    return None, missing_probe(
+                        publication,
+                        observed,
+                        self.settings,
+                        "rutube_video_deleted",
                     )
                 return None, transient_probe(
                     publication,

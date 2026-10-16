@@ -8,8 +8,8 @@ for (const platform of ["telegram", "vk", "max", "rutube"]) {
     await expect(page.locator('[data-testid="main-nav"] a[href^="/review"]')).toHaveAttribute("href", `/review?platform=${platform}`);
     for (const link of await page.getByTestId("main-nav").locator("a").all()) {
       const href = new URL((await link.getAttribute("href"))!, "http://test");
-      // Методология одна на все площадки и параметра не несёт.
-      expect(href.searchParams.get("platform")).toBe(href.pathname === "/methodology" ? null : platform);
+      // Методология и «Рейтинг» одни на все площадки и параметра не несут.
+      expect(href.searchParams.get("platform")).toBe(["/methodology", "/rating"].includes(href.pathname) ? null : platform);
     }
   });
 

@@ -749,6 +749,45 @@ def test_max_and_rutube_unsupported_values_remain_null() -> None:
     )
 
 
+def test_rutube_batch_carries_upload_time_outside_snapshot_fingerprints() -> None:
+    target = account(Platform.RUTUBE)
+    base = RutubeVideo(
+        "video-1", "Video", NOW - timedelta(minutes=5), 3,
+        "https://rutube.ru/video/video-1/", {},
+    )
+    uploaded = replace(base, uploaded_at=NOW - timedelta(days=40))
+
+    def normalized(video: RutubeVideo):
+        raw = rutube_batch(
+            account=target,
+            channel=RutubeChannel(5, "RUTUBE", "https://rutube.ru/channel/5/"),
+            videos=(video,),
+            metrics={"video-1": RutubeVideoMetrics(1, 0, {})},
+            observed_at=NOW,
+            collected_at=NOW,
+            subscriber_count=None,
+        )
+        assert raw.publications[0].uploaded_at == video.uploaded_at
+        return CanonicalNormalizer().normalize(
+            raw, context(Platform.RUTUBE),
+        ).publications[0]
+
+    without, with_date = normalized(base), normalized(uploaded)
+    assert without.uploaded_at is None
+    assert with_date.uploaded_at == NOW - timedelta(days=40)
+    # Дата загрузки не входит в отпечатки снимка: иначе каждое видео Rutube
+    # получило бы лишнюю строку снимка, а старые — открытый архивный месяц.
+    assert with_date.quality_flags == without.quality_flags
+    assert (
+        with_date.snapshot.semantic_fingerprint
+        == without.snapshot.semantic_fingerprint
+    )
+    assert (
+        with_date.snapshot.source_fingerprint
+        == without.snapshot.source_fingerprint
+    )
+
+
 def test_rutube_gateway_keeps_other_videos_when_one_metric_request_fails() -> None:
     class Client:
         async def resolve_channel(self, reference: str, url: str | None) -> int:
@@ -966,9 +1005,14 @@ class _MaxPointClient:
         return None
 
 
-def _http_error(status: int) -> httpx.HTTPStatusError:
+def _http_error(status: int, body: Any = None) -> httpx.HTTPStatusError:
     request = httpx.Request("GET", "https://provider.test/object")
-    response = httpx.Response(status, request=request)
+    if isinstance(body, str):
+        response = httpx.Response(status, request=request, text=body)
+    elif body is not None:
+        response = httpx.Response(status, request=request, json=body)
+    else:
+        response = httpx.Response(status, request=request)
     return httpx.HTTPStatusError("provider detail must not escape", request=request, response=response)
 
 
@@ -1162,17 +1206,52 @@ def test_vk_exact_lookup_omission_is_missing_but_auth_is_transient(
     assert auth.deletion_probes[0].reason_code == "vk_auth_error"
 
 
+# Ответ живого API RUTUBE на удалённое видео (проверено 16.10.2026).
+_RUTUBE_DELETED = {
+    "message": "Видео удалено",
+    "code": "2042002",
+    "data": [],
+    "source": "object video video_id = 467879027",
+}
+
+
 @pytest.mark.parametrize(
-    ("status", "outcome", "reason"),
+    ("status", "body", "outcome", "reason"),
     (
-        (404, DeletionProbeOutcome.MISSING, "rutube_video_http_404"),
-        (403, DeletionProbeOutcome.TRANSIENT_ERROR, "rutube_auth_error"),
-        (429, DeletionProbeOutcome.TRANSIENT_ERROR, "rutube_rate_limited"),
+        (404, None, DeletionProbeOutcome.MISSING, "rutube_video_http_404"),
+        (403, None, DeletionProbeOutcome.TRANSIENT_ERROR, "rutube_auth_error"),
+        (429, None, DeletionProbeOutcome.TRANSIENT_ERROR, "rutube_rate_limited"),
+        (403, _RUTUBE_DELETED, DeletionProbeOutcome.MISSING, "rutube_video_deleted"),
+        (403, {"code": 2042002}, DeletionProbeOutcome.MISSING, "rutube_video_deleted"),
+        (
+            403,
+            {"message": " Видео удалено "},
+            DeletionProbeOutcome.MISSING,
+            "rutube_video_deleted",
+        ),
+        (
+            403,
+            {"message": "Видео недоступно", "code": "2042001"},
+            DeletionProbeOutcome.TRANSIENT_ERROR,
+            "rutube_auth_error",
+        ),
+        (
+            403,
+            {"detail": "Authentication credentials were not provided."},
+            DeletionProbeOutcome.TRANSIENT_ERROR,
+            "rutube_auth_error",
+        ),
+        (403, "Видео удалено", DeletionProbeOutcome.TRANSIENT_ERROR, "rutube_auth_error"),
+        (403, ["Видео удалено"], DeletionProbeOutcome.TRANSIENT_ERROR, "rutube_auth_error"),
+        # Маркер удаления имеет силу только вместе с 403.
+        (429, _RUTUBE_DELETED, DeletionProbeOutcome.TRANSIENT_ERROR, "rutube_rate_limited"),
+        (500, _RUTUBE_DELETED, DeletionProbeOutcome.TRANSIENT_ERROR, "rutube_transient_http"),
     ),
 )
 def test_rutube_point_status_contract_never_turns_auth_or_rate_into_deletion(
     tmp_path: Path,
     status: int,
+    body: Any,
     outcome: DeletionProbeOutcome,
     reason: str,
     ) -> None:
@@ -1187,7 +1266,7 @@ def test_rutube_point_status_contract_never_turns_auth_or_rate_into_deletion(
             return 1
 
         async def video(self, video_id: str) -> RutubeVideo:
-            raise _http_error(status)
+            raise _http_error(status, body)
 
         async def video_metrics(self, video_id: str) -> RutubeVideoMetrics:
             raise AssertionError("metrics are not requested for unavailable video")
@@ -1205,6 +1284,15 @@ def test_rutube_point_status_contract_never_turns_auth_or_rate_into_deletion(
 
     assert result.deletion_probes[0].outcome == outcome
     assert result.deletion_probes[0].reason_code == reason
+    # Один ответ «удалено» не удаляет: репозиторий подтверждает удаление
+    # только после двух подряд missing-проверок.
+    assert result.deletion_probes[0].confirmation_threshold == 2
+    assert result.publications == ()
+    # Нормализатор принимает только известные платформе причины missing;
+    # неизвестная отвергла бы весь пакет аккаунта.
+    canonical = CanonicalNormalizer().normalize(result, context(Platform.RUTUBE))
+    assert canonical.deletion_probes[0].outcome == outcome
+    assert canonical.deletion_probes[0].reason_code == reason
 
 
 @pytest.mark.parametrize(

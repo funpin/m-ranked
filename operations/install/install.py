@@ -213,6 +213,8 @@ UNITS_COMMON_PRESENTATION = [
     "m-ranked-target-contributors.timer",
     "m-ranked-target-official-rating.service",
     "m-ranked-target-official-rating.timer",
+    "m-ranked-target-rating-forecast.service",
+    "m-ranked-target-rating-forecast.timer",
     "m-ranked-target-overview-metrics.service",
     "m-ranked-target-overview-metrics.timer",
     "m-ranked-target-dump-backup.service",

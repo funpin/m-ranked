@@ -260,6 +260,44 @@ bootstrap по населённой базе не проигрывается н�
 Сервере 2. Функции снимаются `DROP FUNCTION catalog.apply_catalog_sync(jsonb);
 DROP FUNCTION catalog.catalog_sync_snapshot();`.
 
+### Дата загрузки видео Rutube (`0083_publication_uploaded_at.sql`)
+
+`ingest.publication.uploaded_at` — Rutube `created_ts` рядом с
+`published_at` (`publication_ts`): М-Рейтинг считает видео за месяц по дате
+загрузки. Заполняется только у Rutube; пакет без даты её не стирает. В
+отпечатки снимков дата не входит, поэтому лишних строк снимков нет; в событии
+переноса ключ `uploadedAt` есть только у публикаций с датой, события прочих
+площадок не меняются. Замысел — `docs/superpowers/specs/2026-10-16-rutube-uploaded-at-design.md`.
+
+Порядок выкатки:
+
+1. `0083` на обеих базах (`SET ROLE migration_owner`). `ADD COLUMN` без
+   значения по умолчанию меняет только каталог: на копии прода ~2 мс.
+2. Код приёмника на Сервере 2 (`collector_target/model.py`, `transfer.py`,
+   `repository.py`) и перезапуск `m-ranked-target-transfer-ingest.service`.
+   Старый приёмник ключ `uploadedAt` молча пропускает, поэтому приёмник —
+   раньше сборщика.
+3. Код сборщика Rutube на Сервере 1 (те же три файла плюс `normalize.py`,
+   `platforms/rutube.py`, `collector_runtime/rutube.py`) и перезапуск
+   `m-ranked-target-collector@rutube`. Прочие сборщики не трогаются.
+4. Backfill видео старше окна отслеживания (30 суток), на обеих базах:
+   список id без даты — запросом из docstring
+   `collector_target/rutube_upload_backfill.py`; затем там, где есть доступ к
+   rutube.ru (Сервер 1 или ноутбук; сервисы Сервера 2 наружу не ходят),
+   `python -m collector_target.rutube_upload_backfill ids.txt > backfill.sql`;
+   файл применить `psql -v ON_ERROR_STOP=1` под `migration_owner`. Он
+   заполняет только пустые даты: повторный прогон ничего не меняет. Удалённые
+   видео (404/410, а также 403 «Видео удалено») пропускаются, счётчики —
+   в stderr.
+
+Проверка: `SELECT count(*) FILTER (WHERE uploaded_at IS NULL), count(*) FROM
+ingest.publication p JOIN catalog.platform_account a ON a.id=p.primary_account_id
+WHERE a.platform='rutube' AND p.deleted_at IS NULL` — после backfill пустых
+только удалённые на Rutube видео; новые видео приходят с датой.
+
+Откат: прежний код (колонку он не замечает); колонка снимается
+`ALTER TABLE ingest.publication DROP COLUMN uploaded_at;`.
+
 ## 3. Учётные данные и переменные
 
 Секреты живут systemd-credential'ами в `/etc/m-ranked/credentials` и файлами
@@ -344,7 +382,11 @@ SECRET
    namespace `m-rating`, миграция 0078), а не в файле релиза. Релиз с новым
    `api/official_rating.py` выкатывается только после миграции 0078: без неё
    ежедневное задание официального рейтинга упадёт на отсутствующей функции.
-4. `.env`, сессии площадок, дампы и учётные данные в релиз не попадают.
+4. **Прогноз М-Рейтинга требует миграции 0084** (`rating_run.parameters`,
+   функции записи снимков). Релиз с `api/routes/rating.py` и
+   `m-ranked-target-rating-forecast.timer` выкатывается после неё: без неё
+   `/api/v1/rating/*` отвечают 500, а ночное задание падает.
+5. `.env`, сессии площадок, дампы и учётные данные в релиз не попадают.
 
 ## 5. Зависимости
 
