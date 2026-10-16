@@ -54,7 +54,7 @@ def _cell(category: str, cell: dict[str, Any], platform: dict[str, Any] | None,
     if category != "social":
         metrics = (platform or {}).get("metrics") or {}
         body["metrics"] = ({key: metrics.get(key) for key in ("posts", "postsExtrapolated", "avgViews", "students", "erv")}
-                           if (platform or {}).get("source") == "formula" else None)
+                           if (platform or {}).get("source") in ("formula", "source_zero") else None)
     return body
 
 

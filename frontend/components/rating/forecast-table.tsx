@@ -1,17 +1,10 @@
 import Link from "@/components/native-link";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { hasActual, rankDelta, rankLabel, rowsFor, stripPosition } from "@/lib/rating";
+import { hasActual, rankDelta, rankLabel, rowsFor, sourceNote, stripPosition } from "@/lib/rating";
 import type { RatingCategory, RatingForecast, RatingForecastCell } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_COLUMNS = [["max", "MAX"], ["vk", "VK"], ["rutube", "Rutube"]] as const;
-
-function sourceNote(cell: RatingForecastCell, basePeriod: string): string | null {
-  if (cell.source === "fallback") return `нет полных данных — взят балл за ${basePeriod.toLowerCase()}`;
-  if (cell.source === "partial") return "часть площадок — по баллу прошлого месяца";
-  if (cell.source === "no_account") return "аккаунта нет — 0, как в официальном рейтинге";
-  return null;
-}
 
 function Delta({ value }: { value: number | null }) {
   if (value === null || value === 0) return <span className="text-muted-foreground">—</span>;
@@ -67,7 +60,7 @@ export function ForecastTable({ forecast, category, total }: { forecast: RatingF
           <TableCell className="max-w-72 whitespace-normal">
             {row.legacyId ? <Link href={`/institutions/${row.legacyId}`} prefetch={false} title={row.name}
               className="hover:underline focus-visible:underline">{name}</Link> : name}
-            {note ? <span className={cn("text-muted-foreground block text-xs", cell.source === "fallback" && "text-foreground/80")}>{note}</span> : null}
+            {note ? <span className={cn("text-muted-foreground block text-xs", (cell.source === "fallback" || cell.source === "source_zero") && "text-foreground/80")}>{note}</span> : null}
           </TableCell>
           <TableCell className="hidden md:table-cell"><PlaceStrip cell={cell} total={total} /></TableCell>
           <TableCell className="text-right">{cell.score.toFixed(1)}</TableCell>

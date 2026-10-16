@@ -221,3 +221,48 @@ def test_base_month_is_the_latest_published_before():
     assert rf.base_month_for(date(2026, 11, 1), published) == date(2026, 9, 1)
     assert rf.base_month_for(date(2026, 9, 1), published) == date(2026, 8, 1)
     assert rf.base_month_for(date(2026, 8, 1), published) is None
+
+
+def test_source_ignored_channel_two_months_in_a_row_predicts_zero():
+    """Орловский ГАУ: MAX у источника 0 с июня при живом канале. Два опубликованных
+    месяца подряд с нулём — источник канал не учитывает, прогноз тоже 0."""
+    ours = institution("orel", {"max": month(100, views=100 * 500, interactions=5000), "vk": month(60),
+                                "rutube": month(10)})
+    scores = {"orel": {"social": 40, "max": 0, "vk": 60, "rutube": 30}}
+    prior = {"orel": {"social": 41, "max": 0, "vk": 58, "rutube": 30}}
+    base_month = rf.BaseMonth(period="Сентябрь 2026", scores=scores, names={"orel": "Вуз orel"}, prior=prior)
+    row = rf.forecast([ours], base_month, ERRORS)[0]
+    cell = row["explanation"]["categories"]["max"]
+    assert (cell["score"], cell["source"]) == (0, "source_zero")
+    assert row["explanation"]["platforms"]["max"]["subscores"]["posts"] == pytest.approx(100)
+    assert row["score"] == pytest.approx(0.3 * row["explanation"]["categories"]["vk"]["score"]
+                                         + 0.3 * row["explanation"]["categories"]["rutube"]["score"], abs=0.01)
+
+
+def test_a_single_zero_month_keeps_the_formula():
+    """БГТУ им. Шухова: MAX 0 только в сентябре — может быть разовый сбой, прогноз по формуле."""
+    ours = institution("bstu", {"max": month(100, views=100 * 500, interactions=5000)})
+    base_month = rf.BaseMonth(period="Сентябрь 2026", scores={"bstu": {"social": 30, "max": 0, "vk": 50, "rutube": 0}},
+                              names={"bstu": "Вуз bstu"}, prior={"bstu": {"social": 50, "max": 57, "vk": 50, "rutube": 0}})
+    cell = rf.forecast([ours], base_month, ERRORS)[0]["explanation"]["categories"]["max"]
+    assert cell["source"] == "formula" and cell["score"] > 50
+
+
+def test_source_zero_needs_our_active_channel():
+    """Нет постов за месяц — это наш ноль по формуле, а не «источник не учитывает»."""
+    ours = institution("quiet", {"max": month(0, viewed=0, views=0, interactions=0)})
+    base_month = rf.BaseMonth(period="Сентябрь 2026", scores={"quiet": {"max": 0}}, names={},
+                              prior={"quiet": {"max": 0}})
+    cell = rf.forecast([ours], base_month, ERRORS)[0]["explanation"]["categories"]["max"]
+    assert (cell["score"], cell["source"]) == (0, "formula")
+
+
+def test_rutube_zeros_are_the_video_threshold_not_an_ignored_channel():
+    """КГУ (Курск): Rutube 0 в августе (видео загружены в июле) и в сентябре (видео не
+    было) — это порог «меньше 5 видео», а не неучтённый канал. В октябре 11 видео,
+    прогноз должен остаться по формуле."""
+    ours = institution("kursk", {"rutube": month(11)})
+    base_month = rf.BaseMonth(period="Сентябрь 2026", scores={"kursk": {"rutube": 0}}, names={},
+                              prior={"kursk": {"rutube": 0}})
+    cell = rf.forecast([ours], base_month, ERRORS)[0]["explanation"]["categories"]["rutube"]
+    assert cell["source"] == "formula" and cell["score"] > 0

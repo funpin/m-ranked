@@ -80,3 +80,14 @@ export function stripPosition(rank: number, total: number): number {
   if (total <= 1) return 0;
   return Math.min(100, Math.max(0, ((rank - 1) / (total - 1)) * 100));
 }
+
+/** Почему в ячейке не обычный расчёт по формуле; null — обычный. */
+export function sourceNote(cell: RatingForecastCell, basePeriod: string): string | null {
+  switch (cell.source) {
+    case "fallback": return `нет полных данных — взят балл за ${basePeriod.toLowerCase()}`;
+    case "partial": return "часть площадок — по баллу прошлого месяца";
+    case "no_account": return "аккаунта нет — 0, как в официальном рейтинге";
+    case "source_zero": return "рейтинг не учитывает этот канал: 0 два месяца подряд";
+    default: return null;
+  }
+}

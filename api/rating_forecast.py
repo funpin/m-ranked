@@ -15,7 +15,7 @@ import calendar
 import math
 import statistics
 from collections.abc import Collection, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -62,10 +62,15 @@ class InstitutionMonth:
 
 @dataclass(frozen=True)
 class BaseMonth:
-    """Последний опубликованный месяц: баллы всех вузов официального рейтинга."""
+    """Последний опубликованный месяц: баллы всех вузов официального рейтинга.
+
+    prior — баллы месяца перед ним: по двум месяцам видно, что источник не
+    учитывает канал вуза (ноль два месяца подряд при живом канале).
+    """
     period: str
     scores: Mapping[str, Mapping[str, float | None]]
     names: Mapping[str, str]
+    prior: Mapping[str, Mapping[str, float | None]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -113,6 +118,21 @@ def platform_score(platform: str, month: PlatformMonth | None, students: int | N
     return PlatformScore(sum(subscores.values()) / 3, "formula", subscores, metrics)
 
 
+def ignored_by_source(platform: str, code: str, base: BaseMonth, score: PlatformScore) -> bool:
+    """Источник второй опубликованный месяц подряд ставит площадке 0, а у нас по
+    ней живой канал и ненулевой балл. Так у Орловского ГАУ с июня 2026 по MAX:
+    рейтинг канал не учитывает, и предсказывать ему балл по формуле — ошибка
+    на сотню с лишним мест."""
+    # Только VK и MAX: там ноль при живом канале формулой не получить. Ноль Rutube —
+    # обычный порог «меньше 5 видео» (КГУ (Курск): в августе видео загружены в июле).
+    if platform not in ("max", "vk"):
+        return False
+    if score.source != "formula" or score.score <= 0 or not score.metrics.get("posts"):
+        return False
+    return (base.scores.get(code, {}).get(platform) == 0
+            and base.prior.get(code, {}).get(platform) == 0)
+
+
 def rank_in_pool(pool: Mapping[str, float], names: Mapping[str, str]) -> dict[str, int]:
     order = sorted(pool, key=lambda code: (-pool[code], names.get(code, "").casefold()))
     return {code: index for index, code in enumerate(order, 1)}
@@ -135,6 +155,9 @@ def forecast(institutions: Iterable[InstitutionMonth], base: BaseMonth, errors: 
                                               institution.students, official.get(platform),
                                               scale=scale, formula=formula)
                      for platform in PLATFORMS}
+        for platform, item in list(platforms.items()):
+            if ignored_by_source(platform, institution.code, base, item):
+                platforms[platform] = PlatformScore(0.0, "source_zero", item.subscores, item.metrics)
         scores = {platform: platforms[platform].score for platform in PLATFORMS}
         scores["social"] = sum(weights[platform] * scores[platform] for platform in PLATFORMS)
         computed.append((institution, platforms, scores))
