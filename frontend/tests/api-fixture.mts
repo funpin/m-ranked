@@ -182,6 +182,27 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
 // Панель сравнения: детерминированные данные на все вузы фикстуры (в замере
 // производительности — 207) и четыре площадки. Числа различаются так, чтобы
 // рейтинг, карта и выделение имели что показывать.
+function ratingForecast(month: string): Schema["RatingForecast"] {
+  const retrospective = month === "2026-09";
+  const base = (rank: number, source: Schema["RatingForecastCell"]["source"] = "formula") => ({
+    score: 70 - rank, rank, rankBest: Math.max(1, rank - 3), rankWorst: rank + 6, baseRank: rank + 2, source,
+    actualRank: retrospective ? rank + 1 : null, actualScore: retrospective ? 69 - rank : null,
+  });
+  const cell = (rank: number, source: Schema["RatingForecastCell"]["source"] = "formula") => ({
+    ...base(rank, source), metrics: { posts: 90, postsExtrapolated: 120, avgViews: 800, students: 12000, erv: 0.02 },
+  });
+  const social = base;
+  const rows = [
+    { institutionId: uuid(9, 1), legacyId: 1, name: "Северо-Кавказский федеральный университет", shortName: "СКФУ", baseConsolidatedRank: null,
+      categories: { social: social(8), max: cell(27), vk: cell(38), rutube: cell(13) } },
+    { institutionId: uuid(9, 2), legacyId: 2, name: "Нижневартовский государственный университет", shortName: null, baseConsolidatedRank: 40,
+      categories: { social: social(20, "partial"), max: cell(30), vk: { ...cell(25, "fallback"), metrics: null }, rutube: cell(60) } },
+  ];
+  return { month, status: retrospective ? "retrospective" : "running", period: retrospective ? "Сентябрь 2026" : "Октябрь 2026",
+    basePeriod: retrospective ? "Август 2026" : "Сентябрь 2026", asOf: "2026-10-15T22:10:00Z", early: false, formulaVersion: 1,
+    errors: { social: 7, max: 10, vk: 9, rutube: 8 }, rows };
+}
+
 function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
   const networks = ["telegram", "vk", "max", "rutube"] as const;
   const count = Math.max(12, names.length);
@@ -466,6 +487,13 @@ const server = createServer(async (request, response) => {
   }
   if (url.pathname === "/api/v1/site/summary") return json({ available: true, trackedInstitutions: 84, ratedInstitutions: 75, ratingInstitutions: 233, institutions: 12, accounts: 40,
     accountsByPlatform: { telegram: 11, vk: 12, max: 9, rutube: 8 }, publications: 1234, snapshots: 98765, computedAt: asOf });
+  if (url.pathname === "/api/v1/rating/forecast/months") return json({ months: [
+    { month: "2026-10", status: "running", asOf: "2026-10-15T22:10:00Z" },
+    { month: "2026-09", status: "retrospective", asOf: "2026-10-16T22:10:00Z" },
+  ] } satisfies Schema["RatingForecastMonths"]);
+  if (url.pathname === "/api/v1/rating/forecast") return json(ratingForecast(url.searchParams.get("month") ?? "2026-10"));
+  if (url.pathname === "/api/v1/rating/own") return json({ status: "no_methodology",
+    questions: ["Какие площадки входят и с какими весами."] } satisfies Schema["OwnRating"]);
   if (url.pathname === "/api/v1/sitemap") return json({ publicationPages: 1, publications: 2, datasetRevision: revision, asOf,
     accounts: [{ accountId: uuid(1,1), lastModified: "2026-07-07T00:00:00Z" }], institutions: [{ legacyId: 1 }, { legacyId: 2 }] });
   const sitemapPage = /^\/api\/v1\/sitemap\/publications\/(\d+)$/.exec(url.pathname);

@@ -51,7 +51,8 @@ test("справочник API: только публичные чтения, и
   assert.equal(new Set(anchors).size, anchors.length);
   const overview = API_DIGEST.operations.find((operation) => operation.operationId === "getOverview");
   assert.equal(overview?.path, "/api/v1/overview");
-  assert.ok(API_DIGEST.operations.every((operation) => !operation.path.startsWith("/api/v1/rating")));
+  // /api/v1/rating — методы вкладки «Рейтинг», для которой адрес и держали свободным.
+  assert.ok(API_DIGEST.operations.some((operation) => operation.path === "/api/v1/rating/forecast"));
   const analysis = API_DIGEST.operations.find((operation) => operation.operationId === "getPublicationAnomalyAnalysis");
   assert.ok(analysis?.fields.some((field) => field.name === "originalLevel"));
   assert.ok(analysis?.fields.some((field) => field.name === "recheckMethodVersion"));

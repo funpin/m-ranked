@@ -19,6 +19,7 @@ export const API_SECTIONS = [
   { id: "comparison", title: "Сравнение" },
   { id: "accounts", title: "Вузы и аккаунты" },
   { id: "publications", title: "Публикации" },
+  { id: "rating", title: "Рейтинг" },
   { id: "service", title: "Сводка и ревизия" },
 ] as const;
 type SectionId = (typeof API_SECTIONS)[number]["id"];
@@ -121,6 +122,21 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
     section: "publications", title: "Анализ динамики публикации",
     text: "Итоговый уровень, исходный уровень до контекстной проверки, признаки и качество данных. Поля recheckReason и recheckMethodVersion заполняются только после пересмотра. Пост без анализа — уровень null и статус pending.",
     example: "/api/v1/publications/{uuid}/anomaly-analysis",
+  },
+  getRatingForecastMonths: {
+    section: "rating", title: "Месяцы прогноза М-Рейтинга",
+    text: "Месяцы, за которые есть ночной снимок прогноза, новые первыми, и статус снимка: месяц идёт, итоговый прогноз, опубликован, ретроспективный расчёт.",
+    example: "/api/v1/rating/forecast/months",
+  },
+  getRatingForecast: {
+    section: "rating", title: "Прогноз М-Рейтинга по соцсетям",
+    text: "Прогнозные места вузов в официальном М-Рейтинге по соцсетям — общий, MAX, VK и Rutube — среди всех вузов рейтинга, с диапазоном при типичной ошибке. Для опубликованного месяца — ещё фактические места.",
+    example: "/api/v1/rating/forecast?month=2026-09",
+  },
+  getOwnRating: {
+    section: "rating", title: "Наш рейтинг",
+    text: "Заготовка: методика собственного рейтинга ещё не выбрана, метод возвращает открытые вопросы.",
+    example: "/api/v1/rating/own",
   },
   getSiteSummary: {
     section: "service", title: "Сводка проекта",

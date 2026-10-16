@@ -1,0 +1,14 @@
+[Unit]
+Description=Snapshot the M-Rating social forecast once a day
+
+[Timer]
+# После ежедневной проверки официального рейтинга (01:17 + до 20 мин) и до
+# ночного дампа: новый официальный месяц финализирует прогноз в ту же ночь.
+OnCalendar=*-*-* 01:47:00
+RandomizedDelaySec=10min
+Persistent=true
+AccuracySec=5min
+Unit=m-ranked-target-rating-forecast.service
+
+[Install]
+WantedBy=timers.target

@@ -46,3 +46,16 @@ def test_failed_source_does_not_replace_the_reference_count(monkeypatch):
         asyncio.run(official_rating.refresh(request, "operator", uuid.uuid4(), update_coverage=True))
     update.assert_not_awaited()
     failure.assert_awaited_once()
+
+
+def test_evidence_keeps_the_consolidated_score():
+    import json
+    source = json.dumps({"months": [{"name": "Сентябрь", "items": [
+        {"code": "37", "name": "Вуз", "scores": {"consolidated": 22.0, "social": 46.9, "vk": 56.7,
+                                                "tg": None, "ok": 60.4, "rt": 19.2}}]}]}).encode()
+    month = official_rating._filled_months(source)[0]
+    parsed = official_rating._parse_month("year: 2026", month, source, "https://www.m-rating.ru/data/r.json")
+    assert parsed["evidence"]["items"][0]["scores"] == {"consolidated": 22.0, "social": 46.9, "vk": 56.7,
+                                                         "ok": 60.4, "rt": 19.2}
+    # Сводный балл — справка, в места категорий он не входит.
+    assert set(parsed["rankings"]) == {"social", "telegram", "vk", "max", "rutube"}

@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "102fef32b68a3dbd558a282023ef56afbdccf6d0af856c6c6bdcc8e59c1bffff",
+  "sourceSha256": "2b713877014c3e387e079efc585c417d7772fe5ff3247a44bb1dce01099346d1",
   "version": "1.0.0",
   "operations": [
     {
@@ -1523,6 +1523,88 @@
         {
           "name": "computedAt",
           "type": "string | null"
+        }
+      ]
+    },
+    {
+      "operationId": "getRatingForecastMonths",
+      "path": "/api/v1/rating/forecast/months",
+      "summary": "List M-Rating forecast months",
+      "parameters": [],
+      "response": "RatingForecastMonths",
+      "fields": [
+        {
+          "name": "months",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getRatingForecast",
+      "path": "/api/v1/rating/forecast",
+      "summary": "Read an M-Rating social forecast snapshot",
+      "parameters": [
+        {
+          "name": "month",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "RatingForecast",
+      "fields": [
+        {
+          "name": "month",
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "basePeriod",
+          "type": "string"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "early",
+          "type": "boolean"
+        },
+        {
+          "name": "formulaVersion",
+          "type": "integer"
+        },
+        {
+          "name": "errors",
+          "type": "object"
+        },
+        {
+          "name": "rows",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getOwnRating",
+      "path": "/api/v1/rating/own",
+      "summary": "Read our own rating",
+      "parameters": [],
+      "response": "OwnRating",
+      "fields": [
+        {
+          "name": "status",
+          "type": "string"
+        },
+        {
+          "name": "questions",
+          "type": "string[]"
         }
       ]
     },

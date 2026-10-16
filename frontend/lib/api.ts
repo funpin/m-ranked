@@ -137,6 +137,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
     siteSummary() {
       return client.GET("/api/v1/site/summary", {}).then(unwrap);
     },
+    ratingForecastMonths() {
+      return client.GET("/api/v1/rating/forecast/months", {}).then(unwrap);
+    },
+    ratingForecast(month?: string) {
+      return client.GET("/api/v1/rating/forecast", { params: { query: month ? { month } : {} } }).then(unwrap);
+    },
+    ownRating() {
+      return client.GET("/api/v1/rating/own", {}).then(unwrap);
+    },
     sitemapSummary() {
       return client.GET("/api/v1/sitemap", {}).then(unwrap);
     },

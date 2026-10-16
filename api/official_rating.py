@@ -18,6 +18,9 @@ from .errors import ApiProblem
 BASE = "https://www.m-rating.ru/"
 CATEGORIES = {"social": "social", "telegram": "tg", "vk": "vk", "max": "ok",
               "rutube": "rt"}
+# Сводный балл в места категорий не входит; хранится в evidence справкой для
+# прогноза (сводное место прошлого месяца на вкладке «Рейтинг»).
+EVIDENCE_EXTRA = ("consolidated",)
 
 
 def _allow(url: str) -> bool:
@@ -98,7 +101,7 @@ def _parse_month(config: str, selected: dict[str, Any], source: bytes,
                               for index, (code, _, score) in enumerate(candidates, 1) if code}
     evidence = []
     for item in selected["items"]:
-        scores = {key: float(item["scores"][key]) for key in CATEGORIES.values()
+        scores = {key: float(item["scores"][key]) for key in (*EVIDENCE_EXTRA, *CATEGORIES.values())
                   if (item.get("scores") or {}).get(key) is not None}
         evidence.append({"code": str(item.get("code") or ""),
                          "name": str(item.get("name") or ""), "scores": scores})

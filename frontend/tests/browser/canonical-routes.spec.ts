@@ -62,8 +62,9 @@ test("old overview links move permanently to /review with their parameters", asy
   expect(response.status()).toBe(308);
   expect(new URL(response.headers().location!, response.url()).pathname + new URL(response.headers().location!, response.url()).search)
     .toBe("/review?platform=vk&period=7d");
-  const futureRating = await request.get("/rating?platform=max&period=30d", { maxRedirects: 0 });
-  expect(futureRating.status()).toBe(404);
+  // /rating — вкладка «Рейтинг»: старые параметры обзора её не уводят на /review.
+  const rating = await request.get("/rating?platform=max&period=30d", { maxRedirects: 0 });
+  expect(rating.status()).toBe(200);
   await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
