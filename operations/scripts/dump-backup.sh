@@ -129,6 +129,11 @@ image="$(docker inspect --format '{{.Image}}' "$MRANKED_DB_CONTAINER")"
 dumper="mranked-backup-$stamp"
 cleanup() {
   status=$?
+  # Уборку не обрывает следующий сигнал: 'exit 143' посреди неё пропускал
+  # снятие сессии и удаление .partial. Пустое действие, а не '': игнорирование
+  # унаследовали бы docker kill и docker exec. От зависшей уборки страхует
+  # TimeoutStopSec юнита.
+  trap : TERM INT HUP
   docker kill "$dumper" >/dev/null 2>&1 || true
   docker exec "$MRANKED_DB_CONTAINER" psql -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" -At -c \
     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = '$dumper'" \
