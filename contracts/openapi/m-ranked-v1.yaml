@@ -2769,7 +2769,7 @@ components:
         rankBest: { type: integer, minimum: 1 }
         rankWorst: { type: integer, minimum: 1 }
         baseRank: { type: ['integer', 'null'], minimum: 1, description: 'Official place in the base (last published) month.' }
-        source: { type: string, enum: [formula, fallback, no_account, partial], description: 'fallback — our data does not cover the month, the base official score is used; partial — the social score includes a fallback platform.' }
+        source: { type: string, enum: [formula, fallback, no_account, partial, source_zero], description: 'fallback — our data does not cover the month, the base official score is used; partial — the social score includes a fallback platform; source_zero — the official rating scored this VK or MAX channel 0 for two published months in a row although the channel is active, so the forecast is 0.' }
         actualRank: { type: ['integer', 'null'], minimum: 1 }
         actualScore: { type: ['number', 'null'] }
         metrics:

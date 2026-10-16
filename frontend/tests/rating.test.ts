@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hasActual, monthLabel, normalizeCategory, normalizeMonth, rankDelta, rankLabel, rowsFor, scatterPoints, statusLine, stripPosition } from "../lib/rating";
+import { hasActual, monthLabel, normalizeCategory, normalizeMonth, rankDelta, rankLabel, rowsFor, scatterPoints, sourceNote, statusLine, stripPosition } from "../lib/rating";
 import type { RatingForecastCell, RatingForecastRow } from "../lib/types";
 
 const cell = (rank: number, extra: Partial<RatingForecastCell> = {}): RatingForecastCell => ({
@@ -62,4 +62,11 @@ test("place strip positions stay inside the scale", () => {
   assert.deepEqual(stripPosition(1, 233), 0);
   assert.deepEqual(stripPosition(233, 233), 100);
   assert.equal(stripPosition(300, 233), 100);
+});
+
+test("source notes explain every non-formula cell", () => {
+  assert.equal(sourceNote(cell(5, { source: "formula" }), "Сентябрь 2026"), null);
+  assert.equal(sourceNote(cell(5, { source: "fallback" }), "Сентябрь 2026"), "нет полных данных — взят балл за сентябрь 2026");
+  assert.equal(sourceNote(cell(5, { source: "source_zero" }), "Сентябрь 2026"),
+    "рейтинг не учитывает этот канал: 0 два месяца подряд");
 });

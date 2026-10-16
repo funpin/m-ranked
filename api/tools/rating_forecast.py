@@ -117,6 +117,11 @@ async def _forecast_month(database: Any, month: date, status: str, as_of: dateti
         logger.warning("нет опубликованного базового месяца для %s — пропуск", month.isoformat())
         return None
     base = await _base(database, published[base_month])
+    # Месяц перед базовым — чтобы узнать нули источника два месяца подряд.
+    prior_month = rf.base_month_for(base_month, published)
+    prior = await _base(database, published[prior_month]) if prior_month else None
+    if prior is not None:
+        base = rf.BaseMonth(period=base.period, scores=base.scores, names=base.names, prior=prior.scores)
     if not base.scores:
         logger.warning("базовый месяц %s пуст — пропуск", base.period)
         return None
@@ -127,6 +132,7 @@ async def _forecast_month(database: Any, month: date, status: str, as_of: dateti
     start, end = rf.month_window(month)
     window_end = min(end, as_of)
     parameters = {"status": status, "basePeriod": base.period, "period": rf.period_label(month),
+                  "priorPeriod": prior.period if prior is not None else None,
                   "errors": errors, "postsScale": round(scale, 4), "early": early,
                   "formulaVersion": rf.FORMULA_V1["version"]}
     digest = hashlib.sha256(json.dumps({"month": month.isoformat(), "parameters": parameters,

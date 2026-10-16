@@ -94,3 +94,14 @@ def test_definer_functions_read_the_revision_without_foreign_functions():
     body = migration.split("CREATE FUNCTION ops_and_admin.record_rating_forecast", 1)[1]
     assert "latest_dataset_revision" not in body
     assert body.count("SELECT max(id) INTO revision FROM analytics.dataset_revision") == 2
+
+
+def test_job_reads_the_month_before_base_for_source_zeros():
+    zero_max = [{**SCORES[0], "max_score": 0}]
+    rows = MONTH_ROWS + [{**MONTH_ROWS[0], "platform": "max"}]
+    database = FakeDatabase(["Август 2026", "Сентябрь 2026"],
+                            {"Август 2026": zero_max, "Сентябрь 2026": zero_max}, rows)
+    asyncio.run(job.run(database, datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
+    [body] = database.recorded
+    assert body["results"][0]["explanation"]["categories"]["max"]["source"] == "source_zero"
+    assert body["parameters"]["priorPeriod"] == "Август 2026"

@@ -81,3 +81,15 @@ def test_missing_snapshot_is_404(monkeypatch):
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=Read())))
     with pytest.raises(NotFound):
         asyncio.run(rating.forecast(request, "2026-10"))
+
+
+def test_source_zero_cell_matches_the_contract():
+    row = json.loads(json.dumps(ROW))
+    row["explanation"]["categories"]["max"]["source"] = "source_zero"
+    row["explanation"]["platforms"]["max"] = {"source": "source_zero", "subscores": {"posts": 100.0},
+                                              "metrics": {"posts": 104, "postsExtrapolated": 104.0, "avgViews": 300.0,
+                                                          "students": 5000, "erv": 0.03}}
+    body = rating.forecast_body(RUN, [row])
+    validate(body, "RatingForecast")
+    # Метрики канала видны: у нас он живой, ноль ставит источник.
+    assert body["rows"][0]["categories"]["max"]["metrics"]["posts"] == 104
