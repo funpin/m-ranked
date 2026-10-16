@@ -194,11 +194,14 @@ test("each account finding kind has its own chart with labelled values",async({p
 });
 
 test("a post without signals reads calmly and an unanalyzed post says so",async({page})=>{
+  // Потоковая отрисовка на мгновение держит вторую, скрытую копию блока (React
+  // div[hidden]); строгий локатор видел обе и падал — проверяем видимую.
+  const toggle=page.getByTestId("anomaly-toggle").filter({visible:true});
   await page.goto("/posts/3");
-  await expect(page.getByTestId("anomaly-toggle")).toContainText("Нет признаков");
-  await expect(page.getByTestId("anomaly-toggle").locator('[data-slot="badge"]')).toHaveCount(0);
+  await expect(toggle).toContainText("Нет признаков");
+  await expect(toggle.locator('[data-slot="badge"]')).toHaveCount(0);
   await page.goto("/posts/2");
-  await expect(page.getByTestId("anomaly-toggle")).toContainText("Ещё не проанализирован");
+  await expect(toggle).toContainText("Ещё не проанализирован");
 });
 
 test("cumulative and delta charts both draw when anomaly boundaries size points per sample",async({page})=>{
