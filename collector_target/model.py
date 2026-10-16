@@ -185,6 +185,9 @@ class RawPublication:
     sampling_interval_seconds: int = 300
     sampling_bucket: int | None = None
     quality_flags: Mapping[str, Any] = field(default_factory=dict)
+    # Время загрузки на площадке, если она отличает его от выхода (Rutube
+    # created_ts). В отпечатки снимка не входит.
+    uploaded_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,6 +273,7 @@ class CanonicalPublication:
     synthetic_baseline_allowed: bool
     quality_flags: Mapping[str, Any]
     snapshot: CanonicalMetricSnapshot
+    uploaded_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

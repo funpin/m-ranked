@@ -455,4 +455,8 @@ class CanonicalNormalizer:
             ),
             quality_flags=flags,
             snapshot=snapshot,
+            uploaded_at=(
+                utc(raw.uploaded_at, "uploaded_at")
+                if raw.uploaded_at is not None else None
+            ),
         )

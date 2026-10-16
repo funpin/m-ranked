@@ -21,6 +21,7 @@ from collector_target.transfer import (
     TransferEnvelope,
     TransferRejected,
     _validate_value,
+    canonical_event,
     decode_events,
     seal_batch,
     validate_envelope,
@@ -58,6 +59,29 @@ def test_envelope_round_trip_and_batch_id_are_deterministic() -> None:
     assert first.payload == second.payload
     decoded = decode_events(with_cursor(first, 11))
     assert decoded == (batch,)
+
+
+def test_upload_time_round_trips_and_is_absent_when_unknown() -> None:
+    batch = _batch()
+    assert "uploadedAt" not in canonical_event(batch)["batch"]["publications"][0]
+    dated = replace(batch, publications=(replace(
+        batch.publications[0],
+        uploaded_at=datetime(2026, 7, 31, 21, tzinfo=timezone.utc),
+    ),))
+    event = canonical_event(dated)
+    assert event["batch"]["publications"][0]["uploadedAt"] == "2026-07-31T21:00:00Z"
+    assert decode_events(with_cursor(seal_batch(dated, "server-1/default"), 1)) == (dated,)
+
+
+def test_publication_without_upload_time_keeps_the_previous_event_shape() -> None:
+    # Прочие площадки сохраняют прежний набор ключей, а с ним eventId и
+    # semanticHash: дедупликация и повторы на Сервере 2 не меняются.
+    assert set(canonical_event(_batch())["batch"]["publications"][0]) == {
+        "id", "accountId", "contentGroupId", "externalId", "sourceExternalId",
+        "identities", "publicUrl", "publishedAt", "discoveredAt",
+        "publicationType", "isRepost", "historyCompleteness",
+        "syntheticBaselineAllowed", "qualityFlags", "snapshot",
+    }
 
 
 def test_in_process_transport_returns_consumer_ack() -> None:
