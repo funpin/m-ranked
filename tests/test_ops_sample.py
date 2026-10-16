@@ -42,6 +42,22 @@ def test_traffic_counts_only_growth_since_previous_sample(tmp_path: Path) -> Non
     assert rotated is not None and rotated["requests"] == 1
 
 
+def test_media_and_service_files_are_not_pages() -> None:
+    # Картинка реакции, иконки, манифест и robots.txt идут через тот же кэш,
+    # но страницами не являются: 10-секундный отказ картинки Telegram не
+    # должен выдавать себя за медленную страницу на графике скорости.
+    totals, latencies = ops_sample.empty_traffic(), []
+    for path in ("/emoji/5461040295409892378", "/icons/icon-192.png", "/splash/a.png",
+                 "/apple-touch-icon.png", "/favicon.ico", "/manifest.webmanifest",
+                 "/robots.txt", "/sitemap.xml"):
+        ops_sample.add_line(totals, latencies,
+                            f'1.2.3.4 [16/Oct/2026:02:13:49 +0300] "GET {path} HTTP/2.0" 404 47 14.359 human MISS "UA"')
+    ops_sample.add_line(totals, latencies,
+                        '1.2.3.4 [16/Oct/2026:02:13:55 +0300] "GET /findings?platform=all HTTP/2.0" 200 9 2.377 human MISS "UA"')
+    assert totals["requests"] == 9 and totals["pages"] == 1 and totals["pageHits"] == 0
+    assert latencies == [2.377]
+
+
 def test_units_report_failures_and_restarts() -> None:
     def run(command, **_):
         if command[1] == "list-units":
