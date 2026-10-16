@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import timedelta
+from typing import Mapping
 from uuid import UUID
 
 from anomaly_analysis.metrics import write_textfile
@@ -99,6 +100,22 @@ def _row(series, due_at):
     return DueRow(series.publication_id, series.published_at, due_at, None, None, None, 0, ())
 
 
+def _cut(series, until):
+    """Ряд, оборванный на моменте `until`: выровненные с замерами поля режутся вместе."""
+    size = sum(at <= until for at in series.observed_at)
+    total = len(series.observed_at)
+
+    def cut(value):
+        if isinstance(value, tuple) and len(value) == total:
+            return value[:size]
+        if isinstance(value, Mapping):
+            return {key: cut(item) for key, item in value.items()}
+        return value
+    return replace(series, **{name: cut(getattr(series, name)) for name in
+                              ("observed_at", "values", "qualities", "interval_uncertain",
+                               "reaction_breakdowns", "reaction_kinds")})
+
+
 def _worker(store, now):
     return Worker(store, ScheduleConfig(), CollectionCadence(), clock=lambda: now)
 
@@ -158,6 +175,26 @@ def test_postponing_without_the_series_decides_exactly_like_the_series():
     half = len(outcomes) // 2
     assert outcomes[:half] == outcomes[half:]
     assert any(item[1] for item in outcomes[:half]) and any(item[2] for item in outcomes[:half])
+
+
+def test_a_long_silent_series_is_probed_at_the_analysis_interval_not_every_collection_step():
+    # Сбор поста давно молчит: каждая проба — перезапись широкой строки
+    # состояния, поэтому проба отступает до интервала анализа его возраста.
+    from anomaly_analysis.v2.schedule import interval
+    full = synthetic_cases()["honest_organic_telegram"].subject
+    # Сбор оборвался на восьмые сутки поста, анализ идёт двое суток спустя.
+    subject = _cut(full, full.published_at + timedelta(days=8))
+    now = subject.observed_at[-1] + timedelta(days=2)
+    expected = now + timedelta(seconds=interval(ScheduleConfig(), subject.platform,
+                                                (now - subject.published_at).total_seconds()))
+    assert expected - now > timedelta(seconds=ScheduleConfig().stale_probe_seconds)
+    for enabled in (True, False):
+        row = DueRow(subject.publication_id, subject.published_at, now, now - timedelta(hours=3),
+                     subject.observed_at[-1], None, 0, ())
+        store = FakeStore({subject.publication_id: subject}, [row])
+        store.progress_enabled = enabled
+        _worker(store, now).run_once()
+        assert not store.written and store.postponed == [(subject.publication_id, expected)]
 
 
 def test_catch_up_analyzes_each_overdue_post_once():

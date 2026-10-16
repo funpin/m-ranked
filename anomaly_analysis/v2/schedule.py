@@ -53,6 +53,11 @@ class ScheduleConfig:
     # Пост без новых замеров проверяется на возобновление с шагом сбора, а не
     # с интервалом анализа: возобновившийся ряд анализируется сразу.
     stale_probe_seconds: int = 15 * MINUTE
+    # Долго молчащий ряд пробуется реже: шаг пробы — эта доля от длительности
+    # молчания, но не меньше шага выше и не больше интервала анализа возраста.
+    # Каждая проба — перезапись широкой строки состояния; 16.10 на проде
+    # пробы замолчавших постов давали почти все обновления таблицы.
+    stale_probe_backoff: float = 0.1
 
     def __post_init__(self) -> None:
         for item in fields(self):
@@ -111,7 +116,8 @@ def stretch_for_lag(config: ScheduleConfig, queue_lag_seconds: float) -> float:
 def plan(config: ScheduleConfig, *, platform: str, published_at: datetime, now: datetime,
          new_points: int, analyzed_before: bool, resumed_after_gap: bool = False,
          norm_recheck: bool = False, stale: bool = False, stretch: float = 1.0,
-         reference_checkpoint: bool = False, tail_ledger_stale: bool = False) -> Plan:
+         reference_checkpoint: bool = False, tail_ledger_stale: bool = False,
+         silent_seconds: float = 0.0) -> Plan:
     """Решение по посту, срок которого наступил."""
     age = (now - published_at).total_seconds()
     if age >= config.track_seconds:
@@ -131,7 +137,11 @@ def plan(config: ScheduleConfig, *, platform: str, published_at: datetime, now: 
         return Plan(True, False, now + step, "tail_ledger")
     if new_points >= config.min_new_points:
         return Plan(True, False, now + step, "scheduled")
-    probe = timedelta(seconds=config.stale_probe_seconds) if stale else step
+    # Возобновление после пробела анализируется сразу, как только проба его
+    # увидит; отступ пробы ограничен интервалом анализа, поэтому задержка не
+    # больше той, что у поста с обычным сбором.
+    probe = (timedelta(seconds=max(config.stale_probe_seconds, config.stale_probe_backoff * silent_seconds))
+             if stale else step)
     return Plan(False, False, now + min(step, probe), "waiting_points")
 
 
