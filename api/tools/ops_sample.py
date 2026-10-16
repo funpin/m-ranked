@@ -31,6 +31,11 @@ RETENTION_DAYS = 30
 SIZE_INTERVAL_SECONDS = 6 * 3600
 BOT_CLASSES = frozenset({"ai_user", "ai_search", "ai_training", "crawler"})
 CACHE_HITS = frozenset({"HIT", "STALE", "UPDATING", "REVALIDATED"})
+# Не страницы: служебные файлы и картинки реакций (тот же список, что у
+# шлюза в operations/nginx/traffic.conf). Отказ картинки Telegram ждёт 10 с —
+# считай мы её страницей, график скорости показывал бы его, а не страницы.
+NOT_PAGES = ("/_next/", "/api/", "/emoji/", "/icons/", "/splash/", "/apple-touch-icon",
+             "/favicon", "/manifest.webmanifest", "/robots.txt", "/sitemap")
 # Не больше 64 МБ журнала за проход и 20 000 времён ответа на перцентили:
 # после долгого простоя таймера снимок не должен съесть память службы.
 LOG_CHUNK_BYTES = 64 * 1024 * 1024
@@ -99,7 +104,7 @@ def add_line(totals: dict[str, Any], latencies: list[float], line: str) -> None:
         totals["human5xx"] += 1
     if status == 503 and bot:
         totals["bot503"] += 1
-    if path.startswith(("/_next/", "/api/")) or match["cache"] == "-":
+    if path.startswith(NOT_PAGES) or match["cache"] == "-":
         return
     # Страницы: доля попаданий в страничный кэш и время ответа людям.
     totals["pages"] += 1
