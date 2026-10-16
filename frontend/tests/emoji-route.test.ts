@@ -68,6 +68,30 @@ test("emoji facade maps Spring 404 to the exact legacy response", async () => {
   assert.equal(await response.text(), '{"detail":"Реакция не найдена"}');
 });
 
+test("emoji facade keeps the short cache of a temporary Spring 404", async () => {
+  // API отвечает «временно недоступна» с кэшем на 10 минут: без него nginx и
+  // браузер повторяли бы каждую неудачную картинку и ждали те же 10 секунд.
+  for (const [upstream, expected] of [
+    ["public, max-age=600", "public, max-age=600"],
+    ["public, max-age=31536000", "public, max-age=3600"],
+    ["no-store", null],
+    ["private, max-age=600", null],
+  ] as const) {
+    const route = createEmojiRoute({
+      fetcher: async () => Response.json(
+        { type: "urn:m-ranked:problem:not-found", status: 404 },
+        { status: 404, headers: { "Cache-Control": upstream } },
+      ),
+    });
+
+    const response = await route("5461040295409892378");
+
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("cache-control"), expected);
+    assert.equal(await response.text(), '{"detail":"Реакция не найдена"}');
+  }
+});
+
 test("emoji catch-all preserves framework 404 for missing, slash, and encoded-slash paths", async () => {
   for (const emojiPath of [undefined, ["12", "34"], ["12/34"]]) {
     const response = await GET(

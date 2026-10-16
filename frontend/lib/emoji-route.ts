@@ -1,6 +1,8 @@
 // Картинка custom emoji по номеру не меняется: кэш на месяц, без перепроверок.
 const CACHE_CONTROL = "public, max-age=2592000, immutable";
 const NOT_FOUND_DETAIL = "Реакция не найдена";
+// Временный отказ API (Telegram недоступен) помнится не дольше часа.
+const NOT_FOUND_MAX_AGE_SECONDS = 3600;
 const ALLOWED_MEDIA_TYPES = new Set([
   "image/webp",
   "image/png",
@@ -40,7 +42,7 @@ export function createEmojiRoute(options: EmojiRouteOptions = {}) {
       return internalError();
     }
 
-    if (upstream.status === 404) return legacyNotFound();
+    if (upstream.status === 404) return legacyNotFound(notFoundCacheControl(upstream.headers.get("cache-control")));
     if (upstream.status !== 200 || upstream.body === null) return internalError();
 
     const contentType = normalizedMediaType(upstream.headers.get("content-type"));
@@ -74,8 +76,17 @@ function normalizedMediaType(value: string | null): string {
   return ALLOWED_MEDIA_TYPES.has(candidate) ? candidate : "image/webp";
 }
 
-function legacyNotFound(): Response {
-  return fixedTextResponse(JSON.stringify({ detail: NOT_FOUND_DETAIL }), 404, "application/json");
+function legacyNotFound(cacheControl: string | null = null): Response {
+  return fixedTextResponse(JSON.stringify({ detail: NOT_FOUND_DETAIL }), 404, "application/json", cacheControl);
+}
+
+// Короткий публичный кэш отказа из API передаётся nginx и браузеру: иначе
+// каждая неудачная картинка запрашивалась заново и ждала тот же таймаут.
+function notFoundCacheControl(value: string | null): string | null {
+  const directives = (value ?? "").toLowerCase().split(",").map((item) => item.trim());
+  const maxAge = directives.map((item) => /^max-age=([0-9]+)$/.exec(item)?.[1]).find(Boolean);
+  if (!directives.includes("public") || maxAge === undefined) return null;
+  return `public, max-age=${Math.min(Number(maxAge), NOT_FOUND_MAX_AGE_SECONDS)}`;
 }
 
 function internalError(): Response {
@@ -86,12 +97,12 @@ export function legacyEmojiRouteNotFound(): Response {
   return fixedTextResponse('{"detail":"Not Found"}', 404, "application/json");
 }
 
-function fixedTextResponse(body: string, status: number, contentType: string): Response {
-  return new Response(body, {
-    status,
-    headers: {
-      "Content-Length": String(new TextEncoder().encode(body).byteLength),
-      "Content-Type": contentType,
-    },
+function fixedTextResponse(body: string, status: number, contentType: string,
+  cacheControl: string | null = null): Response {
+  const headers = new Headers({
+    "Content-Length": String(new TextEncoder().encode(body).byteLength),
+    "Content-Type": contentType,
   });
+  if (cacheControl !== null) headers.set("Cache-Control", cacheControl);
+  return new Response(body, { status, headers });
 }
