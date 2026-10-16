@@ -274,10 +274,11 @@ class Worker:
         step = self.cadence.expected_step_seconds(
             platform, np.array([(now - published_at).total_seconds()]))[0]
         resumed = bool(last and first_new_at and (first_new_at - last).total_seconds() > GAP_FACTOR * step)
-        stale = (now - last_observed_at).total_seconds() > GAP_FACTOR * step
+        silent = (now - last_observed_at).total_seconds()
+        stale = silent > GAP_FACTOR * step
         return plan(self.schedule, platform=platform, published_at=published_at, now=now,
                     new_points=new_points, analyzed_before=row.analyzed_at is not None,
-                    resumed_after_gap=resumed, stale=stale, stretch=stretch,
+                    resumed_after_gap=resumed, stale=stale, silent_seconds=silent, stretch=stretch,
                     norm_recheck=self._norm_recheck(row), tail_ledger_stale=row.tail_ledger_stale,
                     reference_checkpoint=(self.reference is not None and platform == self.reference.platform
                         and self.reference.available_at <= published_at < self.reference.expires_at

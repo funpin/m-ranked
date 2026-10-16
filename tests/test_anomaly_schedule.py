@@ -42,6 +42,34 @@ def test_resumed_series_is_analyzed_at_once_and_stale_series_is_probed_often():
     assert not stale.analyze and stale.next_due_at == NOW + timedelta(seconds=CONFIG.stale_probe_seconds)
 
 
+@pytest.mark.parametrize("silent_hours,expected", [
+    # Только что замолчавший ряд проверяется с шагом сбора, как раньше.
+    (0.5, 15 * M), (3, 18 * M), (6, 36 * M),
+    # Долго молчащий — не чаще интервала анализа своего возраста.
+    (12, 72 * M), (30, 3 * H), (48, 3 * H),
+])
+def test_stale_probe_backs_off_with_the_silence_up_to_the_analysis_interval(silent_hours, expected):
+    stale = decide(10 * 24, new_points=0, stale=True, silent_seconds=silent_hours * H)
+    assert not stale.analyze and stale.reason == "waiting_points"
+    assert stale.next_due_at == NOW + timedelta(seconds=expected)
+
+
+def test_stale_probe_never_waits_longer_than_a_fresh_post_interval():
+    # Первые сутки: интервал анализа и есть шаг пробы, отступ его не растягивает.
+    stale = decide(2, new_points=0, stale=True, silent_seconds=48 * H)
+    assert stale.next_due_at == NOW + timedelta(minutes=15)
+
+
+def test_stale_probe_backoff_is_configurable():
+    config = ScheduleConfig.from_environment({"ANOMALY_STALE_PROBE_BACKOFF": "0.5"})
+    assert config.stale_probe_backoff == 0.5
+    stale = plan(config, platform="telegram", published_at=NOW - timedelta(days=10), now=NOW,
+                 new_points=0, analyzed_before=True, stale=True, silent_seconds=2 * H)
+    assert stale.next_due_at == NOW + timedelta(hours=1)
+    with pytest.raises(ValueError):
+        ScheduleConfig(stale_probe_backoff=0)
+
+
 def test_new_norm_forces_a_recheck_without_new_points():
     assert decide(10 * 24, new_points=0, norm_recheck=True).reason == "norm_recheck"
 
