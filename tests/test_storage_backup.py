@@ -59,9 +59,13 @@ def test_dump_runs_in_a_named_container_that_the_exit_trap_stops():
     assert "application_name = '$dumper'" in script
     assert '"$BACKUP_MAX_BYTES_PER_SECOND" &' in script and 'wait $!' in script
 
-def test_stopping_the_backup_stops_the_dump_container(tmp_path):
-    """SIGTERM посреди потока: контейнер дампа убит, сессия снята, ни готового, ни частичного файла."""
-    import os, signal, time
+def _start_streaming_dump(tmp_path, on_kill=''):
+    """Дамп с поддельным docker, чей поток длится ~10 с; возвращается, когда писатель открыл .partial.
+
+    Ждать надо сам файл: строка run в журнале docker появляется раньше, чем
+    писатель успевает создать файл, — сигнал тогда приходит не посреди потока.
+    """
+    import os, time, pytest
     bindir = tmp_path/'bin'; bindir.mkdir()
     # macOS lacks flock; the lock itself is not what this test checks.
     (bindir/'flock').write_text('#!/usr/bin/env bash\nexit 0\n'); (bindir/'flock').chmod(0o755)
@@ -71,6 +75,7 @@ echo "$*" >> {log}
 case "$1" in
   inspect) echo sha256:image ;;
   run) for i in $(seq 1 200); do head -c 65536 /dev/zero; sleep 0.05; done ;;
+  kill) {on_kill} ;;
 esac
 ''')
     (bindir/'docker').chmod(0o755)
@@ -80,14 +85,19 @@ esac
                BACKUP_RESERVE_BYTES='1')
     process = subprocess.Popen(['bash', str(SCRIPTS/'dump-backup.sh')], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     deadline = time.time() + 10
-    while time.time() < deadline and not (log.exists() and ' run ' in f' {log.read_text()}'):
+    while time.time() < deadline and not list(backups.glob('mranked-*.dump.partial')):
         if process.poll() is not None:
             break
-        time.sleep(0.1)
+        time.sleep(0.05)
     if process.poll() is not None:
-        import pytest
         pytest.skip(f'guard refused on this host: {process.stderr.read()[:200]!r}')
-    time.sleep(0.5)
+    assert list(backups.glob('mranked-*.dump.partial')), 'stream writer never opened its file'
+    return process, log, backups
+
+def test_stopping_the_backup_stops_the_dump_container(tmp_path):
+    """SIGTERM посреди потока: контейнер дампа убит, сессия снята, ни готового, ни частичного файла."""
+    import signal, time
+    process, log, backups = _start_streaming_dump(tmp_path)
     stopped = time.monotonic()
     process.send_signal(signal.SIGTERM)
     assert process.wait(timeout=15) != 0
@@ -98,6 +108,21 @@ esac
     assert "application_name = 'mranked-backup-" in calls
     assert not list(backups.glob('mranked-*.dump'))
     # Недоснятый файл этого запуска тоже убран, а не ждёт суток на диске.
+    assert not list(backups.glob('mranked-*.dump.partial'))
+
+def test_a_second_stop_signal_does_not_cut_the_cleanup_short(tmp_path):
+    """Сигнал, пришедший, пока ловушка убирает за собой, не обрывает уборку.
+
+    16.10 в CI сигнал теста совпал с собственным выходом скрипта: 'exit 143'
+    сработал посреди cleanup, и .partial остался на диске. Приди сигнал чуть
+    раньше — осталась бы и сессия pg_dump в базе.
+    """
+    import signal
+    # Повторная остановка (второй systemctl stop, второй Ctrl-C) — пока идёт docker kill.
+    process, log, backups = _start_streaming_dump(tmp_path, on_kill='kill -TERM "$PPID"')
+    process.send_signal(signal.SIGTERM)
+    assert process.wait(timeout=15) != 0
+    assert "application_name = 'mranked-backup-" in log.read_text()
     assert not list(backups.glob('mranked-*.dump.partial'))
 
 def test_refresh_keeps_only_the_restore_verified_copy_before_a_new_dump(tmp_path):
