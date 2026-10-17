@@ -144,19 +144,45 @@ def test_non_http_link_is_not_rendered():
 def test_long_output_is_split_on_lines():
     base = fixture("findings_all.json")["items"][0]
     items = []
-    for number in range(300):
-        item = copy.deepcopy(base)
-        item["publicUrl"] = f"https://example.org/post/{number}"
-        item["institutionShortName"] = "Очень длинное название " * 3
-        items.append(item)
+    for platform in ("telegram", "vk", "rutube"):
+        for number in range(20):
+            item = copy.deepcopy(base)
+            item.update(platform=platform, publicUrl=f"https://example.org/{platform}/{number}",
+                        institutionShortName="Очень длинное название " * 12)
+            items.append(item)
     body = with_items(fixture("findings_all.json"), items)
-    messages = render_top(TopQuery(who="all", count=20), body, OUR_ID, LABEL)
-    long_text = "\n".join(f"{n}. " + items[0]["institutionShortName"] * 3 for n in range(200))
+    query = TopQuery(count=20)
+    messages = render_top(query, body, OUR_ID, LABEL)
+    assert len(messages) > 1
+    assert all(len(m.text) <= 4096 for m in messages)
+    assert all(m.keyboard is None for m in messages[:-1])
+    assert messages[-1].keyboard == top_keyboard(query)
+    # Ни одна строка не порвана: теги внутри каждой строки парные, ссылок всего 60.
+    lines = "\n".join(m.text for m in messages).split("\n")
+    for line in lines:
+        assert line.count("<b>") == line.count("</b>")
+        assert line.count("<a ") == line.count("</a>")
+    assert sum(line.count("<a ") for line in lines) == 60
+
+
+def test_split_message_keeps_lines_whole():
+    long_text = "\n".join(f"{n}. " + "Очень длинное название " * 9 for n in range(200))
     parts = split_message(long_text)
     assert len(parts) > 1
     assert all(len(part) <= 4096 for part in parts)
-    assert "\n".join(parts) == long_text  # строки целы и ничего не потеряно
-    assert all(len(m.text) <= 4096 for m in messages)
+    assert "\n".join(parts) == long_text
+
+
+def test_us_mark_only_when_institutions_are_mixed():
+    body = fixture("findings_all.json")
+    all_text = text_of(render_top(TopQuery(who="all"), body, OUR_ID, LABEL))
+    assert "(мы)" in all_text
+    ours_body = fixture("findings_institution.json")
+    assert "мы)" not in text_of(render_top(TopQuery(), ours_body, OUR_ID, LABEL))
+    single = TopQuery(who="institution", institution=OUR_ID)
+    assert "мы)" not in text_of(render_top(single, ours_body, OUR_ID, LABEL))
+    ours, others = digest_args()
+    assert "мы)" not in text_of(render_digest(ours, others, CURRENT, None, None, OUR_ID))
 
 
 def test_split_message_edge_cases():

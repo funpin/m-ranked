@@ -138,6 +138,7 @@ def _name(item: dict[str, Any]) -> str:
 
 def _line(number: int, item: dict[str, Any], our_id: int | None) -> str:
     parts = [f"{number}. <b>{esc(_name(item))}</b>"]
+    # our_id задан только там, где вузы смешаны (/top все): в своих выборках метка лишняя.
     if our_id is not None and item.get("institutionLegacyId") == our_id:
         parts[0] += " (мы)"
     platform = PLATFORM_NAMES.get(item.get("platform"), esc(item.get("platform") or "—"))
@@ -208,7 +209,7 @@ def render_top(query: TopQuery, body: dict[str, Any], our_id: int | None,
     if query.who == "all":
         lines += _section(None, items, count, our_id) if items else ["Постов выше нормы за период нет."]
     else:
-        lines += _platform_sections(items, query.platform, count, our_id)
+        lines += _platform_sections(items, query.platform, count, None)
     hidden = body.get("hiddenAnomalous") or 0
     if hidden > 0 and not query.suspicious:
         lines += ["", f"Скрыто подозрительных: {int(hidden)}"]
@@ -364,7 +365,7 @@ def render_digest(ours: dict, others: dict, current: dict, previous: dict | None
     foreign = [item for item in others.get("items") or []
                if item.get("institutionLegacyId") != our_id]
     lines = [f"<b>Дайджест · {esc(label)}</b>", "", "<b>Наши лучшие посты</b>",
-             *_platform_sections(list(ours.get("items") or []), "all", DEFAULT_COUNT, our_id),
+             *_platform_sections(list(ours.get("items") or []), "all", DEFAULT_COUNT, None),
              "", "<b>Лучшие у других вузов</b>",
              *(_section(None, foreign, DIGEST_OTHERS_COUNT, None)
                if foreign else ["Постов выше нормы за период нет."]),
