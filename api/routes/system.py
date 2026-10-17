@@ -40,27 +40,19 @@ async def system(request: Request, _: Annotated[Principal, Depends(READ)],
     rows = await request.app.state.db.admin_fetch_all(SAMPLES, {"seconds": span + 900})
     latest = rows[-1] if rows else None
     previous = rows[-2]["sample"] if len(rows) > 1 else None
-    sampled_at = latest["observed_at"].timestamp() if latest else None
     settings = request.app.state.settings
-    window = [row for row in rows if row["observed_at"].timestamp() >= now - 3 * 3600]
-    freshness: dict[str, tuple[float | None, int]] = {}
-    for platform in overview.PLATFORMS:
-        moments = [row["sample"].get("collection", {}).get(platform, {}).get("lastOk") for row in window]
-        known = [moment for moment in moments if isinstance(moment, (int, float))]
-        freshness[platform] = (max(known) if known else None, _threshold(settings, platform))
-    recent = [row for row in rows if row["observed_at"].timestamp() >= now - 3600]
+    summary = overview.status_summary(rows, now, lambda platform: _threshold(settings, platform), span)
     # Период и один снимок перед ним — опора для первых разностей счётчиков.
     start = now - span
-    inside = [row for row in rows if row["observed_at"].timestamp() >= start]
-    period_rows = [row for row in rows if row["observed_at"].timestamp() < start][-1:] + inside
+    period_rows = overview.period_rows(rows, now, span)
     body = {
         "range": period,
-        "sampledAt": latest["observed_at"].isoformat() if latest else None,
-        "checks": overview.checks(now, sampled_at, latest["sample"] if latest else None, recent, freshness),
+        "sampledAt": summary["sampledAt"],
+        "checks": summary["checks"],
         "host": overview.host(latest["sample"], previous) if latest else None,
         "pipeline": overview.pipeline(latest["sample"]) if latest else None,
         "restarts": overview.restarts(period_rows),
-        "collection": overview.collection(period_rows),
+        "collection": summary["collection"],
         "series": overview.series(period_rows, bucket, since=start),
         "backups": overview.backups(latest["sample"] if latest else None),
     }

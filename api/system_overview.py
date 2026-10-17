@@ -7,13 +7,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
 # Период → (длина, шаг точек графика), секунды. Часовые масштабы идут
 # по минутным снимкам как есть; ресурсы машины для них панель берёт из
 # живого буфера API (api/live_host.py) с шагом в несколько секунд.
 RANGES = {"1h": (3600, 60), "3h": (3 * 3600, 60), "day": (86400, 300), "week": (7 * 86400, 3600)}
+# Пороги свежести сбора профиля B, секунды: как api/routes/health._threshold
+# для профиля b. Нужны боту, у которого нет Settings.
+PROFILE_B_FRESHNESS = {"telegram": 2700, "vk": 2700, "max": 2700, "rutube": 5400}
 # Снимок раз в минуту; дольше пяти минут тишины — таймер не работает.
 SAMPLE_STALE_SECONDS = 5 * 60
 
@@ -250,4 +253,32 @@ def backups(latest: dict[str, Any] | None) -> dict[str, Any] | None:
         "requested": bool(value.get("requested")),
         "lastResult": value.get("lastResult"),
         "lastExitStatus": value.get("lastExitStatus"),
+    }
+
+
+def period_rows(rows: list[dict[str, Any]], now: float, span: float) -> list[dict[str, Any]]:
+    """Снимки периода и один снимок перед ним — опора для первых разностей счётчиков."""
+    start = now - span
+    inside = [row for row in rows if row["observed_at"].timestamp() >= start]
+    return [row for row in rows if row["observed_at"].timestamp() < start][-1:] + inside
+
+
+def status_summary(rows: list[dict[str, Any]], now: float, threshold: Callable[[str], int],
+                   span: float = RANGES["day"][0]) -> dict[str, Any]:
+    """Проверки и сбор по площадкам из снимков сервера; общая для панели и бота.
+    rows — снимки по возрастанию времени за последние три часа и больше;
+    threshold(platform) — порог свежести сбора, секунды; span — период для сбора."""
+    latest = rows[-1] if rows else None
+    sampled_at = latest["observed_at"].timestamp() if latest else None
+    window = [row for row in rows if row["observed_at"].timestamp() >= now - 3 * 3600]
+    freshness: dict[str, tuple[float | None, int]] = {}
+    for platform in PLATFORMS:
+        moments = [row["sample"].get("collection", {}).get(platform, {}).get("lastOk") for row in window]
+        known = [moment for moment in moments if isinstance(moment, (int, float))]
+        freshness[platform] = (max(known) if known else None, threshold(platform))
+    recent = [row for row in rows if row["observed_at"].timestamp() >= now - 3600]
+    return {
+        "sampledAt": latest["observed_at"].isoformat() if latest else None,
+        "checks": checks(now, sampled_at, latest["sample"] if latest else None, recent, freshness),
+        "collection": collection(period_rows(rows, now, span)),
     }
