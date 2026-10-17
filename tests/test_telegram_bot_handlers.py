@@ -97,6 +97,10 @@ class FakeSource:
             return copy.deepcopy(self.body)
         return fixture("findings_all.json" if query.who == "all" else "findings_institution.json")
 
+    async def findings(self, *, institution, platform, period, suspicious) -> dict:
+        self._call("findings")
+        return fixture("findings_all.json" if institution is None else "findings_institution.json")
+
     async def dashboard(self) -> dict:
         self._call("dashboard")
         return fixture("dashboard.json")
@@ -401,8 +405,8 @@ def test_week_uses_snapshot_and_forecast():
     assert source.calls == ["dashboard", "forecast"]
 
 
-def test_help_and_digest_stub():
-    bot, telegram, _, _ = make_bot()
+def test_help_and_digest_command():
+    bot, telegram, source, _ = make_bot()
     handle(bot, private_message(ADMIN, "/help"))
     assert "/settings" in sent_texts(telegram)[-1] and "/status" in sent_texts(telegram)[-1]
     handle(bot, group_message(ADMIN, "/help"))
@@ -410,7 +414,12 @@ def test_help_and_digest_stub():
     handle(bot, private_message(PERSON, "/help"))
     assert "/status" not in sent_texts(telegram, PERSON)[-1]
     handle(bot, group_message(STRANGER, "/digest"))
-    assert sent_texts(telegram, GROUP)[-1] == "дайджест появится после подключения расписания"
+    assert "Дайджест" in sent_texts(telegram, GROUP)[-1]
+    assert len(sent_texts(telegram, PERSON)) == 1  # дайджест ушёл только в тот чат
+    source.down = True
+    handle(bot, group_message(STRANGER, "/digest"))
+    assert sent_texts(telegram, GROUP)[-1] == "данные временно недоступны, попробуйте позже"
+    source.down = False
 
     seen = []
 

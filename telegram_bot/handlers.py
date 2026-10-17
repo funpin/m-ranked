@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from . import settings
+from . import content, settings
 from .access import Access, access_for, allowed
 from .config import BotConfig
 from .render import (
@@ -43,7 +43,6 @@ FLAGS = ("digest", "spike", "anomaly", "alerts")
 NO_ACCESS = "Доступа нет. Пришлите админу бота свой ID — его покажет /id."
 NO_OURS = "админ ещё не выбрал наш вуз: /settings"
 SOURCE_DOWN = "данные временно недоступны, попробуйте позже"
-DIGEST_STUB = "дайджест появится после подключения расписания"
 STATUS_REFUSED = "Статус сервера — только в личке и только людям из списка тревог."
 SETTINGS_REFUSED = "Настройки — только админу бота и только в личке."
 UNKNOWN_COMMAND = "Не знаю такой команды. Список — в /help."
@@ -134,10 +133,20 @@ class Bot:
         commands = person_commands(r) if r is not None else list(BASE_COMMANDS)
         await self._set_commands(commands, {"type": "chat", "chat_id": target})
 
-    # --- переопределяемые крючки (Task 11, Task 12) ---------------------
+    # --- переопределяемые крючки (Task 12) ---------------------
 
     async def send_digest_here(self, chat_id: int) -> None:
-        await self.reply(chat_id, DIGEST_STUB)
+        """/digest: тот же дайджест, что по понедельникам, но только в этот чат."""
+        try:
+            messages = await content.build_digest(self)
+        except content.NoOurInstitution:
+            await self.reply(chat_id, NO_OURS)
+            return
+        except SourceUnavailable as error:
+            log.warning("digest: %s", type(error).__name__)
+            await self.reply(chat_id, SOURCE_DOWN)
+            return
+        await self.send_all(chat_id, messages)
 
     async def on_mute_callback(self, callback: dict, access: Access) -> None:
         """Вызывается только для человека из списка тревог в личке."""
