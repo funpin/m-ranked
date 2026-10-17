@@ -75,3 +75,19 @@ def test_telegram_bot_role_is_nologin_with_exact_grants(connection):
     assert sequences == ["bot_held_alert_id_seq"]
     assert connection.execute("SELECT count(*) AS n FROM information_schema.routine_privileges "
                               "WHERE grantee = 'telegram_bot'").fetchone()["n"] == 0
+
+
+def test_telegram_bot_can_work_with_its_tables_and_nothing_else(connection):
+    assert connection.execute(
+        "SELECT has_schema_privilege('telegram_bot', 'ops_and_admin', 'USAGE') AS ok").fetchone()["ok"]
+    connection.execute("SET LOCAL ROLE telegram_bot")
+    connection.execute("SELECT count(*) FROM ops_and_admin.bot_setting")
+    connection.execute("SELECT count(*) FROM ops_and_admin.host_sample")
+    connection.execute("INSERT INTO ops_and_admin.bot_held_alert(event) VALUES ('{}'::jsonb)")
+    connection.execute("DELETE FROM ops_and_admin.bot_held_alert")
+    connection.execute("SAVEPOINT denied")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        connection.execute("SELECT 1 FROM catalog.institution LIMIT 1")
+    connection.execute("ROLLBACK TO SAVEPOINT denied")
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        connection.execute("INSERT INTO ops_and_admin.host_sample(sample) VALUES ('{}'::jsonb)")

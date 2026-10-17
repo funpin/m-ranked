@@ -15,6 +15,7 @@
 --     ops_and_admin.bot_alert_mute, ops_and_admin.bot_announced, ops_and_admin.bot_recipient,
 --     ops_and_admin.bot_setting;
 --   REVOKE SELECT ON ops_and_admin.host_sample FROM telegram_bot;
+--   REVOKE USAGE ON SCHEMA ops_and_admin FROM telegram_bot;
 --   (роль снимает DROP ROLE telegram_bot от mranked_bootstrap, когда бот не нужен.)
 BEGIN;
 SET LOCAL lock_timeout = '5s';
@@ -72,6 +73,7 @@ CREATE TABLE ops_and_admin.bot_job (
     last_run_at timestamptz NOT NULL
 );
 
+GRANT USAGE ON SCHEMA ops_and_admin TO telegram_bot;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     ops_and_admin.bot_setting, ops_and_admin.bot_recipient, ops_and_admin.bot_announced,
     ops_and_admin.bot_alert_mute, ops_and_admin.bot_held_alert, ops_and_admin.bot_week_snapshot,
