@@ -75,11 +75,12 @@ def make_bot(tmp_path: Path, *, recipients: list[Recipient] | None = None, now: 
 
 def spool(tmp_path: Path, key: str = "disk", kind: str = "open", *, urgent: bool = False,
           text: str = "диск заполнен", server: str = "Сервер 2", since: float = 1_000_000.0,
-          stamp: int | None = None) -> Path:
+          stamp: int | None = None, at: float | None = None) -> Path:
     stamp = stamp if stamp is not None else time.time_ns()
     path = tmp_path / f"{stamp}-{key}.json"
     path.write_text(json.dumps({"version": 1, "server": server, "key": key, "kind": kind, "urgent": urgent,
-                                "text": text, "since": since, "at": since}), encoding="utf-8")
+                                "text": text, "since": since,
+                                "at": NIGHT.timestamp() - 60 if at is None else at}), encoding="utf-8")
     return path
 
 
@@ -321,7 +322,7 @@ def test_morning_failure_puts_events_back(tmp_path):
 def test_morning_without_recipients_drops_events(tmp_path):
     bot, telegram, store = make_bot(tmp_path, recipients=[Recipient(PERSON, "person", "человек")])
     asyncio.run(store.hold_alert({"version": 1, "server": "s", "key": "k", "kind": "open", "urgent": False,
-                                  "text": "t", "since": 1.0, "at": 1.0}))
+                                  "text": "t", "since": 1.0, "at": MORNING.timestamp() - 60}))
     asyncio.run(morning(bot, MORNING))
     assert telegram.of("send") == []
     assert asyncio.run(store.take_held()) == []
@@ -348,6 +349,41 @@ def test_failure_keeps_order_by_stopping_at_first_failed_file(tmp_path):
     second = spool(tmp_path, "a", "resolve", stamp=2)
     asyncio.run(deliver(bot, NOON))
     assert first.exists() and second.exists()
+
+
+def test_undeliverable_fresh_file_is_kept_but_stale_one_is_dropped(tmp_path):
+    bot, telegram, _ = make_bot(tmp_path)
+    telegram.failing = {ADMIN}
+    fresh = spool(tmp_path, "a", "open", stamp=1, at=NOON.timestamp() - 5 * 3600)
+    asyncio.run(deliver(bot, NOON))
+    assert fresh.exists()
+    stale = spool(tmp_path, "b", "open", stamp=2, at=NOON.timestamp() - 6 * 3600 - 1)
+    telegram.failing = set()
+    asyncio.run(deliver(bot, NOON))
+    assert not stale.exists()
+    assert [call[2].count("диск") for call in telegram.of("send")] == [1]  # ушёл только свежий
+    assert not fresh.exists()
+
+
+def test_stale_file_is_dropped_without_sending_and_logs_name_only(tmp_path, caplog):
+    bot, telegram, store = make_bot(tmp_path)
+    stale = spool(tmp_path, "a", "resolve", text="секретный текст", at=NOON.timestamp() - 7 * 3600)
+    with caplog.at_level("INFO"):
+        asyncio.run(deliver(bot, NOON))
+    assert not stale.exists()
+    assert telegram.of("send") == []
+    assert asyncio.run(store.take_held()) == []
+    assert "stale" in caplog.text and "секретный" not in caplog.text
+
+
+def test_morning_rehold_drops_events_older_than_a_day(tmp_path):
+    bot, telegram, store = make_bot(tmp_path)
+    telegram.failing = {ADMIN}
+    base = {"version": 1, "server": "s", "kind": "open", "urgent": False, "text": "t", "since": 1.0}
+    asyncio.run(store.hold_alert({**base, "key": "old", "at": MORNING.timestamp() - 24 * 3600 - 1}))
+    asyncio.run(store.hold_alert({**base, "key": "new", "at": MORNING.timestamp() - 3600}))
+    asyncio.run(morning(bot, MORNING))
+    assert [event["key"] for event in asyncio.run(store.take_held())] == ["new"]
 
 
 def test_no_alert_recipients_deletes_file(tmp_path):

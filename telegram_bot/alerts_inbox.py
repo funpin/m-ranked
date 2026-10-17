@@ -27,6 +27,10 @@ QUIET_FROM_HOUR = 23
 QUIET_TO_HOUR = 8
 MUTE_SECONDS = 2 * 3600
 STALE_TEMPORARY_SECONDS = 3600
+# Равно интервалу «повтора» в alerts.py: открытая тревога всё равно объявится заново.
+STALE_SECONDS = 6 * 3600
+# Дольше суток утреннюю сводку не донести: события из неё больше не возвращаем.
+HELD_MAX_SECONDS = 24 * 3600
 CALLBACK_LIMIT = 64
 SPOOL_VERSION = 1
 KINDS = ("open", "repeat", "resolve")
@@ -140,6 +144,13 @@ def is_quiet(now: datetime) -> bool:
 
 # --- доставка -------------------------------------------------------------------------
 
+def _age(event: dict, now: float) -> float:
+    at = event.get("at")
+    if isinstance(at, bool) or not isinstance(at, (int, float)):
+        return 0.0
+    return now - at
+
+
 def _alert_people(recipients: list[Recipient]) -> list[Recipient]:
     return [r for r in recipients if r.kind == "person" and r.alerts]
 
@@ -151,10 +162,18 @@ async def deliver(bot: Bot, now: datetime) -> None:
         return
     has_people = bool(_alert_people(await bot.store.recipients()))
     quiet = is_quiet(now)
+    moment = now.timestamp()
     for path, event in inbox:
         if not has_people:
             path.unlink(missing_ok=True)
             continue
+        if _age(event, moment) > STALE_SECONDS:
+            # Недоставимая очередь не должна копиться вечно и потом хлынуть потоком.
+            log.warning("alert spool: %s stale, dropped", path.name)
+            path.unlink(missing_ok=True)
+            continue
+        # Заглушка ключуется одним ключом правила: alerts.py работает только на Сервере 2,
+        # правила Сервера 1 имеют приставку node_<id>_, пересечений нет.
         if event["kind"] != "resolve" and await bot.store.muted_until(event["key"]) is not None:
             path.unlink(missing_ok=True)
             continue
@@ -179,8 +198,10 @@ async def morning(bot: Bot, now: datetime) -> None:
     lines = [_summary_line(group) for group in _by_key(held)]
     text = "Тревоги за ночь\n" + "\n".join(lines)
     if await bot.broadcast(text, "alerts") == 0:
+        moment = now.timestamp()
         for event in held:
-            await bot.store.hold_alert(event)
+            if _age(event, moment) <= HELD_MAX_SECONDS:
+                await bot.store.hold_alert(event)
 
 
 def _by_key(held: list[dict]) -> list[list[dict]]:
