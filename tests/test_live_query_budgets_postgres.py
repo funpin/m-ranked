@@ -135,7 +135,7 @@ def _comparison_ids(connection: psycopg.Connection[Any], platform: str,
                AND alias.entity_type='channels'
              JOIN ingest.visible_publication publication ON publication.primary_account_id=account.id
             WHERE account.enabled AND account.platform='telegram'
-              AND publication.published_at>=%s::timestamptz-interval '70 days'
+              AND publication.published_at>=%s::timestamptz-interval '100 days'
               AND publication.published_at+make_interval(hours=>%s)<=%s::timestamptz
             GROUP BY alias.legacy_id ORDER BY publications DESC,alias.legacy_id LIMIT 25"""
     else:
@@ -146,7 +146,7 @@ def _comparison_ids(connection: psycopg.Connection[Any], platform: str,
              JOIN catalog.visible_platform_account account ON account.institution_id=institution.id
              JOIN ingest.visible_publication publication ON publication.primary_account_id=account.id
             WHERE account.enabled AND account.platform::text=%s
-              AND publication.published_at>=%s::timestamptz-interval '70 days'
+              AND publication.published_at>=%s::timestamptz-interval '100 days'
               AND publication.published_at+make_interval(hours=>%s)<=%s::timestamptz
             GROUP BY alias.legacy_id ORDER BY publications DESC,alias.legacy_id LIMIT 25"""
     parameters = ((as_of, horizon, as_of) if platform == "telegram"
@@ -189,7 +189,7 @@ def test_public_screen_query_budgets() -> None:
             }, DEFAULT_BUDGET),
             ("account-stats", details.ACCOUNT_STATS, common | {
                 "account_id": fixture["account_id"], "institution_id": fixture["institution_id"],
-                "platform": "telegram", "days": 70,
+                "platform": "telegram", "days": 100,
             }, DEFAULT_BUDGET),
             ("institution-accounts", details.INSTITUTION_ACCOUNTS, common | {
                 "legacy_id": fixture["institution_legacy_id"], "platform": "all",
@@ -200,7 +200,7 @@ def test_public_screen_query_budgets() -> None:
             }, DEFAULT_BUDGET),
             ("account-publications", details.ACCOUNT_PUBLICATIONS, common | {
                 "account_id": fixture["account_id"], "publication_legacy_type": "posts",
-                "after_id": None, "fetch_limit": 51, "days": 70, "growth_day": None,
+                "after_id": None, "fetch_limit": 51, "days": 100, "growth_day": None,
             }, DEFAULT_BUDGET),
             ("publication", details.PUBLICATION, common | {
                 "entity_uuid": None, "legacy_id": fixture["publication_legacy_id"],
@@ -246,7 +246,7 @@ def test_public_screen_query_budgets() -> None:
                     "revision": fixture["revision"], "platform": platform,
                     "horizon_hours": horizon, "include_partial": True,
                     "metric": "reactions", "aggregation": "median",
-                    "selection_ids": json.dumps(selected), "hot_days": 70,
+                    "selection_ids": json.dumps(selected), "hot_days": 100,
                 }
                 budget = COMPARISON_336H_BUDGET if horizon == 336 else COMPARISON_24H_BUDGET
                 _assert_budget(
