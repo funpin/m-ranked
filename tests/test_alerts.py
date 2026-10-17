@@ -14,9 +14,11 @@ alerts = importlib.util.module_from_spec(SPEC)
 sys.modules["alerts"] = alerts  # dataclass ищет модуль по имени
 SPEC.loader.exec_module(alerts)
 
-LIMITS = {"backup_hours": 36, "disk_free_bytes": 6 * 10**9, "load5": 4.0, "ingest_minutes": 20,
+LIMITS = {"backup_hours": 36, "disk_free_bytes": 6 * 10**9, "load15": 6.0, "ingest_minutes": 20,
           "analysis_lag_seconds": 3 * 3600, "docker_bytes": 5 * 10**9, "human_5xx": 20,
-          "bot_503_share": 0.5, "misses_per_second": 20, "hit_ratio": 0.3}
+          "bot_503_share": 0.5, "misses_per_second": 20, "hit_ratio": 0.3,
+          "cpu_percent": 90, "cpu_minutes": 45, "page_p95_seconds": 3.0, "memory_percent": 90,
+          "swap_bytes": 10**9, "disk_urgent_share": 0.07, "bots_per_minute": 150, "bot_minutes": 5}
 
 
 def line(path="/", status=200, klass="human", cache="HIT"):
@@ -28,10 +30,10 @@ def healthy(now, **overrides):
     values = {"mranked_backup_last_success_unixtime": now - 3600,
               'mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}': now - 30,
               "mranked_anomaly_queue_lag_seconds": 60.0}
-    arguments = dict(disk_free=20 * 10**9, disk_total=50 * 10**9, load5=1.0, failed=[], dump_mtime=None,
-                     limits=LIMITS)
-    arguments.update(overrides)
-    return values, arguments
+    host = dict(disk_free=20 * 10**9, disk_total=50 * 10**9, load5_series=[1.0] * 15, cpu_series=[10.0] * 45,
+                memory_used_share=0.5, swap_used_bytes=0, failed=[], dump_mtime=None, bots_per_minute=[10] * 5)
+    host.update(overrides)
+    return values, dict(host=alerts.Host(**host), inputs=None, limits=LIMITS)
 
 
 def test_log_line_carries_class_cache_and_static_flag():
@@ -71,7 +73,7 @@ def test_healthy_server_raises_nothing():
 
 def test_thresholds_fire_on_the_problems_they_name():
     now = 1_800_000_000.0
-    values, arguments = healthy(now, disk_free=4 * 10**9, load5=6.5, failed=["m-ranked-target-web.service"])
+    values, arguments = healthy(now, disk_free=4 * 10**9, load5_series=[6.5] * 15, failed=["m-ranked-target-web.service"])
     values["mranked_backup_last_success_unixtime"] = now - 40 * 3600
     values['mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}'] = now - 3600
     traffic = alerts.empty_bucket()
@@ -246,3 +248,157 @@ def test_stale_account_tail_profile_warns(age_days, firing):
     rule = next(rule for rule in alerts.evaluate(now, alerts.empty_bucket(), values, **arguments)
                 if rule.key == "analysis_tail")
     assert rule.firing is firing
+
+
+def firing_rules(now, traffic=None, **overrides):
+    inputs = overrides.pop("inputs", None)
+    values, arguments = healthy(now, **overrides)
+    arguments["inputs"] = inputs
+    rules = alerts.evaluate(now, traffic or alerts.empty_bucket(), values, **arguments)
+    return {rule.key: rule for rule in rules if rule.firing}
+
+
+NOW = 1_800_000_000.0
+
+
+def test_load_uses_15_minute_mean():
+    assert "load" not in firing_rules(NOW, load5_series=[6.0] * 15)
+    assert "load" in firing_rules(NOW, load5_series=[6.1] * 15)
+    assert "load" not in firing_rules(NOW, load5_series=[7.0] * 14)
+
+
+def test_cpu_sustained_45_minutes():
+    rules = firing_rules(NOW, cpu_series=[90.5] * 45)
+    assert "cpu" in rules and rules["cpu"].urgent is False and "cpu_slow" not in rules
+    slow = firing_rules(NOW, cpu_series=[90.5] * 45, inputs={"pageP95Median15m": 3.5})
+    assert "cpu" in slow and slow["cpu_slow"].urgent is True
+    assert "cpu_slow" not in firing_rules(NOW, cpu_series=[90.5] * 45, inputs={"pageP95Median15m": 2.5})
+    assert not {"cpu", "cpu_slow"} & set(firing_rules(NOW, cpu_series=[99.0] * 44,
+                                                      inputs={"pageP95Median15m": 9.0}))
+    assert "cpu_slow" not in firing_rules(NOW, cpu_series=[10.0] * 45, inputs={"pageP95Median15m": 9.0})
+
+
+def test_memory_and_swap():
+    assert "memory" in firing_rules(NOW, memory_used_share=0.91)
+    assert "memory" in firing_rules(NOW, swap_used_bytes=int(1.1e9))
+    assert "memory" not in firing_rules(NOW, memory_used_share=0.89, swap_used_bytes=int(0.5e9))
+    assert "memory" not in firing_rules(NOW, memory_used_share=None, swap_used_bytes=None)
+
+
+def test_disk_urgent_is_separate_key():
+    total = 500 * 10**9
+    rules = firing_rules(NOW, disk_free=int(total * 0.08), disk_total=total)
+    assert "disk" in rules and "disk_urgent" not in rules
+    rules = firing_rules(NOW, disk_free=int(total * 0.06), disk_total=total)
+    assert "disk" in rules and rules["disk_urgent"].urgent is True
+
+
+def test_bots_surge_needs_five_minutes():
+    rules = firing_rules(NOW, bots_per_minute=[151] * 5)
+    assert rules["bots"].urgent is True
+    assert "bots" not in firing_rules(NOW, bots_per_minute=[151] * 4 + [100])
+    assert "bots" not in firing_rules(NOW, bots_per_minute=[151] * 4)
+
+
+def test_existing_urgency():
+    now = NOW
+    values, arguments = healthy(now, failed=["m-ranked-x.service"], disk_free=1)
+    values["mranked_backup_last_success_unixtime"] = now - 40 * 3600
+    values['mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}'] = now - 3600
+    values["mranked_anomaly_queue_lag_seconds"] = 5 * 3600.0
+    values["mranked_anomaly_reference_accounts"] = 16
+    values["mranked_anomaly_reference_expires_at_unixtime"] = now + 86400
+    values["mranked_anomaly_tail_last_run_unixtime"] = now - 5 * 86400
+    values["mranked_host_docker_reclaimable_bytes"] = 9e9
+    traffic = alerts.empty_bucket()
+    for item in ([line("/p", 503, "ai_training", "MISS")] * 9000 + [line("/q", 200, "crawler", "MISS")] * 7000
+                 + [line("/", 502, "human", "MISS")] * 25):
+        alerts.add(traffic, alerts.parse_line(item))
+    urgent = {rule.key: rule.urgent for rule in alerts.evaluate(now, traffic, values, **arguments) if rule.firing}
+    for key in ("units", "human_5xx"):
+        assert urgent[key] is True
+    for key in ("backup", "ingest", "analysis", "docker", "misses", "hit_ratio", "bot_503",
+                "analysis_reference", "analysis_tail"):
+        assert urgent[key] is False
+
+
+def test_series_keep_only_the_latest_values():
+    state = {}
+    for value in range(20):
+        series = alerts.push_series(state, "load5", float(value), 15)
+    assert series == [float(value) for value in range(5, 20)]
+    assert alerts.push_series(state, "cpu", 1.0, 45) == [1.0] and state["series"]["load5"] == series
+
+
+def test_cpu_busy_percent_uses_difference_from_previous_run(monkeypatch):
+    state = {}
+    readings = iter([(1000, 800), (1200, 900), (1200, 900)])
+    monkeypatch.setattr(alerts, "read_cpu_times", lambda: next(readings))
+    assert alerts.cpu_busy_percent(state) is None  # первого запуска не с чем сравнивать
+    assert alerts.cpu_busy_percent(state) == pytest.approx(50.0)  # занято 100 из 200 тактов
+    assert alerts.cpu_busy_percent(state) is None  # время не сдвинулось
+    monkeypatch.setattr(alerts, "read_cpu_times", lambda: None)
+    assert alerts.cpu_busy_percent(state) is None
+
+
+def test_proc_readers_parse_and_tolerate_absence(tmp_path):
+    stat = tmp_path / "stat"
+    stat.write_text("cpu  100 10 50 800 20 5 5 10 99 99\ncpu0 1 1 1 1 1 1 1 1 1 1\n")
+    assert alerts.read_cpu_times(stat) == (1000, 820)
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal: 1000 kB\nMemAvailable: 250 kB\nSwapTotal: 800 kB\nSwapFree: 300 kB\n")
+    share, swap = alerts.read_memory(meminfo)
+    assert share == pytest.approx(0.75) and swap == 500 * 1024
+    missing = tmp_path / "absent"
+    assert alerts.read_cpu_times(missing) is None and alerts.read_memory(missing) == (None, None)
+
+
+def test_bots_per_minute_returns_complete_minutes_oldest_first():
+    state = {"buckets": {str(minute): {**alerts.empty_bucket(), "bot_requests": minute - 100}
+                         for minute in (101, 102, 104, 105, 106)}}
+    # Минута 106 ещё идёт; 103 пропущена и считается нулём.
+    assert alerts.bots_per_minute(state, 106, 5) == [1, 2, 0, 4, 5]
+
+
+def test_buckets_survive_long_enough_for_five_complete_minutes(tmp_path):
+    log = tmp_path / "access.log"
+    log.write_text("")
+    state = {}
+    alerts.read_log(log, state, 100)
+    for minute in range(101, 108):
+        with log.open("a") as stream:
+            stream.write(line("/p", 200, "crawler", "MISS") * 1 + "\n")
+        alerts.read_log(log, state, minute)
+    assert alerts.bots_per_minute(state, 107, 5) == [1] * 5
+    assert alerts.window(state)["bot_requests"] == alerts.WINDOW_MINUTES
+
+
+def _failing_spool(tmp_path, monkeypatch, state, fire=True):
+    spool = tmp_path / "inbox"
+    spool.mkdir()
+    _server(tmp_path, monkeypatch, ALERTS_BOT_SPOOL_DIR=spool)
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "state.json").write_text(json.dumps(state))
+    monkeypatch.setattr(alerts, "evaluate", lambda *args, **kwargs: [
+        alerts.Rule("disk", fire, "мало места")])
+
+    def broken(*args):
+        raise OSError("disk full")
+    monkeypatch.setattr(alerts, "write_event", broken)
+
+
+def test_spool_failure_on_repeat_keeps_previous_sent(tmp_path, monkeypatch, capsys):
+    now = time.time()
+    old = now - alerts.REPEAT_SECONDS - 10
+    _failing_spool(tmp_path, monkeypatch, {"active": {"disk": {"since": old - 100, "sent": old}}})
+    assert alerts.main() == 0
+    saved = json.loads((tmp_path / "state" / "state.json").read_text())
+    assert saved["active"]["disk"] == {"since": old - 100, "sent": old}
+
+
+def test_spool_failure_on_resolve_keeps_alert_active(tmp_path, monkeypatch, capsys):
+    now = time.time()
+    _failing_spool(tmp_path, monkeypatch, {"active": {"disk": {"since": now - 500, "sent": now - 400}}}, fire=False)
+    assert alerts.main() == 0
+    saved = json.loads((tmp_path / "state" / "state.json").read_text())
+    assert saved["active"]["disk"] == {"since": now - 500, "sent": now - 400}

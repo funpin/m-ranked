@@ -29,6 +29,8 @@ from typing import Literal
 
 BOT_CLASSES = ("ai_user", "ai_search", "ai_training", "crawler")
 WINDOW_MINUTES = 5
+HISTORY_MINUTES = 15  # сколько минутных корзин хранить: для роботов нужно 5 законченных минут
+LOAD_MINUTES = 15
 REPEAT_SECONDS = 6 * 3600
 SPOOL_LIMIT = 500  # файлов очереди; при переполнении самые старые отбрасываются
 
@@ -53,6 +55,20 @@ class Event:
     urgent: bool
     text: str
     since: float
+
+
+@dataclass(frozen=True)
+class Host:
+    """Что видно на самой машине; ряды — по одному значению в минуту, старые первыми."""
+    disk_free: int
+    disk_total: int
+    load5_series: list[float]
+    cpu_series: list[float]
+    memory_used_share: float | None
+    swap_used_bytes: int | None
+    failed: list[str]
+    dump_mtime: float | None
+    bots_per_minute: list[int]
 
 
 def env_int(name: str, default: int) -> int:
@@ -117,13 +133,18 @@ def read_log(path: Path, state: dict, minute: int) -> None:
         if item:
             add(bucket, item)
     state["log"] = {"inode": stat.st_ino, "offset": offset}
-    for key in [key for key in buckets if int(key) <= minute - WINDOW_MINUTES]:
+    for key in [key for key in buckets if int(key) <= minute - HISTORY_MINUTES]:
         del buckets[key]
 
 
 def window(state: dict) -> dict:
+    """Сумма за последние WINDOW_MINUTES минут: от самой свежей корзины назад."""
+    buckets = state.get("buckets", {})
     total = empty_bucket()
-    for bucket in state.get("buckets", {}).values():
+    latest = max((int(key) for key in buckets), default=0)
+    for key, bucket in buckets.items():
+        if int(key) <= latest - WINDOW_MINUTES:
+            continue
         for key in ("requests", "human_5xx", "bot_requests", "bot_503", "hits", "cacheable"):
             total[key] += bucket[key]
         for klass, count in bucket["misses"].items():
@@ -161,8 +182,61 @@ def failed_units() -> list[str]:
     return [line.split()[0] for line in result.stdout.splitlines() if line.strip()]
 
 
-def evaluate(now: float, traffic: dict, values: dict[str, float], *, disk_free: int, disk_total: int,
-             load5: float, failed: list[str], dump_mtime: float | None, limits: dict) -> list[Rule]:
+def bots_per_minute(state: dict, minute: int, count: int) -> list[int]:
+    """Запросы роботов за последние count законченных минут, старые первыми; пропущенная минута — 0."""
+    buckets = state.get("buckets", {})
+    return [buckets.get(str(number), {}).get("bot_requests", 0) for number in range(minute - count, minute)]
+
+
+def push_series(state: dict, name: str, value: float, keep: int) -> list[float]:
+    """Добавить значение в ряд state["series"][name] и оставить последние keep значений."""
+    series = state.setdefault("series", {})
+    values = (series.get(name, []) + [value])[-keep:]
+    series[name] = values
+    return values
+
+
+def read_cpu_times(path: str | Path = "/proc/stat") -> tuple[int, int] | None:
+    """(всего тактов, тактов простоя) по первой строке /proc/stat; None, если файла нет."""
+    try:
+        fields = Path(path).read_text().splitlines()[0].split()
+        numbers = [int(field) for field in fields[1:9]]  # guest уже входит в user и nice
+    except (OSError, IndexError, ValueError):
+        return None
+    if fields[0] != "cpu" or len(numbers) < 5:
+        return None
+    return sum(numbers), numbers[3] + numbers[4]
+
+
+def cpu_busy_percent(state: dict) -> float | None:
+    """Занятость процессора с прошлого запуска; None на первом запуске и если счётчик не сдвинулся."""
+    current = read_cpu_times()
+    if current is None:
+        return None
+    previous = state.get("cpu_prev")
+    state["cpu_prev"] = list(current)
+    if not previous or current[0] <= previous[0] or current[1] < previous[1]:
+        return None
+    return 100 * (1 - (current[1] - previous[1]) / (current[0] - previous[0]))
+
+
+def read_memory(path: str | Path = "/proc/meminfo") -> tuple[float | None, int | None]:
+    """(доля занятой памяти без кэша, занято подкачки в байтах); (None, None), если файла нет."""
+    try:
+        text = Path(path).read_text()
+        kib = {name: int(value.split()[0]) for name, _, value in
+               (line.partition(":") for line in text.splitlines() if ":" in line)}
+        total, available = kib["MemTotal"], kib["MemAvailable"]
+        swap = (kib["SwapTotal"] - kib["SwapFree"]) * 1024
+    except (OSError, KeyError, ValueError, IndexError):
+        return None, None
+    return (1 - available / total if total else None), swap
+
+
+def evaluate(now: float, traffic: dict, values: dict[str, float], host: Host, inputs: dict | None,
+             limits: dict) -> list[Rule]:
+    disk_free, disk_total = host.disk_free, host.disk_total
+    failed, dump_mtime = host.failed, host.dump_mtime
     rules: list[Rule] = []
     minutes = WINDOW_MINUTES
     backup = values.get("mranked_backup_last_success_unixtime") or dump_mtime
@@ -170,10 +244,34 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], *, disk_free: 
     rules.append(Rule("backup", age is None or age > limits["backup_hours"],
                       "Бэкапа нет" if age is None else f"Последний бэкап {age:.0f} ч назад"))
     free_share = disk_free / disk_total if disk_total else 1
-    rules.append(Rule("disk", disk_free < limits["disk_free_bytes"] or free_share < 0.12,
-                      f"Свободно на диске {disk_free / 1e9:.1f} ГБ ({free_share:.0%})"))
-    rules.append(Rule("load", load5 > limits["load5"], f"Load average за 5 минут {load5:.1f}"))
-    rules.append(Rule("units", bool(failed), "Упали юниты: " + ", ".join(failed) if failed else "Юниты в порядке"))
+    disk_text = f"Свободно на диске {disk_free / 1e9:.1f} ГБ ({free_share:.0%})"
+    rules.append(Rule("disk", disk_free < limits["disk_free_bytes"] or free_share < 0.12, disk_text))
+    rules.append(Rule("disk_urgent", free_share < limits["disk_urgent_share"], disk_text, urgent=True))
+    load_series = host.load5_series[-LOAD_MINUTES:]
+    load15 = sum(load_series) / len(load_series) if load_series else 0.0
+    rules.append(Rule("load", len(load_series) >= LOAD_MINUTES and load15 > limits["load15"],
+                      f"Load average в среднем за {LOAD_MINUTES} минут {load15:.1f}"))
+    cpu_series = host.cpu_series[-limits["cpu_minutes"]:]
+    cpu = sum(cpu_series) / len(cpu_series) if cpu_series else 0.0
+    cpu_busy = len(cpu_series) >= limits["cpu_minutes"] and cpu > limits["cpu_percent"]
+    rules.append(Rule("cpu", cpu_busy, f"Процессор {cpu:.0f}% в среднем за {limits['cpu_minutes']} мин"))
+    page_p95 = inputs.get("pageP95Median15m") if inputs is not None else None
+    rules.append(Rule("cpu_slow", cpu_busy and page_p95 is not None and page_p95 > limits["page_p95_seconds"],
+                      f"Процессор {cpu:.0f}% и страницы медленные: p95 {page_p95:.1f} с"
+                      if page_p95 is not None else "Страницы отвечают в норме", urgent=True))
+    memory_share, swap = host.memory_used_share, host.swap_used_bytes
+    memory_full = memory_share is not None and memory_share * 100 > limits["memory_percent"]
+    swap_full = swap is not None and swap > limits["swap_bytes"]
+    memory_text = "Память в порядке" if memory_share is None else (
+        f"Память занята {memory_share:.0%}, подкачка {(swap or 0) / 1e9:.1f} ГБ")
+    rules.append(Rule("memory", memory_full or swap_full, memory_text))
+    bots = host.bots_per_minute[-limits["bot_minutes"]:]
+    surge = len(bots) >= limits["bot_minutes"] and min(bots) > limits["bots_per_minute"]
+    rules.append(Rule("bots", surge,
+                      f"Роботы шлют больше {limits['bots_per_minute']} запросов в минуту уже "
+                      f"{limits['bot_minutes']} мин (сейчас {bots[-1] if bots else 0})", urgent=True))
+    rules.append(Rule("units", bool(failed), "Упали юниты: " + ", ".join(failed) if failed else "Юниты в порядке",
+                      urgent=True))
     accepted = values.get('mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}')
     ingest_age = (now - accepted) / 60 if accepted else None
     rules.append(Rule("ingest", ingest_age is not None and ingest_age > limits["ingest_minutes"],
@@ -205,7 +303,7 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], *, disk_free: 
                       f"Docker может освободить {reclaimable / 1e9:.1f} ГБ — нужна ручная чистка"
                       if reclaimable else "Docker в порядке"))
     rules.append(Rule("human_5xx", traffic["human_5xx"] >= limits["human_5xx"],
-                      f"Людям {traffic['human_5xx']} ответов 5xx за {minutes} мин"))
+                      f"Людям {traffic['human_5xx']} ответов 5xx за {minutes} мин", urgent=True))
     bot_share = traffic["bot_503"] / traffic["bot_requests"] if traffic["bot_requests"] else 0
     rules.append(Rule("bot_503", traffic["bot_requests"] >= 100 and bot_share > limits["bot_503_share"],
                       f"Роботам 503 в {bot_share:.0%} запросов ({traffic['bot_503']} из {traffic['bot_requests']})"))
@@ -278,12 +376,21 @@ def main() -> int:
         state = json.loads(state_path.read_text())
     except (FileNotFoundError, ValueError):
         state = {}
-    read_log(Path(os.environ.get("ALERTS_ACCESS_LOG", "/var/log/nginx/m-ranked-access.log")), state, int(now // 60))
+    minute = int(now // 60)
+    read_log(Path(os.environ.get("ALERTS_ACCESS_LOG", "/var/log/nginx/m-ranked-access.log")), state, minute)
     disk = shutil.disk_usage(os.environ.get("ALERTS_DISK_PATH", "/"))
     limits = {
         "backup_hours": env_int("ALERTS_BACKUP_HOURS", 36),
         "disk_free_bytes": env_int("ALERTS_DISK_FREE_GB", 6) * 10**9,
-        "load5": env_int("ALERTS_LOAD5_X10", 40) / 10,
+        "load15": env_int("ALERTS_LOAD15_X10", 60) / 10,
+        "cpu_percent": env_int("ALERTS_CPU_PERCENT", 90),
+        "cpu_minutes": env_int("ALERTS_CPU_MINUTES", 45),
+        "page_p95_seconds": float(env_int("ALERTS_PAGE_P95_SECONDS", 3)),
+        "memory_percent": env_int("ALERTS_MEMORY_PERCENT", 90),
+        "swap_bytes": env_int("ALERTS_SWAP_MB", 1000) * 10**6,
+        "disk_urgent_share": env_int("ALERTS_DISK_URGENT_PERCENT", 7) / 100,
+        "bots_per_minute": env_int("ALERTS_BOTS_PER_MINUTE", 150),
+        "bot_minutes": env_int("ALERTS_BOT_MINUTES", 5),
         "ingest_minutes": env_int("ALERTS_INGEST_MINUTES", 20),
         "analysis_lag_seconds": env_int("ALERTS_ANALYSIS_LAG_MINUTES", 180) * 60,
         "docker_bytes": env_int("ALERTS_DOCKER_GB", 5) * 10**9,
@@ -292,13 +399,21 @@ def main() -> int:
         "misses_per_second": env_int("ALERTS_MISSES_PER_SECOND", 20),
         "hit_ratio": env_int("ALERTS_HIT_RATIO_PERCENT", 30) / 100,
     }
+    load5_series = push_series(state, "load5", os.getloadavg()[1], LOAD_MINUTES)
+    cpu = cpu_busy_percent(state)
+    cpu_series = (push_series(state, "cpu", cpu, limits["cpu_minutes"]) if cpu is not None
+                  else state.get("series", {}).get("cpu", []))
+    memory_share, swap = read_memory()
+    host = Host(disk_free=disk.free, disk_total=disk.total, load5_series=load5_series, cpu_series=cpu_series,
+                memory_used_share=memory_share, swap_used_bytes=swap, failed=failed_units(),
+                dump_mtime=newest_dump(Path(os.environ.get("ALERTS_BACKUP_DIR", "/var/backups/m-ranked"))),
+                bots_per_minute=bots_per_minute(state, minute, limits["bot_minutes"]))
+    inputs = None  # выборка ops-sample подключается отдельным шагом; без неё cpu_slow молчит
     rules = evaluate(now, window(state), metrics(Path(os.environ.get(
-        "ALERTS_METRICS_DIR", "/var/lib/node_exporter/textfile_collector"))),
-        disk_free=disk.free, disk_total=disk.total, load5=os.getloadavg()[1], failed=failed_units(),
-        dump_mtime=newest_dump(Path(os.environ.get("ALERTS_BACKUP_DIR", "/var/backups/m-ranked"))),
-        limits=limits)
+        "ALERTS_METRICS_DIR", "/var/lib/node_exporter/textfile_collector"))), host, inputs, limits)
     spool = Path(os.environ.get("ALERTS_BOT_SPOOL_DIR", "/var/lib/m-ranked/telegram-bot/inbox"))
     server = os.environ.get("ALERTS_SERVER_NAME", "Сервер 2")
+    before = {key: dict(entry) for key, entry in state.get("active", {}).items()}
     for event in transitions(rules, state, now):
         print(format_event(event), flush=True)
         if not spool.is_dir():
@@ -307,9 +422,13 @@ def main() -> int:
             write_event(spool, event, server, now)
         except OSError as error:
             print(f"spool write failed class={type(error).__name__}", file=sys.stderr)
+            # Не удалось записать — вернуть отметку как была, чтобы попробовать в следующую минуту.
             if event.kind == "open":
-                # Не удалось записать — откатить отметку, чтобы попробовать в следующую минуту.
                 state["active"].pop(event.key, None)
+            elif event.kind == "repeat":
+                state["active"][event.key]["sent"] = before[event.key]["sent"]
+            else:
+                state["active"][event.key] = before[event.key]
     state_dir.mkdir(parents=True, exist_ok=True)
     temporary = state_path.with_suffix(".tmp")
     temporary.write_text(json.dumps(state))
