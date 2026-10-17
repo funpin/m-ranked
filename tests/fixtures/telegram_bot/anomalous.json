@@ -1,0 +1,78 @@
+{
+ "mode": "institution",
+ "institution": 4,
+ "platform": "all",
+ "period": "7d",
+ "types": [],
+ "sort": "anomaly",
+ "direction": "desc",
+ "group": "none",
+ "q": "",
+ "clean": false,
+ "promotion": "all",
+ "items": [
+  {
+   "publicationId": "1022",
+   "institutionId": "00000000-0000-0000-0000-000000000004",
+   "institutionLegacyId": 4,
+   "institutionShortName": "Дельта",
+   "institutionCanonicalName": "Университет Дельта",
+   "accountId": "00000000-0000-0000-1111-000000000004",
+   "platform": "vk",
+   "publicationType": "photo",
+   "externalId": "22",
+   "publicUrl": "https://example.org/vk/22",
+   "publishedAt": "2026-10-14T09:00:00+00:00",
+   "reactions": 100,
+   "comments": 15,
+   "shares": 5,
+   "views": 3400,
+   "accountFindings": [],
+   "promotion": false,
+   "anomalyLevel": 3,
+   "anomalyShare": 0.62,
+   "anomalyGrowth": 4200,
+   "anomalyMetric": "views",
+   "anomalyPattern": 2,
+   "signals": [
+    {
+     "pattern": 2,
+     "title": "Всплеск просмотров",
+     "metric": "views",
+     "strength": 0.8
+    }
+   ]
+  }
+ ],
+ "groups": [],
+ "total": 1,
+ "hiddenByFindings": 0,
+ "institutions": [
+  {
+   "legacyId": 4,
+   "shortName": "Дельта",
+   "canonicalName": "Университет Дельта"
+  },
+  {
+   "legacyId": 11,
+   "shortName": "Альфа",
+   "canonicalName": "Университет Альфа"
+  },
+  {
+   "legacyId": 12,
+   "shortName": "Бета",
+   "canonicalName": "Университет Бета"
+  },
+  {
+   "legacyId": 13,
+   "shortName": null,
+   "canonicalName": "Университет Гамма"
+  }
+ ],
+ "limit": 50,
+ "offset": 0,
+ "hasMore": false,
+ "nextCursor": null,
+ "datasetRevision": 5,
+ "asOf": "2026-10-16T12:00:00+00:00"
+}
