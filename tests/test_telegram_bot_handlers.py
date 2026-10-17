@@ -17,7 +17,7 @@ from telegram_bot.render import Message, decode_callback, encode_callback
 from telegram_bot.source import SourceUnavailable
 from telegram_bot.status import render_status
 from telegram_bot.store import OUR_INSTITUTION, MemoryStore, Recipient
-from telegram_bot.telegram import BotBlocked, TelegramError
+from telegram_bot.telegram import BotBlocked, CannotInitiate, TelegramError
 from telegram_bot.words import Institution, TopQuery
 
 FIXTURES = Path(__file__).parent / "fixtures" / "telegram_bot"
@@ -38,6 +38,9 @@ class FakeTelegram:
         self.calls: list[tuple] = []
         self.blocked: set[int] = set()
         self.failing: set[int] = set()
+        self.not_started: set[int] = set()
+        self.edit_error: Exception | None = None
+        self.username = "m_ranked_bot"
         self._next_id = 100
 
     def of(self, name: str) -> list[tuple]:
@@ -48,12 +51,19 @@ class FakeTelegram:
             raise BotBlocked(chat_id)
         if chat_id in self.failing:
             raise TelegramError("sendMessage: Telegram ответил 500")
+        if chat_id in self.not_started:
+            raise CannotInitiate(chat_id)
         self._next_id += 1
         self.calls.append(("send", chat_id, text, keyboard, self._next_id))
         return {"message_id": self._next_id, "chat": {"id": chat_id}}
 
     async def edit_message(self, chat_id, message_id, text, keyboard=None):
+        if self.edit_error is not None:
+            raise self.edit_error
         self.calls.append(("edit", chat_id, message_id, text, keyboard))
+
+    async def get_me(self):
+        return {"id": 1, "is_bot": True, "username": self.username}
 
     async def answer_callback(self, callback_id, text=None):
         self.calls.append(("answer", callback_id, text))
@@ -319,6 +329,35 @@ def test_top_without_slash_in_private():
     assert "Лучшие посты всех вузов" in sent_texts(telegram)[-1]
 
 
+def test_group_needs_slash_and_chatter_costs_no_db_read():
+    bot, telegram, source, store = make_bot()
+    reads = []
+    original = store.recipients
+
+    async def counted():
+        reads.append(1)
+        return await original()
+
+    store.recipients = counted
+    handle(bot, group_message(STRANGER, "топ все"))
+    handle(bot, group_message(STRANGER, "просто болтовня"))
+    assert telegram.of("send") == [] and reads == [] and source.calls == []
+    handle(bot, group_message(STRANGER, "/top все"))
+    assert "Лучшие посты всех вузов" in sent_texts(telegram, GROUP)[-1] and reads
+
+
+def test_group_commands_for_other_bots_ignored():
+    bot, telegram, _, _ = make_bot()
+    asyncio.run(bot.setup())
+    for text in ("/top@other_bot", "/status@other_bot", "/help@other_bot"):
+        handle(bot, group_message(ADMIN, text))
+    assert sent_texts(telegram, GROUP) == []
+    handle(bot, group_message(STRANGER, "/top@M_Ranked_Bot все"))
+    assert "Лучшие посты всех вузов" in sent_texts(telegram, GROUP)[-1]
+    handle(bot, group_message(STRANGER, "/help"))
+    assert len(sent_texts(telegram, GROUP)) == 2
+
+
 def test_ambiguous_institution_asks_which():
     bot, telegram, source, _ = make_bot()
     handle(bot, private_message(PERSON, "/top университет"))
@@ -400,14 +439,15 @@ def test_added_by_admin_registers_chat():
     assert chats == [Recipient(-700, "chat", "Команда", digest=True, spike=True, anomaly=True)]
     assert telegram.of("leave") == []
 
+    # Не админ: чат не подключается, но и сразу не уходим (возможен переход в супергруппу).
     handle(bot, membership(STRANGER, -800, "left", "member"))
-    assert telegram.of("leave") == [("leave", -800)]
+    assert telegram.of("leave") == []
     assert all(r.chat_id != -800 for r in asyncio.run(store.recipients()))
 
     # Повышение в уже подключённом чате (даже не админом) не сбрасывает флаги и не уводит бота.
     asyncio.run(store.upsert_recipient(Recipient(-700, "chat", "Команда", digest=False), None))
     handle(bot, membership(STRANGER, -700, "member", "administrator"))
-    assert telegram.of("leave") == [("leave", -800)]
+    assert telegram.of("leave") == []
     assert [r for r in asyncio.run(store.recipients()) if r.chat_id == -700][0].digest is False
 
     handle(bot, membership(STRANGER, -700, "member", "kicked"))
@@ -421,7 +461,39 @@ def test_leave_chat_error_is_swallowed():
         raise TelegramError("leaveChat: Telegram ответил 403: Forbidden")
 
     telegram.leave_chat = leave_fails
+    handle(bot, group_message(STRANGER, "/top", chat=-800))
+    assert telegram.of("send") == []
+
+
+def test_unknown_group_command_leaves():
+    bot, telegram, source, _ = make_bot()
     handle(bot, membership(STRANGER, -800, "left", "member"))
+    handle(bot, group_message(ADMIN, "/top", chat=-800))
+    assert telegram.of("leave") == [("leave", -800)]
+    assert telegram.of("send") == [] and source.calls == []
+
+
+def test_migrate_from_chat_id():
+    bot, _, _, store = make_bot()
+    update = {"update_id": 4, "message": {"message_id": 1, "chat": {"id": -100500, "type": "supergroup"},
+                                          "from": {"id": ADMIN}, "migrate_from_chat_id": GROUP}}
+    handle(bot, update)
+    chats = {r.chat_id: r for r in asyncio.run(store.recipients()) if r.kind == "chat"}
+    assert set(chats) == {-100500} and chats[-100500].digest is True
+
+
+def test_supergroup_join_before_migration_keeps_chat():
+    bot, telegram, _, store = make_bot()
+    # Группу повысил не админ: my_chat_member нового id приходит раньше сообщения о переезде.
+    handle(bot, membership(STRANGER, -100500, "left", "member"))
+    handle(bot, {"update_id": 5, "message": {"message_id": 1,
+                                             "chat": {"id": -100500, "type": "supergroup"},
+                                             "from": {"id": STRANGER}, "migrate_from_chat_id": GROUP}})
+    handle(bot, group_message(STRANGER, "/top", chat=-100500))
+    chats = {r.chat_id: r for r in asyncio.run(store.recipients()) if r.kind == "chat"}
+    assert set(chats) == {-100500} and chats[-100500].spike is True
+    assert telegram.of("leave") == []
+    assert sent_texts(telegram, -100500)
 
 
 def test_migrate_to_supergroup():
@@ -448,6 +520,14 @@ def test_blocked_recipient_removed():
     assert len(telegram.of("send")) == 4
     remaining = {r.chat_id for r in asyncio.run(store.recipients())}
     assert remaining == {10, 12, 13, -14}
+
+
+def test_not_started_person_kept_and_not_counted():
+    bot, telegram, _, store = make_bot(recipients=[Recipient(10, "person", "a", digest=True),
+                                                   Recipient(11, "person", "b", digest=True)])
+    telegram.not_started = {11}
+    assert asyncio.run(bot.broadcast("дайджест", "digest")) == 1
+    assert {r.chat_id for r in asyncio.run(store.recipients())} == {10, 11}
 
 
 def test_alerts_broadcast_only_to_people():
@@ -514,6 +594,7 @@ def test_settings_flow():
     handle(bot, private_message(ADMIN, "31"))
     added = {r.chat_id: r for r in asyncio.run(store.recipients())}[31]
     assert added.kind == "person" and not added.alerts
+    assert "/start" in last_screen(telegram)[0]  # первым бот писать не может
     press(bot, telegram, ADMIN, "Тревоги")
     added = {r.chat_id: r for r in asyncio.run(store.recipients())}[31]
     assert added.alerts is True
@@ -580,8 +661,30 @@ def test_bad_person_id_keeps_waiting():
 
 def test_mute_callback_default_hook():
     bot, telegram, _, _ = make_bot()
+    seen = []
     handle(bot, callback(ADMIN, ADMIN, 77, "m|disk"))
     assert telegram.of("answer") == [("answer", "cb1", "недоступно")]
+
+    async def hook(cb, access):
+        seen.append(access.user_id)
+
+    bot.on_mute_callback = hook
+    handle(bot, callback(PERSON, PERSON, 77, "m|disk"))  # не в списке тревог
+    handle(bot, callback(ADMIN, GROUP, 77, "m|disk", chat_type="supergroup"))  # не в личке
+    assert seen == []
+    assert [call[2] for call in telegram.of("answer")[1:]] == [
+        "заглушать тревоги можно только в личке, из списка тревог"] * 2
+    handle(bot, callback(ADMIN, ADMIN, 77, "m|disk"))
+    assert seen == [ADMIN]
+
+
+def test_failed_edit_still_answers_callback():
+    bot, telegram, _, _ = make_bot()
+    telegram.edit_error = TelegramError("editMessageText: Telegram ответил 400: message to edit not found")
+    handle(bot, callback(PERSON, PERSON, 55, encode_callback(TopQuery(who="all"))))
+    assert telegram.of("answer") == [("answer", "cb1", None)]
+    handle(bot, callback(ADMIN, ADMIN, 77, "s|menu"))
+    assert len(telegram.of("answer")) == 2
 
 
 # --- запуск ----------------------------------------------------------------

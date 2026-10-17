@@ -38,6 +38,8 @@ MAX_CHOICES = 8
 MAX_USER_ID = 2**53
 SOURCE_DOWN = "данные временно недоступны, попробуйте позже"
 REFUSED = "Настройки — только админу бота и только в личке."
+# Первым бот писать не может: пока человек не нажал /start, рассылки до него не дойдут.
+START_HINT = "<i>Человек должен открыть бота и нажать /start — иначе сообщения до него не дойдут.</i>"
 
 # Код в callback → поле Recipient и подпись кнопки.
 PERSON_FLAGS = {"t": ("alerts", "Тревоги"), "d": ("digest", "Дайджест"),
@@ -122,6 +124,8 @@ def _card(bot: Bot, r: Recipient, viewer: int | None) -> Screen:
     lines = [f"<b>{title}</b>", f"Telegram ID: <code>{r.chat_id}</code>"]
     if r.is_admin:
         lines.append("Админ бота.")
+    if not own:
+        lines.append(START_HINT)
     flags = [(code, field, label) for code, (field, label) in PERSON_FLAGS.items() if code != "x"]
     keyboard = [[_toggle(label, getattr(r, field), f"s|pt|{r.chat_id}|{code}")
                  for code, field, label in flags[:2]],
@@ -207,8 +211,8 @@ async def on_callback(bot: Bot, callback: dict, access: Access, message: dict) -
     if screen is None:
         await bot.telegram.answer_callback(callback_id, "кнопка устарела")
         return
-    await bot.telegram.edit_message(access.chat_id, message["message_id"], screen[0], screen[1])
-    await bot.telegram.answer_callback(callback_id, note)
+    await bot.edit_and_answer(callback_id, access.chat_id, message["message_id"],
+                              screen[0], screen[1], note)
 
 
 async def _person_action(bot: Bot, action: str, args: list[str], admin: int) -> tuple[Screen | None, str | None]:

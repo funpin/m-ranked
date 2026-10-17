@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from telegram_bot.config import BotConfig
-from telegram_bot.telegram import BotBlocked, TelegramClient, TelegramError
+from telegram_bot.telegram import BotBlocked, CannotInitiate, TelegramClient, TelegramError
 
 # Заведомо поддельное значение: в реальных файлах токена нет.
 TOKEN = "123:abc"
@@ -267,6 +267,30 @@ def test_forbidden_raises_bot_blocked(response):
         _run(go)
     assert raised.value.chat_id == 42
     assert isinstance(raised.value, TelegramError)
+
+
+def test_cannot_initiate_is_not_blocked():
+    recorder = Recorder(fail(403, "Forbidden: bot can't initiate conversation with a user"))
+
+    async def go():
+        async with _client(recorder) as client:
+            await client.send_message(42, "x")
+
+    with pytest.raises(CannotInitiate) as raised:
+        _run(go)
+    assert raised.value.chat_id == 42
+    assert isinstance(raised.value, TelegramError) and not isinstance(raised.value, BotBlocked)
+
+
+def test_get_me():
+    recorder = Recorder(ok({"id": 1, "is_bot": True, "username": "m_ranked_bot"}))
+
+    async def go():
+        async with _client(recorder) as client:
+            return await client.get_me()
+
+    assert _run(go)["username"] == "m_ranked_bot"
+    assert recorder.requests[0].url.path.endswith("/getMe")
 
 
 def test_other_api_error_is_telegram_error_not_blocked():

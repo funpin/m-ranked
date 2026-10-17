@@ -36,6 +36,17 @@ class BotBlocked(TelegramError):
         self.chat_id = chat_id
 
 
+class CannotInitiate(TelegramError):
+    """Человек ещё не открывал бота (не нажимал /start): писать первым нельзя.
+
+    Не BotBlocked: такого получателя не убирают, он появится, когда нажмёт /start.
+    """
+
+    def __init__(self, chat_id: int) -> None:
+        super().__init__(f"Бот не может написать первым в чат {chat_id}")
+        self.chat_id = chat_id
+
+
 def _keyboard_markup(keyboard: list[list[dict]] | None) -> dict | None:
     return {"inline_keyboard": keyboard} if keyboard is not None else None
 
@@ -124,11 +135,16 @@ class TelegramClient:
                 continue
             if code == 400 and "message is not modified" in lowered:
                 return None
+            if chat_id is not None and code == 403 and "can't initiate conversation" in lowered:
+                raise CannotInitiate(chat_id)
             if chat_id is not None and (
                 code == 403 or (code == 400 and "chat not found" in lowered)
             ):
                 raise BotBlocked(chat_id)
             raise TelegramError(f"{method}: Telegram ответил {code}: {description}")
+
+    async def get_me(self) -> dict:
+        return await self._call("getMe", {}) or {}
 
     async def get_updates(self, offset: int | None, timeout: int = 50) -> list[dict]:
         payload: dict[str, Any] = {"timeout": timeout}

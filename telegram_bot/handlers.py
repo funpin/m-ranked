@@ -32,7 +32,7 @@ from .render import (
 from .source import ApiSource, SourceUnavailable
 from .status import STATUS_WINDOW_SECONDS, render_status
 from .store import OUR_INSTITUTION, Recipient, Store
-from .telegram import BotBlocked, TelegramClient, TelegramError
+from .telegram import BotBlocked, CannotInitiate, TelegramClient, TelegramError
 from .words import TopQuery, parse_top, split_command
 
 log = logging.getLogger(__name__)
@@ -49,6 +49,7 @@ SETTINGS_REFUSED = "Настройки — только админу бота и
 UNKNOWN_COMMAND = "Не знаю такой команды. Список — в /help."
 NOT_UNDERSTOOD = "Не понял. Команды — в /help."
 ANSWER_BELOW = "ответ ниже"
+MUTE_REFUSED = "заглушать тревоги можно только в личке, из списка тревог"
 STALE_BUTTON = "кнопка устарела"
 MAX_CHOICES = 8
 
@@ -94,10 +95,16 @@ class Bot:
         self.clock = clock
         # Ожидание ввода в /settings: id админа → что ждём («our», «add»).
         self.pending: dict[int, str] = {}
+        # Имя бота из getMe: в группах команды «/x@чужой_бот» пропускаем.
+        self.username: str | None = None
 
     # --- запуск ---------------------------------------------------------
 
     async def setup(self) -> None:
+        try:
+            self.username = (await self.telegram.get_me()).get("username") or None
+        except TelegramError as error:
+            log.warning("get_me: %s", type(error).__name__)
         known = {r.chat_id: r for r in await self.store.recipients()}
         for admin_id in sorted(self.config.admin_ids):
             existing = known.get(admin_id)
@@ -132,7 +139,8 @@ class Bot:
     async def send_digest_here(self, chat_id: int) -> None:
         await self.reply(chat_id, DIGEST_STUB)
 
-    async def on_mute_callback(self, callback: dict) -> None:
+    async def on_mute_callback(self, callback: dict, access: Access) -> None:
+        """Вызывается только для человека из списка тревог в личке."""
         await self.telegram.answer_callback(callback["id"], "недоступно")
 
     # --- рассылка -------------------------------------------------------
@@ -159,6 +167,10 @@ class Bot:
                 log.info("broadcast %s: recipient %s unreachable, removed", flag, r.kind)
                 await self.store.remove_recipient(r.chat_id)
                 continue
+            except CannotInitiate as error:
+                # Человек ещё не нажал /start: оставляем, дойдёт после.
+                log.info("broadcast %s: %s", flag, type(error).__name__)
+                continue
             except TelegramError as error:
                 log.warning("broadcast %s: %s", flag, type(error).__name__)
                 continue
@@ -173,6 +185,15 @@ class Bot:
     async def send_all(self, chat_id: int, messages: list[Message]) -> None:
         for message in messages:
             await self.telegram.send_message(chat_id, message.text, message.keyboard)
+
+    async def edit_and_answer(self, callback_id: str, chat_id: int, message_id: int, text: str,
+                              keyboard: list[list[dict]] | None, note: str | None = None) -> None:
+        """Правка сообщения под кнопкой; ответ на нажатие уходит и при сбое правки,
+        иначе у человека крутится часик."""
+        try:
+            await self.telegram.edit_message(chat_id, message_id, text, keyboard)
+        finally:
+            await self.telegram.answer_callback(callback_id, note)
 
     # --- разбор обновлений ----------------------------------------------
 
@@ -199,9 +220,19 @@ class Bot:
         if "migrate_from_chat_id" in message:
             await self.store.migrate_chat(message["migrate_from_chat_id"], chat["id"])
             return
-        access = access_for(message, await self.store.recipients())
+        private = chat.get("type") == "private"
         text = message.get("text") or ""
         command, args = split_command(text)
+        if not private and (command is None or not text.lstrip().startswith("/")
+                            or self._addressed_elsewhere(text)):
+            # В группе — только слэш-команды нам; обычная переписка не стоит чтения базы.
+            return
+        access = access_for(message, await self.store.recipients())
+        if not private and not access.known_chat:
+            # Чат не подключён. Выходим лениво, по первой команде: при переходе группы в
+            # супергруппу my_chat_member нового id может прийти раньше migrate_from_chat_id.
+            await self._leave(chat["id"])
+            return
         waiting = access.user_id in self.pending if access.user_id is not None else False
         if waiting and access.private and access.admin and (command is None or "forward_origin" in message):
             await settings.on_input(self, access, message)
@@ -248,6 +279,19 @@ class Bot:
             await self.reply(chat_id, render_status(rows, self.clock()))
         elif command == "settings":
             await settings.open_menu(self, access)
+
+    def _addressed_elsewhere(self, text: str) -> bool:
+        head = text.strip().split(None, 1)[0]
+        if "@" not in head or self.username is None:
+            return False
+        return head.split("@", 1)[1].lower() != self.username.lower()
+
+    async def _leave(self, chat_id: int) -> None:
+        log.info("leaving a chat that is not connected")
+        try:
+            await self.telegram.leave_chat(chat_id)
+        except TelegramError as error:
+            log.warning("leave_chat: %s", type(error).__name__)
 
     @staticmethod
     def _id_text(access: Access) -> str:
@@ -325,9 +369,8 @@ class Bot:
             await self.telegram.answer_callback(callback_id, NO_OURS)
             return
         if len(messages) == 1:
-            await self.telegram.edit_message(access.chat_id, message["message_id"],
-                                             messages[0].text, messages[0].keyboard)
-            await self.telegram.answer_callback(callback_id)
+            await self.edit_and_answer(callback_id, access.chat_id, message["message_id"],
+                                       messages[0].text, messages[0].keyboard)
             return
         # Несколько частей в одно сообщение не влезут: шлём заново, старое остаётся.
         await self.send_all(access.chat_id, messages)
@@ -367,7 +410,10 @@ class Bot:
         elif data.startswith("s|"):
             await settings.on_callback(self, callback, access, message)
         elif data.startswith("m|"):
-            await self.on_mute_callback(callback)
+            if access.alerts and access.private:
+                await self.on_mute_callback(callback, access)
+            else:
+                await self.telegram.answer_callback(callback["id"], MUTE_REFUSED)
         else:
             await self.telegram.answer_callback(callback["id"], STALE_BUTTON)
 
@@ -407,8 +453,7 @@ class Bot:
                 Recipient(chat_id, "chat", title, digest=True, spike=True, anomaly=True), by)
             log.info("membership: chat connected by admin")
             return
-        log.info("membership: added by non-admin, leaving")
-        try:
-            await self.telegram.leave_chat(chat_id)
-        except TelegramError as error:
-            log.warning("leave_chat: %s", type(error).__name__)
+        # Добавил не админ. Сразу не уходим: это может быть новый id той же группы после
+        # перехода в супергруппу (migrate_from_chat_id придёт следом). Неподключённый чат
+        # бот покинет по первой команде из него, а рассылки туда и так не идут.
+        log.info("membership: added by non-admin, chat stays unconnected")
