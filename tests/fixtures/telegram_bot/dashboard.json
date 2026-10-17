@@ -1,0 +1,135 @@
+{
+ "period": "7d",
+ "hours": [
+  1,
+  24
+ ],
+ "datasetRevision": 5,
+ "asOf": "2026-10-16T12:00:00+00:00",
+ "institutions": [
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000004",
+   "legacyId": 4,
+   "name": "Университет Дельта",
+   "shortName": "Дельта",
+   "platforms": [
+    "telegram",
+    "vk"
+   ],
+   "subscribers": {},
+   "students": 1000,
+   "accountFindings": []
+  },
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000011",
+   "legacyId": 11,
+   "name": "Университет Альфа",
+   "shortName": "Альфа",
+   "platforms": [
+    "telegram",
+    "vk"
+   ],
+   "subscribers": {},
+   "students": 1000,
+   "accountFindings": []
+  },
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000012",
+   "legacyId": 12,
+   "name": "Университет Бета",
+   "shortName": "Бета",
+   "platforms": [
+    "telegram",
+    "vk"
+   ],
+   "subscribers": {},
+   "students": 1000,
+   "accountFindings": []
+  },
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000013",
+   "legacyId": 13,
+   "name": "Университет Гамма",
+   "shortName": null,
+   "platforms": [
+    "telegram",
+    "vk"
+   ],
+   "subscribers": {},
+   "students": 1000,
+   "accountFindings": []
+  }
+ ],
+ "stats": [
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000004",
+   "platform": "telegram",
+   "posts": 20,
+   "viewsTotal": 112000,
+   "reactionsTotal": 3400,
+   "commentsTotal": 10,
+   "sharesTotal": 3,
+   "sample24": 20,
+   "views24": 500,
+   "reactions24": 20,
+   "comments24": 1,
+   "shares24": 0,
+   "engagement24": 0.04,
+   "analyzed": 20,
+   "levels": [
+    20,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000004",
+   "platform": "vk",
+   "posts": 8,
+   "viewsTotal": 15000,
+   "reactionsTotal": 900,
+   "commentsTotal": 10,
+   "sharesTotal": 3,
+   "sample24": 8,
+   "views24": 500,
+   "reactions24": 20,
+   "comments24": 1,
+   "shares24": 0,
+   "engagement24": 0.04,
+   "analyzed": 8,
+   "levels": [
+    8,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000011",
+   "platform": "telegram",
+   "posts": 30,
+   "viewsTotal": 90000,
+   "reactionsTotal": 2000,
+   "commentsTotal": 10,
+   "sharesTotal": 3,
+   "sample24": 30,
+   "views24": 500,
+   "reactions24": 20,
+   "comments24": 1,
+   "shares24": 0,
+   "engagement24": 0.04,
+   "analyzed": 30,
+   "levels": [
+    30,
+    0,
+    0,
+    0
+   ]
+  }
+ ],
+ "curves": [],
+ "daily": [],
+ "timing": [],
+ "types": []
+}

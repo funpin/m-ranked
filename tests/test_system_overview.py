@@ -77,3 +77,125 @@ def test_missing_sampler_is_reported_instead_of_host_checks() -> None:
     assert result[-1] == {"key": "sample", "label": "Снимок сервера", "state": "fail",
                           "detail": "последний 1.0 ч назад"}
     assert not any(check["key"] == "disk" for check in result)
+
+
+def _summary_rows():
+    now = T0 + 7200
+    healthy_disk = {"total": 100 * 10**9, "free": 40 * 10**9}
+    full_disk = {"total": 100 * 10**9, "free": 4 * 10**9}
+    web_down = {"failed": ["m-ranked-target-web.service"]}
+    memory = {"total": 100, "available": 50}
+    return now, [
+        row(0, collection={"telegram": {"ok": 4, "failed": 0, "lastOk": T0 - 100}}),
+        row(3600, units={"failed": []}, disk=healthy_disk, memory=memory,
+            collection={"telegram": {"ok": 5, "failed": 1, "lastOk": T0 + 3500},
+                        "vk": {"ok": 3, "failed": 0, "lastOk": T0 + 3400}}),
+        row(6600, units=web_down, disk=full_disk, memory=memory,
+            collection={"telegram": {"ok": 6, "failed": 0, "lastOk": T0 + 6500},
+                        "max": {"ok": 1, "failed": 2, "lastOk": T0 + 1000}}),
+        row(7140, units=web_down, disk=full_disk, memory=memory,
+            pipeline={"ingestAcceptedAt": now - 60, "analysisLag": 120, "analysisBacklog": 5,
+                      "backupAt": now - 3600},
+            traffic=traffic(10, human5xx=30),
+            collection={"telegram": {"ok": 2, "failed": 0, "lastOk": T0 + 7000},
+                        "vk": {"ok": 1, "failed": 0}}),
+    ]
+
+
+def test_status_summary_matches_route_logic() -> None:
+    # Ожидания сняты со старой логики роута до переноса. У Rutube нет ни одного lastOk.
+    now, rows = _summary_rows()
+    result = overview.status_summary(rows, now, lambda platform: overview.PROFILE_B_FRESHNESS[platform])
+    assert result["sampledAt"] == "2026-10-02T13:59:00+00:00"
+    assert result["checks"] == [
+        {"key": "collection.telegram", "label": "Сбор · Telegram", "state": "ok", "detail": "последний аккаунт 3 мин назад"},
+        {"key": "collection.vk", "label": "Сбор · ВКонтакте", "state": "warn", "detail": "последний аккаунт 1.1 ч назад"},
+        {"key": "collection.max", "label": "Сбор · MAX", "state": "fail", "detail": "последний аккаунт 1.7 ч назад"},
+        {"key": "collection.rutube", "label": "Сбор · Rutube", "state": "fail", "detail": "успешных циклов за 3 часа нет"},
+        {"key": "ingest", "label": "Приём с Сервера 1", "state": "ok", "detail": "последний пакет 1 мин назад"},
+        {"key": "analysis", "label": "Очередь анализа", "state": "ok", "detail": "отставание 2 мин, в очереди 5"},
+        {"key": "units", "label": "Службы", "state": "fail", "detail": "m-ranked-target-web.service"},
+        {"key": "disk", "label": "Диск", "state": "fail", "detail": "свободно 4.0 ГБ (4%)"},
+        {"key": "memory", "label": "Память", "state": "ok", "detail": "занято 50%"},
+        {"key": "backup", "label": "Резервная копия", "state": "ok", "detail": "последняя 1.0 ч назад"},
+        {"key": "errors", "label": "Ошибки для людей", "state": "warn", "detail": "30 ответов 5xx за час"},
+    ]
+    assert result["collection"] == [
+        {"platform": "telegram", "ok": 13, "failed": 1, "lastOkAt": "2026-10-02T13:56:40+00:00"},
+        {"platform": "vk", "ok": 4, "failed": 0, "lastOkAt": "2026-10-02T12:56:40+00:00"},
+        {"platform": "max", "ok": 1, "failed": 2, "lastOkAt": "2026-10-02T12:16:40+00:00"},
+        {"platform": "rutube", "ok": 0, "failed": 0, "lastOkAt": None},
+    ]
+
+
+def test_status_summary_without_rows() -> None:
+    result = overview.status_summary([], T0, lambda platform: 2700)
+    assert result["sampledAt"] is None
+    assert result["collection"] == overview.collection([])
+    assert result["checks"] == overview.checks(T0, None, None, [], {p: (None, 2700) for p in overview.PLATFORMS})
+
+
+def test_profile_b_freshness_matches_health_thresholds() -> None:
+    from api.config import Settings
+    from api.routes.health import _threshold
+
+    # Порог профиля B — не меньше этих значений; при HEALTH_POLL_INTERVAL_MINUTES до 22
+    # (по умолчанию 60 → 7200 с) свежесть из настроек их не перекрывает.
+    settings = Settings(deployment_profile="b", poll_interval_minutes=5)
+    assert settings.freshness_seconds == 600
+    assert {p: _threshold(settings, p) for p in overview.PLATFORMS} == overview.PROFILE_B_FRESHNESS
+    assert overview.PROFILE_B_FRESHNESS == {"telegram": 2700, "vk": 2700, "max": 2700, "rutube": 5400}
+
+
+def test_status_summary_reuses_precomputed_period_rows() -> None:
+    now, rows = _summary_rows()
+    span = overview.RANGES["3h"][0]
+    expected = overview.status_summary(rows, now, lambda platform: 2700, span)
+    period = overview.period_rows(rows, now, span)
+    assert overview.status_summary(rows, now, lambda platform: 2700, span, period=period) == expected
+
+
+def test_system_route_computes_period_rows_once(monkeypatch) -> None:
+    import asyncio
+    import json
+    from types import SimpleNamespace
+
+    from api.config import Settings
+    from api.routes import system as route
+    from api.routes.health import _threshold
+
+    now, rows = _summary_rows()
+    settings = Settings(deployment_profile="b", poll_interval_minutes=5)
+
+    class Db:
+        async def admin_fetch_all(self, sql, params):
+            return rows
+
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        clock=lambda: now, db=Db(), settings=settings)))
+    calls = []
+    original = overview.period_rows
+
+    def counting(*args, **kwargs):
+        calls.append(args)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(overview, "period_rows", counting)
+    monkeypatch.setattr(route, "_CACHE", {})
+    response = asyncio.run(route.system(request, None, "3h"))
+    assert len(calls) == 1
+    # Ответ тот же, что собирался до правки (двойной расчёт периода).
+    span, bucket = overview.RANGES["3h"]
+    summary = overview.status_summary(rows, now, lambda platform: _threshold(settings, platform), span)
+    period = original(rows, now, span)
+    expected = {
+        "range": "3h", "sampledAt": summary["sampledAt"], "checks": summary["checks"],
+        "host": overview.host(rows[-1]["sample"], rows[-2]["sample"]),
+        "pipeline": overview.pipeline(rows[-1]["sample"]),
+        "restarts": overview.restarts(period), "collection": summary["collection"],
+        "series": overview.series(period, bucket, since=now - span),
+        "backups": overview.backups(rows[-1]["sample"]),
+    }
+    from fastapi.responses import JSONResponse
+    assert response.body == JSONResponse(expected).body   # байт в байт
+    assert json.loads(response.body)["restarts"] is not None

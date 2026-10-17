@@ -17,6 +17,7 @@ RUNTIME_DIRS = (
     ROOT / "collector_target",
     ROOT / "transfer_ingest",
     ROOT / "anomaly_analysis",
+    ROOT / "telegram_bot",
     # Службы хранения и холодного архива (ADR-016).
     ROOT / "operations" / "storage",
     ROOT / "operations" / "cold_archive",

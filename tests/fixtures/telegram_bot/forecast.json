@@ -1,0 +1,91 @@
+{
+ "month": "2026-10",
+ "status": "ok",
+ "period": "2026-10",
+ "basePeriod": "2026-09",
+ "asOf": "2026-10-16T08:00:00+00:00",
+ "early": false,
+ "formulaVersion": "1",
+ "errors": {
+  "social": 7,
+  "total": 9
+ },
+ "rows": [
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000004",
+   "legacyId": 4,
+   "name": "Университет Дельта",
+   "shortName": "Дельта",
+   "baseConsolidatedRank": 20,
+   "categories": {
+    "social": {
+     "score": 1.0,
+     "rank": 12,
+     "rankBest": 10,
+     "rankWorst": 15,
+     "baseRank": 12,
+     "source": "formula",
+     "actualRank": null,
+     "actualScore": null
+    }
+   }
+  },
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000011",
+   "legacyId": 11,
+   "name": "Университет Альфа",
+   "shortName": "Альфа",
+   "baseConsolidatedRank": 20,
+   "categories": {
+    "social": {
+     "score": 1.0,
+     "rank": 41,
+     "rankBest": 39,
+     "rankWorst": 44,
+     "baseRank": 41,
+     "source": "formula",
+     "actualRank": null,
+     "actualScore": null
+    }
+   }
+  },
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000012",
+   "legacyId": 12,
+   "name": "Университет Бета",
+   "shortName": "Бета",
+   "baseConsolidatedRank": 20,
+   "categories": {
+    "social": {
+     "score": 1.0,
+     "rank": 42,
+     "rankBest": 40,
+     "rankWorst": 45,
+     "baseRank": 42,
+     "source": "formula",
+     "actualRank": null,
+     "actualScore": null
+    }
+   }
+  },
+  {
+   "institutionId": "00000000-0000-0000-0000-000000000013",
+   "legacyId": 13,
+   "name": "Университет Гамма",
+   "shortName": null,
+   "baseConsolidatedRank": 20,
+   "categories": {
+    "social": {
+     "score": 1.0,
+     "rank": 43,
+     "rankBest": 41,
+     "rankWorst": 46,
+     "baseRank": 43,
+     "source": "formula",
+     "actualRank": null,
+     "actualScore": null
+    }
+   }
+  }
+ ]
+}
