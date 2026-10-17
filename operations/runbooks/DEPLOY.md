@@ -298,6 +298,30 @@ WHERE a.platform='rutube' AND p.deleted_at IS NULL` — после backfill пу
 Откат: прежний код (колонку он не замечает); колонка снимается
 `ALTER TABLE ingest.publication DROP COLUMN uploaded_at;`.
 
+### Telegram-бот (`0087_telegram_bot.sql`)
+
+Семь таблиц `ops_and_admin.bot_*` (настройки, получатели, учёт отправленного,
+заглушённые и задержанные тревоги, недельные снимки, отметки заданий) и права
+роли `telegram_bot`: чтение и запись только в эти таблицы, `USAGE` на
+последовательность `bot_held_alert` и `SELECT` на `ops_and_admin.host_sample`.
+Больше роль ничего не видит. Замысел — `docs/superpowers/specs/2026-10-17-telegram-bot-design.md`.
+
+У `migration_owner` нет `CREATEROLE`, поэтому роль создаётся заранее и
+отдельно — до `0087`, от `mranked_bootstrap`:
+
+```sql
+CREATE ROLE telegram_bot NOLOGIN;
+GRANT CONNECT ON DATABASE mranked TO telegram_bot;
+```
+
+Без роли `0087` падает на первом `GRANT` и откатывается целиком. `LOGIN` и
+пароль роли выдаёт только включение бота; пока он выключен, роль не может
+войти. Применять на базе Сервера 2 (бот читает `host_sample` оттуда); на
+Сервере 1 таблицы не нужны.
+
+Откат: `DROP TABLE` семи таблиц (перечень — в заголовке миграции),
+`REVOKE SELECT ON ops_and_admin.host_sample FROM telegram_bot`.
+
 ## 3. Учётные данные и переменные
 
 Секреты живут systemd-credential'ами в `/etc/m-ranked/credentials` и файлами
