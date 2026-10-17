@@ -17,7 +17,7 @@ STATE_DIR.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import json
 import math
 import os
@@ -43,7 +43,7 @@ BASELINE_SHARE = 0.3  # за час успешных опросов меньше
 FAILURE_SHARE = 0.2  # доля ошибок за час выше этой
 FAILURE_MIN_RESULTS = 20  # меньше результатов за час — долю не проверяем
 NODE_SILENT_SECONDS = 30 * 60  # узел не присылал снимка ресурсов
-NODE_LOAD_FACTOR = 3  # load1 выше стольких ядер
+NODE_LOAD_FACTOR = 3  # load1 в среднем за 15 минут выше стольких ядер
 INPUTS_MAX_AGE = 300  # файл ops-sample старше — не верим (пишется раз в минуту)
 INPUTS_PATH = "/var/lib/m-ranked/ops-sample/alert-inputs.json"
 
@@ -82,6 +82,8 @@ class Host:
     failed: list[str]
     dump_mtime: float | None
     bots_per_minute: list[int]
+    # Запросы роботов по классам за те же законченные минуты, что bots_per_minute.
+    bot_classes: dict[str, int] = field(default_factory=dict)
 
 
 def env_int(name: str, default: int) -> int:
@@ -113,7 +115,7 @@ def parse_line(line: str) -> dict | None:
 
 def empty_bucket() -> dict:
     return {"requests": 0, "human_5xx": 0, "bot_requests": 0, "bot_503": 0, "hits": 0,
-            "cacheable": 0, "misses": {}}
+            "cacheable": 0, "misses": {}, "bots": {}}
 
 
 def add(bucket: dict, item: dict) -> None:
@@ -123,6 +125,8 @@ def add(bucket: dict, item: dict) -> None:
         bucket["human_5xx"] += 1
     if bot:
         bucket["bot_requests"] += 1
+        classes = bucket.setdefault("bots", {})  # корзины прошлых версий без разбивки
+        classes[item["klass"]] = classes.get(item["klass"], 0) + 1
         if item["status"] == 503:
             bucket["bot_503"] += 1
     if item["static"] or item["cache"] == "-":
@@ -213,6 +217,16 @@ def bots_per_minute(state: dict, minute: int, count: int) -> list[int]:
     return [buckets.get(str(number), {}).get("bot_requests", 0) for number in range(minute - count, minute)]
 
 
+def bot_classes(state: dict, minute: int, count: int) -> dict[str, int]:
+    """Запросы роботов по классам за последние count законченных минут."""
+    buckets = state.get("buckets", {})
+    total: dict[str, int] = {}
+    for number in range(minute - count, minute):
+        for klass, requests in buckets.get(str(number), {}).get("bots", {}).items():
+            total[klass] = total.get(klass, 0) + requests
+    return total
+
+
 def push_series(state: dict, name: str, value: float, keep: int) -> list[float]:
     """Добавить значение в ряд state["series"][name] и оставить последние keep значений."""
     series = state.setdefault("series", {})
@@ -292,9 +306,14 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], host: Host, in
     rules.append(Rule("memory", memory_full or swap_full, memory_text))
     bots = host.bots_per_minute[-limits["bot_minutes"]:]
     surge = len(bots) >= limits["bot_minutes"] and min(bots) > limits["bots_per_minute"]
-    rules.append(Rule("bots", surge,
-                      f"Роботы шлют больше {limits['bots_per_minute']} запросов в минуту уже "
-                      f"{limits['bot_minutes']} мин (сейчас {bots[-1] if bots else 0})", urgent=True))
+    bots_text = (f"Роботы шлют больше {limits['bots_per_minute']} запросов в минуту уже "
+                 f"{limits['bot_minutes']} мин (сейчас {bots[-1] if bots else 0})")
+    if host.bot_classes:
+        bots_text += f"; за {limits['bot_minutes']} мин: " + ", ".join(f"{klass} {count}" for klass, count in
+                                      sorted(host.bot_classes.items(), key=lambda x: (-x[1], x[0])))
+    if host.cpu_series:
+        bots_text += f"; процессор {host.cpu_series[-1]:.0f}%"
+    rules.append(Rule("bots", surge, bots_text, urgent=True))
     rules.append(Rule("units", bool(failed), "Упали юниты: " + ", ".join(failed) if failed else "Юниты в порядке",
                       urgent=True))
     accepted = values.get('mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}')
@@ -390,8 +409,9 @@ def collection_rules(now: float, collection: dict | None) -> list[Rule]:
 
 
 def node_rules(now: float, nodes: dict, limits: dict) -> list[Rule]:
-    """Ресурсы узлов, кроме Сервера 2: диск, память и load1 по последнему снимку
-    агента узла (пороги те же, что для Сервера 2) и молчание агента."""
+    """Ресурсы узлов, кроме Сервера 2: диск и память по последнему снимку агента
+    узла (пороги те же, что для Сервера 2), load1 в среднем за 15 минут его
+    снимков и молчание агента."""
     rules: list[Rule] = []
     for node_id, node in sorted(nodes.items()):
         name = node.get("name") or node_id
@@ -414,22 +434,25 @@ def node_rules(now: float, nodes: dict, limits: dict) -> list[Rule]:
         used = 1 - available / memory_total if memory_total and available is not None else None
         rules.append(Rule(prefix + "memory", used is not None and used * 100 > limits["memory_percent"],
                           f"{name}: память занята {used:.0%}" if used is not None else f"{name}: память в порядке"))
-        load1, cpus = node.get("load1"), node.get("cpus")
+        load1, cpus = node.get("load1Mean15m"), node.get("cpus")
         loaded = load1 is not None and bool(cpus) and load1 > NODE_LOAD_FACTOR * cpus
         rules.append(Rule(prefix + "load", loaded,
-                          f"{name}: load average {load1:.1f} на {cpus} яд." if loaded else f"{name}: нагрузка в порядке"))
+                          f"{name}: load average {load1:.1f} в среднем за 15 мин на {cpus} яд." if loaded
+                          else f"{name}: нагрузка в порядке"))
     return rules
 
 
 def suppress(rules: list[Rule]) -> list[Rule]:
     """Одна причина — одно сообщение. Приём пакетов с Сервера 1 стоит — молчат
-    сбор площадок и вход MAX; вход MAX отозван — молчит сбор MAX; узел молчит —
+    сбор площадок, вход MAX и молчание узлов (Сервер 1 недоступен целиком); вход
+    MAX отозван — молчит сбор MAX; узел молчит —
     молчат его устаревшие ресурсы. Подавленное правило остаётся в списке с
     firing=False, чтобы уже открытая тревога закрылась."""
     firing = {rule.key for rule in rules if rule.firing}
     muted: set[str] = set()
     if "ingest" in firing:
-        muted.update(rule.key for rule in rules if rule.key.startswith("collection_") or rule.key == "max_auth")
+        muted.update(rule.key for rule in rules if rule.key.startswith("collection_") or rule.key == "max_auth"
+                     or (rule.key.startswith("node_") and rule.key.endswith("_silent")))
     if "max_auth" in firing:
         muted.add("collection_max")
     for key in firing:
@@ -528,7 +551,8 @@ def main() -> int:
     host = Host(disk_free=disk.free, disk_total=disk.total, load5_series=load5_series, cpu_series=cpu_series,
                 memory_used_share=memory_share, swap_used_bytes=swap, failed=failed_units(),
                 dump_mtime=newest_dump(Path(os.environ.get("ALERTS_BACKUP_DIR", "/var/backups/m-ranked"))),
-                bots_per_minute=bots_per_minute(state, minute, limits["bot_minutes"]))
+                bots_per_minute=bots_per_minute(state, minute, limits["bot_minutes"]),
+                bot_classes=bot_classes(state, minute, limits["bot_minutes"]))
     inputs = read_inputs(Path(os.environ.get("ALERTS_INPUTS_PATH", INPUTS_PATH)), now)
     rules = evaluate(now, window(state), metrics(Path(os.environ.get(
         "ALERTS_METRICS_DIR", "/var/lib/node_exporter/textfile_collector"))), host, inputs, limits)

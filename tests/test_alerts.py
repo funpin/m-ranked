@@ -34,7 +34,7 @@ def fresh_inputs(now, **parts):
     entry = {"hourOk": 50, "hourFailed": 0, "hourResults": 50, "baselineOk": 50.0,
              "lastOk": now - 60, "lastResult": now - 60}
     node = {"name": "Сервер 1 · сбор", "observedAt": now - 60, "diskTotal": 100 * 10**9, "diskFree": 50 * 10**9,
-            "memoryTotal": 2 * 10**9, "memoryAvailable": 10**9, "load1": 0.5, "cpus": 2}
+            "memoryTotal": 2 * 10**9, "memoryAvailable": 10**9, "load1Mean15m": 0.5, "cpus": 2}
     inputs = {"at": now - 30, "collection": {name: dict(entry) for name in PLATFORMS},
               "pageP95Median15m": None, "nodes": {"server-1": node}}
     inputs.update(parts)
@@ -367,6 +367,39 @@ def test_proc_readers_parse_and_tolerate_absence(tmp_path):
     assert alerts.read_cpu_times(missing) is None and alerts.read_memory(missing) == (None, None)
 
 
+def test_bot_surge_text_names_classes_and_cpu():
+    rules = firing_rules(NOW, bots_per_minute=[400] * 5, cpu_series=[10.0] * 44 + [87.4],
+                         bot_classes={"crawler": 300, "ai_training": 1200, "ai_user": 5})
+    text = rules["bots"].text
+    assert "сейчас 400" in text
+    assert "ai_training 1200, crawler 300, ai_user 5" in text   # крупные классы первыми
+    assert text.endswith("процессор 87%")
+    # Без замера процессора и без разбивки по классам — без хвостов.
+    bare = firing_rules(NOW, bots_per_minute=[400] * 5, cpu_series=[])["bots"].text
+    assert "процессор" not in bare and "за 5 мин:" not in bare
+
+
+def test_bot_classes_sum_complete_minutes_and_tolerate_old_buckets():
+    state = {"buckets": {
+        "101": {**alerts.empty_bucket(), "bots": {"crawler": 2, "ai_user": 1}},
+        "102": {k: v for k, v in alerts.empty_bucket().items() if k != "bots"},  # корзина старого формата
+        "105": {**alerts.empty_bucket(), "bots": {"crawler": 3}},
+        "106": {**alerts.empty_bucket(), "bots": {"crawler": 100}},  # минута ещё идёт
+    }}
+    assert alerts.bot_classes(state, 106, 5) == {"crawler": 5, "ai_user": 1}
+    assert alerts.bot_classes({}, 106, 5) == {}
+
+
+def test_bot_requests_are_counted_per_class():
+    bucket = alerts.empty_bucket()
+    for klass in ("crawler", "crawler", "ai_search", "human"):
+        alerts.add(bucket, alerts.parse_line(line("/p", 200, klass, "MISS")))
+    assert bucket["bots"] == {"crawler": 2, "ai_search": 1}
+    old = {k: v for k, v in alerts.empty_bucket().items() if k != "bots"}
+    alerts.add(old, alerts.parse_line(line("/p", 200, "crawler", "MISS")))   # старая корзина не падает
+    assert old["bots"] == {"crawler": 1}
+
+
 def test_bots_per_minute_returns_complete_minutes_oldest_first():
     state = {"buckets": {str(minute): {**alerts.empty_bucket(), "bot_requests": minute - 100}
                          for minute in (101, 102, 104, 105, 106)}}
@@ -495,6 +528,19 @@ def test_ingest_down_suppresses_collection():
     assert {"collection_telegram", "max_auth"} <= {rule.key for rule in rules}
 
 
+def test_ingest_down_suppresses_silent_nodes():
+    # Сервер 1 недоступен: одна причина — одно сообщение «пакеты не приходят».
+    inputs = node_inputs(observedAt=NOW - 3600, diskFree=1)
+    values, arguments = healthy(NOW, inputs=inputs)
+    values['mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}'] = NOW - 3600
+    rules = alerts.evaluate(NOW, alerts.empty_bucket(), values, **arguments)
+    firing = {rule.key for rule in rules if rule.firing}
+    assert firing == {"ingest"}
+    assert "node_server-1_silent" in {rule.key for rule in rules}  # открытая тревога закроется
+    # Без ingest молчание узла — своя тревога.
+    assert "node_server-1_silent" in firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 3600))
+
+
 def test_suppress_keeps_texts_and_other_rules():
     rules = [alerts.Rule("ingest", True, "приём"), alerts.Rule("collection_vk", True, "сбор", urgent=True),
              alerts.Rule("max_auth", True, "вход", urgent=True), alerts.Rule("disk", True, "диск")]
@@ -548,9 +594,14 @@ def test_node_rules():
     assert "node_server-1_memory" in firing_rules(NOW, inputs=node_inputs(memoryAvailable=int(2 * 10**9 * 0.09)))
     assert "node_server-1_memory" not in firing_rules(NOW, inputs=node_inputs(memoryAvailable=int(2 * 10**9 * 0.11)))
 
-    assert "node_server-1_load" in firing_rules(NOW, inputs=node_inputs(load1=6.2, cpus=2))
-    assert "node_server-1_load" not in firing_rules(NOW, inputs=node_inputs(load1=6.0, cpus=2))
-    assert "node_server-1_load" not in firing_rules(NOW, inputs=node_inputs(load1=9.0, cpus=None))
+    # Нагрузка — среднее load1 за 15 минут снимков узла, а не один снимок: без дребезга.
+    loaded = firing_rules(NOW, inputs=node_inputs(load1Mean15m=6.2, cpus=2))
+    assert "node_server-1_load" in loaded
+    assert "в среднем за 15 мин" in loaded["node_server-1_load"].text
+    assert "node_server-1_load" not in firing_rules(NOW, inputs=node_inputs(load1Mean15m=6.0, cpus=2))
+    assert "node_server-1_load" not in firing_rules(NOW, inputs=node_inputs(load1Mean15m=9.0, cpus=None))
+    # Старое имя ключа (один снимок) больше не читается.
+    assert "node_server-1_load" not in firing_rules(NOW, inputs=node_inputs(load1=9.0))
 
     silent = firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 31 * 60))
     assert silent["node_server-1_silent"].urgent is False
@@ -558,12 +609,12 @@ def test_node_rules():
 
 
 def test_silent_node_suppresses_its_stale_resources():
-    rules = firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 31 * 60, diskFree=1, load1=50.0))
+    rules = firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 31 * 60, diskFree=1, load1Mean15m=50.0))
     assert set(rules) == {"node_server-1_silent"}
 
 
 def test_node_with_missing_values_is_skipped_not_crashing():
-    inputs = node_inputs(diskTotal=None, diskFree=None, memoryTotal=None, memoryAvailable=None, load1=None)
+    inputs = node_inputs(diskTotal=None, diskFree=None, memoryTotal=None, memoryAvailable=None, load1Mean15m=None)
     assert not firing_rules(NOW, inputs=inputs)
 
 

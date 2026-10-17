@@ -376,20 +376,30 @@ CROSS JOIN LATERAL (
     AND observed_at < to_timestamp(%(now)s::float8 - weeks.w * 604800)
 ) week_rows
 """
-# Последний снимок каждого узла, кроме Сервера 2 (он меряет себя сам).
+# Последний снимок каждого работающего узла, кроме Сервера 2 (он меряет себя сам),
+# и среднее load1 за 15 минут до него: один снимок даёт дребезг тревоги нагрузки.
+# Оба чтения — диапазон по ключу (node_id, observed_at). Выключенные и ещё не
+# принятые узлы снимков не шлют: без фильтра по state они вечно «молчали» бы.
 NODE_SAMPLES = """
 SELECT node.id, node.display_name, node.report->'metrics'->>'cpus',
   extract(epoch FROM sample.observed_at), sample.disk_total_bytes, sample.disk_free_bytes,
-  sample.memory_total_bytes, sample.memory_available_bytes, sample.load1
+  sample.memory_total_bytes, sample.memory_available_bytes, load.mean
 FROM ops_and_admin.server_node node
 CROSS JOIN LATERAL (
-  SELECT observed_at, disk_total_bytes, disk_free_bytes, memory_total_bytes, memory_available_bytes, load1
+  SELECT observed_at, disk_total_bytes, disk_free_bytes, memory_total_bytes, memory_available_bytes
   FROM ops_and_admin.server_node_sample
   WHERE node_id = node.id
   ORDER BY observed_at DESC
   LIMIT 1
 ) sample
-WHERE node.role <> 'main'
+CROSS JOIN LATERAL (
+  SELECT avg(recent.load1) AS mean
+  FROM ops_and_admin.server_node_sample recent
+  WHERE recent.node_id = node.id
+    AND recent.observed_at > sample.observed_at - interval '15 minutes'
+    AND recent.observed_at <= sample.observed_at
+) load
+WHERE node.role <> 'main' AND node.state IN ('active', 'draining')
 """
 
 
@@ -435,15 +445,16 @@ def page_p95_median(values: list[float | None]) -> float | None:
 
 
 def node_inputs(rows: list[tuple]) -> dict[str, dict[str, Any]]:
-    """Последние ресурсы узлов: id -> имя, время снимка, диск, память, load1, ядра."""
+    """Последние ресурсы узлов: id -> имя, время снимка, диск, память, среднее
+    load1 за 15 минут, ядра."""
     nodes: dict[str, dict[str, Any]] = {}
-    for node_id, name, cpus, observed, disk_total, disk_free, memory_total, memory_available, load1 in rows:
+    for node_id, name, cpus, observed, disk_total, disk_free, memory_total, memory_available, load_mean in rows:
         if observed is None:
             continue
         nodes[node_id] = {
             "name": name, "observedAt": float(observed), "diskTotal": disk_total, "diskFree": disk_free,
             "memoryTotal": memory_total, "memoryAvailable": memory_available,
-            "load1": float(load1) if load1 is not None else None,
+            "load1Mean15m": float(load_mean) if load_mean is not None else None,
             "cpus": int(cpus) if cpus is not None and cpus.isdecimal() else None}
     return nodes
 

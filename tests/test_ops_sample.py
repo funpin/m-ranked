@@ -193,10 +193,22 @@ def test_node_inputs_keep_resources_and_cpu_count() -> None:
             ("storage-1", "Хранилище", None, 900.0, None, None, None, None, None)]
     nodes = ops_sample.node_inputs(rows)
     assert nodes["server-1"] == {"name": "Сервер 1 · сбор", "observedAt": 1000.5, "diskTotal": 100, "diskFree": 40,
-                                 "memoryTotal": 200, "memoryAvailable": 80, "load1": 0.61, "cpus": 1}
+                                 "memoryTotal": 200, "memoryAvailable": 80, "load1Mean15m": 0.61, "cpus": 1}
     # Узел без показателей остаётся: по его возрасту тревога «молчит» всё равно считается.
-    assert nodes["storage-1"]["observedAt"] == 900.0 and nodes["storage-1"]["load1"] is None
+    assert nodes["storage-1"]["observedAt"] == 900.0 and nodes["storage-1"]["load1Mean15m"] is None
     assert nodes["storage-1"]["cpus"] is None
+
+
+def test_node_samples_skip_disabled_nodes_and_average_load() -> None:
+    sql = " ".join(ops_sample.NODE_SAMPLES.split())
+    # Выключенный или ещё не принятый узел не шлёт снимков: без фильтра — вечный node_<id>_silent.
+    assert "node.state IN ('active', 'draining')" in sql
+    assert "node.role <> 'main'" in sql
+    # Нагрузка — среднее load1 за 15 минут до последнего снимка, по ключу (node_id, observed_at).
+    assert "avg(recent.load1)" in sql
+    assert "recent.node_id = node.id" in sql
+    assert "recent.observed_at > sample.observed_at - interval '15 minutes'" in sql
+    assert "recent.observed_at <= sample.observed_at" in sql
 
 
 def test_alert_inputs_file_is_atomic_and_world_readable(tmp_path: Path) -> None:
