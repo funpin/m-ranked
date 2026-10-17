@@ -264,10 +264,12 @@ def period_rows(rows: list[dict[str, Any]], now: float, span: float) -> list[dic
 
 
 def status_summary(rows: list[dict[str, Any]], now: float, threshold: Callable[[str], int],
-                   span: float = RANGES["day"][0]) -> dict[str, Any]:
+                   span: float = RANGES["day"][0],
+                   period: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Проверки и сбор по площадкам из снимков сервера; общая для панели и бота.
     rows — снимки по возрастанию времени за последние три часа и больше;
-    threshold(platform) — порог свежести сбора, секунды; span — период для сбора."""
+    threshold(platform) — порог свежести сбора, секунды; span — период для сбора;
+    period — уже посчитанный period_rows(rows, now, span), чтобы не считать дважды."""
     latest = rows[-1] if rows else None
     sampled_at = latest["observed_at"].timestamp() if latest else None
     window = [row for row in rows if row["observed_at"].timestamp() >= now - 3 * 3600]
@@ -280,5 +282,5 @@ def status_summary(rows: list[dict[str, Any]], now: float, threshold: Callable[[
     return {
         "sampledAt": latest["observed_at"].isoformat() if latest else None,
         "checks": checks(now, sampled_at, latest["sample"] if latest else None, recent, freshness),
-        "collection": collection(period_rows(rows, now, span)),
+        "collection": collection(period if period is not None else period_rows(rows, now, span)),
     }

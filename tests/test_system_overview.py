@@ -145,3 +145,57 @@ def test_profile_b_freshness_matches_health_thresholds() -> None:
     assert settings.freshness_seconds == 600
     assert {p: _threshold(settings, p) for p in overview.PLATFORMS} == overview.PROFILE_B_FRESHNESS
     assert overview.PROFILE_B_FRESHNESS == {"telegram": 2700, "vk": 2700, "max": 2700, "rutube": 5400}
+
+
+def test_status_summary_reuses_precomputed_period_rows() -> None:
+    now, rows = _summary_rows()
+    span = overview.RANGES["3h"][0]
+    expected = overview.status_summary(rows, now, lambda platform: 2700, span)
+    period = overview.period_rows(rows, now, span)
+    assert overview.status_summary(rows, now, lambda platform: 2700, span, period=period) == expected
+
+
+def test_system_route_computes_period_rows_once(monkeypatch) -> None:
+    import asyncio
+    import json
+    from types import SimpleNamespace
+
+    from api.config import Settings
+    from api.routes import system as route
+    from api.routes.health import _threshold
+
+    now, rows = _summary_rows()
+    settings = Settings(deployment_profile="b", poll_interval_minutes=5)
+
+    class Db:
+        async def admin_fetch_all(self, sql, params):
+            return rows
+
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        clock=lambda: now, db=Db(), settings=settings)))
+    calls = []
+    original = overview.period_rows
+
+    def counting(*args, **kwargs):
+        calls.append(args)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(overview, "period_rows", counting)
+    monkeypatch.setattr(route, "_CACHE", {})
+    response = asyncio.run(route.system(request, None, "3h"))
+    assert len(calls) == 1
+    # Ответ тот же, что собирался до правки (двойной расчёт периода).
+    span, bucket = overview.RANGES["3h"]
+    summary = overview.status_summary(rows, now, lambda platform: _threshold(settings, platform), span)
+    period = original(rows, now, span)
+    expected = {
+        "range": "3h", "sampledAt": summary["sampledAt"], "checks": summary["checks"],
+        "host": overview.host(rows[-1]["sample"], rows[-2]["sample"]),
+        "pipeline": overview.pipeline(rows[-1]["sample"]),
+        "restarts": overview.restarts(period), "collection": summary["collection"],
+        "series": overview.series(period, bucket, since=now - span),
+        "backups": overview.backups(rows[-1]["sample"]),
+    }
+    from fastapi.responses import JSONResponse
+    assert response.body == JSONResponse(expected).body   # байт в байт
+    assert json.loads(response.body)["restarts"] is not None

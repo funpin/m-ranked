@@ -41,10 +41,11 @@ async def system(request: Request, _: Annotated[Principal, Depends(READ)],
     latest = rows[-1] if rows else None
     previous = rows[-2]["sample"] if len(rows) > 1 else None
     settings = request.app.state.settings
-    summary = overview.status_summary(rows, now, lambda platform: _threshold(settings, platform), span)
     # Период и один снимок перед ним — опора для первых разностей счётчиков.
     start = now - span
     period_rows = overview.period_rows(rows, now, span)
+    summary = overview.status_summary(rows, now, lambda platform: _threshold(settings, platform), span,
+                                      period=period_rows)
     body = {
         "range": period,
         "sampledAt": summary["sampledAt"],
