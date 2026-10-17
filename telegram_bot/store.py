@@ -192,7 +192,11 @@ class PostgresStore:
             raise
         return conn
 
-    async def _with_connection(self, work: Callable[[psycopg.AsyncConnection], Awaitable[T]]) -> T:
+    async def _with_connection(self, work: Callable[[psycopg.AsyncConnection], Awaitable[T]],
+                               retry: bool = True) -> T:
+        """retry=False для неидемпотентных запросов (take_held, mark_announced): при обрыве
+        соединение сбрасывается и следующий вызов подключится заново, но сам запрос не
+        повторяется — он мог уже выполниться, и повтор потерял бы или удвоил результат."""
         async with self._lock:
             for attempt in (1, 2):
                 try:
@@ -204,15 +208,19 @@ class PostgresStore:
                     raise
                 except (psycopg.OperationalError, psycopg.InterfaceError):
                     await self._drop()
-                    if attempt == 2:
+                    if attempt == 2 or not retry:
                         raise
+                except asyncio.CancelledError:
+                    # Отменённый посреди запроса вызов оставляет соединение в неизвестном состоянии.
+                    await self._drop()
+                    raise
             raise AssertionError("недостижимо")  # pragma: no cover
 
-    async def _rows(self, sql: str, params: dict | None = None) -> list[dict]:
+    async def _rows(self, sql: str, params: dict | None = None, *, retry: bool = True) -> list[dict]:
         async def work(conn: psycopg.AsyncConnection) -> list[dict]:
             cursor = await conn.execute(sql, params)
             return await cursor.fetchall() if cursor.description else []
-        return await self._with_connection(work)
+        return await self._with_connection(work, retry)
 
     async def _value(self, sql: str, params: dict | None = None) -> Any:
         rows = await self._rows(sql, params)
@@ -275,7 +283,7 @@ class PostgresStore:
             "ON CONFLICT (kind, publication_id) DO UPDATE "
             "SET level = EXCLUDED.level, announced_at = now() "
             "WHERE bot_announced.level < EXCLUDED.level RETURNING 1",
-            {"kind": kind, "pid": str(publication_id), "level": level})
+            {"kind": kind, "pid": str(publication_id), "level": level}, retry=False)
         return bool(rows)
 
     async def has_announced_any(self, kind: str) -> bool:
@@ -304,7 +312,7 @@ class PostgresStore:
         # Один оператор: забрать и удалить разом, чтобы тревога не ушла дважды и не потерялась.
         rows = await self._rows(
             "WITH taken AS (DELETE FROM ops_and_admin.bot_held_alert RETURNING id, event) "
-            "SELECT event FROM taken ORDER BY id")
+            "SELECT event FROM taken ORDER BY id", retry=False)
         return [row["event"] for row in rows]
 
     async def save_week_snapshot(self, day: date, stats: dict) -> None:

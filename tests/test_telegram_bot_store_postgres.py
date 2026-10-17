@@ -4,6 +4,14 @@ MRANKED_TEST_TELEGRAM_BOT_DSN — суперпользователь однор�
 миграциями (infra/compose.yaml). Контракт хранилища (tests/telegram_bot_store_contract.py)
 идёт через PostgresStore, который работает под ролью telegram_bot, как в проде:
 нехватка прав в SQL хранилища проявится ошибкой, а не пройдёт под суперпользователем.
+
+Две переменные окружения:
+- MRANKED_TEST_TELEGRAM_BOT_DSN — подключение; с ним одним идут только тесты схемы,
+  они откатываются и ничего не меняют.
+- MRANKED_TEST_TELEGRAM_BOT_DESTRUCTIVE=1 — разрешение тестам хранилища очищать (TRUNCATE)
+  таблицы ops_and_admin.bot_*. Имя базы у одноразового кластера такое же, как у боевой,
+  поэтому защита другая: тесты отказываются работать, если в catalog.institution есть
+  строки (на только что созданном кластере их нет, в любой копии боевой базы — много).
 """
 from __future__ import annotations
 
@@ -30,6 +38,18 @@ def dsn() -> str:
     if not value:
         pytest.skip("MRANKED_TEST_TELEGRAM_BOT_DSN is required")
     return value
+
+
+@pytest.fixture(scope="module")
+def destructive_dsn(dsn: str) -> str:
+    if os.environ.get("MRANKED_TEST_TELEGRAM_BOT_DESTRUCTIVE") != "1":
+        pytest.skip("MRANKED_TEST_TELEGRAM_BOT_DESTRUCTIVE=1 is required: the store tests TRUNCATE ops_and_admin.bot_*")
+    with psycopg.connect(dsn) as connection:
+        has_data = connection.execute("SELECT EXISTS (SELECT 1 FROM catalog.institution)").fetchone()[0]
+    if has_data:
+        pytest.fail("catalog.institution is not empty: this is not a freshly initialised disposable "
+                    "cluster, refusing to TRUNCATE ops_and_admin.bot_*", pytrace=False)
+    return dsn
 
 
 @pytest.fixture
@@ -140,11 +160,12 @@ async def _run(dsn: str, case) -> None:
 
 
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case.__name__)
-def test_postgres_store_contract(dsn, case) -> None:
-    asyncio.run(_run(dsn, case))
+def test_postgres_store_contract(destructive_dsn, case) -> None:
+    asyncio.run(_run(destructive_dsn, case))
 
 
-def test_postgres_store_reconnects_once_after_connection_loss(dsn) -> None:
+def test_postgres_store_reconnects_once_after_connection_loss(destructive_dsn) -> None:
+    dsn = destructive_dsn
     async def scenario() -> None:
         store = PostgresStore(_bot_dsn(dsn))
         try:
@@ -156,6 +177,56 @@ def test_postgres_store_reconnects_once_after_connection_loss(dsn) -> None:
                 assert await store.get_setting("reconnect_probe") == 1
                 assert store._conn.info.backend_pid != pid
                 await admin.execute("DELETE FROM ops_and_admin.bot_setting WHERE key = 'reconnect_probe'")
+        finally:
+            await store.aclose()
+    asyncio.run(scenario())
+
+
+def _terminate(dsn: str, store: PostgresStore):
+    async def run() -> None:
+        async with await psycopg.AsyncConnection.connect(dsn, autocommit=True) as admin:
+            await admin.execute("SELECT pg_terminate_backend(%s)", (store._conn.info.backend_pid,))
+        await asyncio.sleep(0.2)
+    return run()
+
+
+def test_non_idempotent_calls_raise_instead_of_retrying_after_connection_loss(destructive_dsn) -> None:
+    async def scenario() -> None:
+        dsn = destructive_dsn
+        store = PostgresStore(_bot_dsn(dsn))
+        try:
+            await store.hold_alert({"kind": "spike"})
+            await _terminate(dsn, store)
+            with pytest.raises((psycopg.OperationalError, psycopg.InterfaceError)):
+                await store.take_held()
+            # Следующий вызов подключается заново, и задержанная тревога на месте.
+            assert await store.take_held() == [{"kind": "spike"}]
+
+            pid = "00000000-0000-0000-0000-000000000009"
+            await store.get_setting("x")
+            await _terminate(dsn, store)
+            with pytest.raises((psycopg.OperationalError, psycopg.InterfaceError)):
+                await store.mark_announced("spike", pid, 2)
+            assert await store.mark_announced("spike", pid, 2) is True
+        finally:
+            await store.aclose()
+    asyncio.run(scenario())
+
+
+def test_cancelled_query_discards_the_shared_connection(destructive_dsn) -> None:
+    async def scenario() -> None:
+        store = PostgresStore(_bot_dsn(destructive_dsn))
+        try:
+            await store.get_setting("x")
+            first_pid = store._conn.info.backend_pid
+            task = asyncio.create_task(store._rows("SELECT pg_sleep(3)"))
+            await asyncio.sleep(0.3)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert store._conn is None
+            assert await store.get_setting("x") is None
+            assert store._conn.info.backend_pid != first_pid
         finally:
             await store.aclose()
     asyncio.run(scenario())
