@@ -61,6 +61,11 @@ def test_badge() -> None:
     assert badge(None, 5) is None
     assert badge(0, 100) == "▼ 100 %"
     assert badge(1099, 100) == "▲ 999 %"
+    # Рост от 999,5 % — «▲ >999 %» (округление то же: 999,4 → 999).
+    assert badge(10_994, 1000) == "▲ 999 %"
+    assert badge(10_995, 1000) == "▲ >999 %"
+    assert badge(10_000, 100) == "▲ >999 %"
+    assert badge(10 ** 9, 1) == "▲ >999 %"
     assert badge(1005, 1000) == "▲ 1 %"  # 0,5 % округляется вверх, как в тексте бота
 
 

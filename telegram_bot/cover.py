@@ -49,6 +49,7 @@ MAX_ROWS = 4
 LABEL_GAP = 16         # полоса — подпись снаружи
 LABEL_INSET = 24       # отступ подписи внутри полосы
 BADGE_GAP = 12         # число — плашка
+BADGE_CAP = 999        # больше — «▲ >999 %»
 NO_DATA = "нет данных"
 ELLIPSIS = "…"
 
@@ -109,13 +110,16 @@ def cover_rows(current: dict[str, dict[str, int]], previous: dict[str, dict[str,
 
 
 def badge(value: int | None, previous: int | None) -> str | None:
-    """«▲ 12 %» / «▼ 5 %» / «≈ 0 %»; без прошлого значения (или при нуле) — нет."""
+    """«▲ 12 %» / «▼ 5 %» / «≈ 0 %» / «▲ >999 %»; без прошлого значения (или при
+    нуле) — нет."""
     if value is None or previous is None or previous <= 0:
         return None
     percent = (value - previous) * 100 / previous
     rounded = int(abs(percent) + 0.5)
     if rounded == 0:
         return "≈ 0 %"
+    if rounded > BADGE_CAP:            # рост ≥ 999,5 %; падение больше 100 % не бывает
+        return f"▲ >{BADGE_CAP} %"
     return f"{'▲' if percent > 0 else '▼'} {rounded} %"
 
 
