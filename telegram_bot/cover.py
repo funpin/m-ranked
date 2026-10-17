@@ -250,8 +250,9 @@ def _label(row: Row, bar: Box | None, track: Box, y: int,
                                               badge_w, BADGE_HEIGHT)
                     texts[f"badge:{p}"] = change
                 return items, texts
-    # С настоящими шрифтами недостижимо (число короче места справа от 70 %);
-    # рамка обрезается по дорожке, рисование обрежет текст по ней же.
+    # С вшитыми шрифтами недостижимо (число короче места справа от 70 %); ветку
+    # покрывает тест с подменой измерителя. Рамка обрезается по дорожке, а
+    # рисование текст не обрезает: он просто выходит за рамку.
     return ({f"label:{p}": Box(outside, y, max(0, track.right - outside), BAR_HEIGHT)},
             {f"label:{p}": number})
 
@@ -314,16 +315,17 @@ BADGE_RADIUS = 9
 SUPERSAMPLE = 4                            # маска скруглённого прямоугольника рисуется в 4×
 
 # Цвета полос — `--platform-*` тёмной темы frontend/app/globals.css, oklch → sRGB
-# (матрицы Оклаба, гамма sRGB, значения вне гаммы обрезаны по каналам).
+# (матрицы Оклаба, гамма sRGB, значения вне гаммы обрезаны по каналам; браузер
+# сжимает цвет вне гаммы иначе, расхождение до ~7 уровней на канал).
 PLATFORM_COLORS = {
     "telegram": "#5cbcf3",   # oklch(0.76 0.12 236)
-    "vk": "#61a4ff",         # oklch(0.72 0.16 258); G вне гаммы обрезан
-    "max": "#9f8fff",        # oklch(0.72 0.18 287); B вне гаммы обрезан
+    "vk": "#61a4ff",         # oklch(0.72 0.16 258); B вне гаммы, обрезан
+    "max": "#9f8fff",        # oklch(0.72 0.18 287); B вне гаммы, обрезан
     "rutube": "#fd7273",     # oklch(0.72 0.17 22)
 }
 
-# Один рендер за раз: шрифты из load_font общие и кэшируются; draw зовут через
-# asyncio.to_thread.
+# Один рендер за раз, включая раскладку: шрифты из load_font общие и кэшируются;
+# draw зовут через asyncio.to_thread.
 _DRAW_LOCK = threading.Lock()
 
 
@@ -337,7 +339,7 @@ def _mix(base: tuple[int, int, int], top: tuple[int, int, int],
     return tuple(round(b + (t - b) * alpha) for b, t in zip(base, top))
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=32)
 def _rounded_mask(w: int, h: int, radius: int) -> Image.Image:
     """Маска скруглённого прямоугольника: рисуется в 4× и уменьшается LANCZOS."""
     big = Image.new("L", (w * SUPERSAMPLE, h * SUPERSAMPLE), 0)
@@ -352,6 +354,7 @@ def _rounded(image: Image.Image, box: Box, radius: int, fill: tuple[int, int, in
         image.paste(fill, (box.x, box.y), _rounded_mask(box.w, box.h, radius))
 
 
+# Кэшированные значки и логотип только читаются (paste), на месте не меняются.
 @lru_cache(maxsize=8)
 def _icon(platform: str) -> Image.Image:
     image = Image.open(ASSETS / "icons" / f"{platform}.png").convert("RGBA")
@@ -395,8 +398,8 @@ def _badge_colours(text: str, in_bar: tuple[int, int, int] | None):
 
 def draw(data: CoverData) -> bytes:
     """PNG обложки 1280×640 по раскладке `layout`."""
-    result = layout(data, pil_measure)
-    with _DRAW_LOCK:
+    with _DRAW_LOCK:             # layout меряет теми же общими шрифтами из кэша
+        result = layout(data, pil_measure)
         image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
         pen = ImageDraw.Draw(image)
 

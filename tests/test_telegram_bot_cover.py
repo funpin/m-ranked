@@ -498,27 +498,55 @@ def test_label_and_badge_inside_bar_are_white(monkeypatch: pytest.MonkeyPatch) -
     assert any(_near(pixel, (255, 255, 255), 6) for pixel in pixels(badge_box))
 
 
-def test_draw_is_fast_and_small() -> None:
+def test_draw_is_fast() -> None:
     import time
-    import tracemalloc
     cover.draw(EXTREMES["four-rows"])  # прогрев шрифтов и значков
-    tracemalloc.start()
     started = time.perf_counter()
     png = cover.draw(EXTREMES["mixed"])
-    elapsed = time.perf_counter() - started
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    assert elapsed < 0.5
-    assert peak < 30 * 1024 * 1024
+    assert time.perf_counter() - started < 0.5
     assert len(png) < 400 * 1024
+
+
+RSS_SCRIPT = """
+import resource, sys
+sys.path.insert(0, sys.argv[1])
+from tests.test_telegram_bot_cover import EXTREMES
+from telegram_bot import cover
+
+def rss_mb():
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return peak / (1024 * 1024 if sys.platform == "darwin" else 1024)
+
+for data in EXTREMES.values():
+    cover.draw(data)
+warm = rss_mb()
+for _ in range(5):
+    for data in EXTREMES.values():
+        cover.draw(data)
+print(warm, rss_mb())
+"""
+
+
+def test_draw_memory_is_flat_and_small() -> None:
+    """tracemalloc не видит C-буферы Pillow, поэтому RSS чужого процесса."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    out = subprocess.run([sys.executable, "-c", RSS_SCRIPT, str(root)], capture_output=True,
+                         text=True, check=True, cwd=root).stdout.split()
+    warm, final = float(out[0]), float(out[1])
+    assert final - warm < 10, (warm, final)
+    assert final < 120, final
 
 
 def test_draw_is_thread_safe_and_deterministic() -> None:
     from concurrent.futures import ThreadPoolExecutor
-    expected = cover.draw(EXTREMES["four-rows"])
-    with ThreadPoolExecutor(4) as pool:
-        results = list(pool.map(cover.draw, [EXTREMES["four-rows"]] * 8))
-    assert all(result == expected for result in results)
+    datasets = [EXTREMES[name] for name in sorted(EXTREMES)] + [_random_data(s) for s in range(12)]
+    expected = [cover.draw(data) for data in datasets]
+    with ThreadPoolExecutor(6) as pool:
+        results = list(pool.map(cover.draw, datasets * 3))
+    assert results == expected * 3
 
 
 @pytest.mark.parametrize("name", sorted(EXTREMES))
