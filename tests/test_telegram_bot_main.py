@@ -169,6 +169,15 @@ def test_stop_event_exits(tmp_path, jobs):
     run_for(bot, bot.config, 0.05)
 
 
+def test_stop_during_long_poll_is_not_an_error(tmp_path, jobs, caplog):
+    # Прерванный стопом длинный опрос — штатная остановка, а не сбой getUpdates
+    # (было: InvalidStateError в журнале при каждом перезапуске службы).
+    bot, _ = make_bot(tmp_path)
+    with caplog.at_level(logging.ERROR, logger="telegram_bot"):
+        run_for(bot, bot.config, 0.05)
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
 def test_run_sets_up_and_installs_mute_hook(tmp_path, jobs):
     bot, store = make_bot(tmp_path)
     original = bot.on_mute_callback

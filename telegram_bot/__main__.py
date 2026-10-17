@@ -55,6 +55,10 @@ async def _until_stop(work: Awaitable[T], stop: asyncio.Event) -> T | None:
         waiter.cancel()
         if not task.done():
             task.cancel()  # стоп или отмена снаружи: длинный опрос не оставляем висеть
+            # cancel() лишь просит об отмене: результат читается, когда задача
+            # действительно завершилась, иначе — InvalidStateError.
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
     if task.cancelled():
         return None
     return task.result()
