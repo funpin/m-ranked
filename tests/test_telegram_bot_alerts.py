@@ -365,6 +365,55 @@ def test_undeliverable_fresh_file_is_kept_but_stale_one_is_dropped(tmp_path):
     assert not fresh.exists()
 
 
+def test_same_file_is_kept_then_dropped_as_it_ages_without_a_send_attempt(tmp_path):
+    bot, telegram, _ = make_bot(tmp_path)
+    telegram.failing = {ADMIN}
+    path = spool(tmp_path, "a", "open", at=NOON.timestamp() - 5 * 3600)
+    asyncio.run(deliver(bot, NOON))
+    assert path.exists()
+    attempts = []
+    original = telegram.send_message
+
+    async def counting(*args, **kwargs):
+        attempts.append(args)
+        return await original(*args, **kwargs)
+
+    telegram.send_message = counting
+    asyncio.run(deliver(bot, NOON + timedelta(hours=2)))
+    assert not path.exists()
+    assert attempts == []
+
+
+@pytest.mark.parametrize("at", ["missing", None, True, "1700000000", [1]])
+def test_events_without_numeric_at_are_deleted_and_do_not_block(tmp_path, at, caplog):
+    bot, telegram, _ = make_bot(tmp_path)
+    broken = spool(tmp_path, "a", "open", stamp=1, text="секретный текст")
+    payload = json.loads(broken.read_text(encoding="utf-8"))
+    if at == "missing":
+        del payload["at"]
+    else:
+        payload["at"] = at
+    broken.write_text(json.dumps(payload), encoding="utf-8")
+    good = spool(tmp_path, "b", "open", stamp=2)
+    with caplog.at_level("INFO"):
+        assert [path for path, _ in read_inbox(tmp_path)] == [good]
+    assert not broken.exists()
+    assert "секретный" not in caplog.text
+    asyncio.run(deliver(bot, NOON))
+    assert len(telegram.of("send")) == 1
+
+
+def test_naive_now_is_refused(tmp_path):
+    bot, telegram, _ = make_bot(tmp_path)
+    path = spool(tmp_path)
+    with pytest.raises(ValueError):
+        asyncio.run(deliver(bot, datetime(2026, 10, 16, 12, 0)))
+    with pytest.raises(ValueError):
+        asyncio.run(morning(bot, datetime(2026, 10, 17, 8, 0)))
+    assert path.exists()
+    assert telegram.of("send") == []
+
+
 def test_stale_file_is_dropped_without_sending_and_logs_name_only(tmp_path, caplog):
     bot, telegram, store = make_bot(tmp_path)
     stale = spool(tmp_path, "a", "resolve", text="секретный текст", at=NOON.timestamp() - 7 * 3600)

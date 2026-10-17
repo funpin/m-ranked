@@ -40,6 +40,10 @@ MUTED_NOTE = "заглушено на 2 часа"
 
 # --- очередь ---------------------------------------------------------------------
 
+def _number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _valid(event: object) -> bool:
     return (
         isinstance(event, dict)
@@ -48,6 +52,8 @@ def _valid(event: object) -> bool:
         and isinstance(event.get("key"), str) and bool(event["key"])
         and event.get("kind") in KINDS
         and isinstance(event.get("text"), str)
+        # Без числового «at» возраст не посчитать, и такой файл застрял бы в голове очереди.
+        and _number(event.get("at"))
     )
 
 
@@ -145,10 +151,12 @@ def is_quiet(now: datetime) -> bool:
 # --- доставка -------------------------------------------------------------------------
 
 def _age(event: dict, now: float) -> float:
-    at = event.get("at")
-    if isinstance(at, bool) or not isinstance(at, (int, float)):
-        return 0.0
-    return now - at
+    return now - event["at"]
+
+
+def _require_aware(now: datetime, caller: str) -> None:
+    if now.tzinfo is None:
+        raise ValueError(f"{caller}(): now должен быть с часовым поясом (Europe/Moscow)")
 
 
 def _alert_people(recipients: list[Recipient]) -> list[Recipient]:
@@ -156,7 +164,9 @@ def _alert_people(recipients: list[Recipient]) -> list[Recipient]:
 
 
 async def deliver(bot: Bot, now: datetime) -> None:
-    """Разобрать очередь. Файл остаётся, только если получатели есть, а не дошло никому."""
+    """Разобрать очередь. Файл остаётся, только если получатели есть, а не дошло никому.
+    `now` обязан быть с часовым поясом; возраст событий считается от now.timestamp()."""
+    _require_aware(now, "deliver")
     inbox = read_inbox(bot.config.spool_dir)
     if not inbox:
         return
@@ -189,7 +199,9 @@ async def deliver(bot: Bot, now: datetime) -> None:
 
 
 async def morning(bot: Bot, now: datetime) -> None:
-    """Одно сообщение про всё, что копилось ночью. Не дошло — события возвращаются."""
+    """Одно сообщение про всё, что копилось ночью. Не дошло — события возвращаются.
+    `now` обязан быть с часовым поясом."""
+    _require_aware(now, "morning")
     held = await bot.store.take_held()
     if not held:
         return
