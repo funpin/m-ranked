@@ -3,8 +3,10 @@
 
 Читает то, что уже пишется на машине: хвост журнала nginx с классом клиента
 и исходом кэша (формат m_ranked_traffic), файлы метрик служб, свободное место,
-нагрузку и упавшие юниты m-ranked. Событие рождается при входе в проблему, при
-выходе из неё и повторно раз в REPEAT_SECONDS, пока проблема держится.
+нагрузку и упавшие юниты m-ranked. В базу не ходит: сбор по площадкам, p95
+страниц и ресурсы Сервера 1 берутся из файла alert-inputs.json, который раз в
+минуту пишет ops-sample. Событие рождается при входе в проблему, при выходе из
+неё и повторно раз в REPEAT_SECONDS, пока проблема держится.
 
 Сюда в сеть не ходим: событие печатается в журнал службы и, если есть каталог
 очереди ALERTS_BOT_SPOOL_DIR, кладётся туда JSON-файлом для Telegram-бота.
@@ -15,7 +17,7 @@ STATE_DIR.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import math
 import os
@@ -33,6 +35,17 @@ HISTORY_MINUTES = 15  # сколько минутных корзин храни�
 LOAD_MINUTES = 15
 REPEAT_SECONDS = 6 * 3600
 SPOOL_LIMIT = 500  # файлов очереди; при переполнении самые старые отбрасываются
+# Обычный ритм сбора, секунд (как порог свежести в api/routes/health.py): дольше без
+# успешного опроса — тревога. У Rutube цикл длинный.
+FRESH_SECONDS = {"telegram": 2700, "vk": 2700, "max": 2700, "rutube": 5400}
+PLATFORM_NAMES = {"telegram": "Telegram", "vk": "ВКонтакте", "max": "MAX", "rutube": "Rutube"}
+BASELINE_SHARE = 0.3  # за час успешных опросов меньше этой доли обычного для часа недели
+FAILURE_SHARE = 0.2  # доля ошибок за час выше этой
+FAILURE_MIN_RESULTS = 20  # меньше результатов за час — долю не проверяем
+NODE_SILENT_SECONDS = 30 * 60  # узел не присылал снимка ресурсов
+NODE_LOAD_FACTOR = 3  # load1 выше стольких ядер
+INPUTS_MAX_AGE = 300  # файл ops-sample старше — не верим (пишется раз в минуту)
+INPUTS_PATH = "/var/lib/m-ranked/ops-sample/alert-inputs.json"
 
 # 127.0.0.1 [25/Sep/2026:22:55:35 +0300] "GET / HTTP/1.1" 200 724 0.000 human HIT "UA"
 LINE = re.compile(
@@ -74,6 +87,18 @@ class Host:
 def env_int(name: str, default: int) -> int:
     raw = os.environ.get(name, "")
     return int(raw) if raw.isdecimal() else default
+
+
+def read_inputs(path: Path, now: float, max_age: float = INPUTS_MAX_AGE) -> dict | None:
+    """Файл ops-sample; None, если его нет, он испорчен или старше max_age секунд."""
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    written = data.get("at") if isinstance(data, dict) else None
+    if isinstance(written, bool) or not isinstance(written, (int, float)) or now - written > max_age:
+        return None
+    return data
 
 
 def parse_line(line: str) -> dict | None:
@@ -315,7 +340,103 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], host: Host, in
     hit_ratio = traffic["hits"] / traffic["cacheable"] if traffic["cacheable"] else 1
     rules.append(Rule("hit_ratio", traffic["cacheable"] >= 300 and hit_ratio < limits["hit_ratio"],
                       f"Доля попаданий в кэш {hit_ratio:.0%} из {traffic['cacheable']} страниц"))
+    if inputs is None:
+        rules.append(Rule("inputs_stale", True,
+                          "Файл замеров ops-sample не обновляется: тревоги по сбору площадок, входу MAX и "
+                          "Серверу 1 временно не проверяются"))
+    else:
+        rules.append(Rule("inputs_stale", False, "Файл замеров ops-sample обновляется"))
+        rules.extend(collection_rules(now, inputs.get("collection")))
+        rules.extend(node_rules(now, inputs.get("nodes") or {}, limits))
+    return suppress(rules)
+
+
+def minutes_text(age: float | None) -> str:
+    return "более 3 ч" if age is None else f"{age / 60:.0f} мин"
+
+
+def collection_rules(now: float, collection: dict | None) -> list[Rule]:
+    """Сбор по площадкам. Нет успешных опросов дольше ритма, мало успешных за час
+    против обычного или много ошибок — «collection_<площадка>». У MAX ни одного
+    результата вообще — не сбой сбора, а отозванный вход: «max_auth»."""
+    if collection is None:
+        return []
+    rules: list[Rule] = []
+    for platform, limit in FRESH_SECONDS.items():
+        entry = collection.get(platform) or {}
+        name = PLATFORM_NAMES[platform]
+        last_ok, last_result = entry.get("lastOk"), entry.get("lastResult")
+        ok_age = now - last_ok if last_ok is not None else None
+        reasons = []
+        if ok_age is None or ok_age > limit:
+            reasons.append(f"нет успешных опросов {minutes_text(ok_age)} (обычно чаще, чем раз в {limit // 60} мин)")
+        hour_ok, baseline = entry.get("hourOk", 0), entry.get("baselineOk")
+        if baseline is not None and hour_ok < BASELINE_SHARE * baseline:
+            reasons.append(f"за час успешных опросов {hour_ok} при обычных {baseline:.0f}")
+        results, failed = entry.get("hourResults", 0), entry.get("hourFailed", 0)
+        if results >= FAILURE_MIN_RESULTS and failed / results > FAILURE_SHARE:
+            reasons.append(f"ошибок {failed / results:.0%} за час ({failed} из {results})")
+        rules.append(Rule(f"collection_{platform}", bool(reasons),
+                          f"Сбор {name}: " + "; ".join(reasons) if reasons else f"Сбор {name} в порядке",
+                          urgent=True))
+        if platform == "max":
+            result_age = now - last_result if last_result is not None else None
+            rules.append(Rule("max_auth", result_age is None or result_age > limit,
+                              f"MAX: нет ни одного результата опроса {minutes_text(result_age)} — вероятно, MAX "
+                              "отозвал вход. Нужна переавторизация: operations/scripts/reauth-max-session.sh "
+                              "на сервере сборщиков" if result_age is None or result_age > limit
+                              else "Вход MAX в порядке", urgent=True))
     return rules
+
+
+def node_rules(now: float, nodes: dict, limits: dict) -> list[Rule]:
+    """Ресурсы узлов, кроме Сервера 2: диск, память и load1 по последнему снимку
+    агента узла (пороги те же, что для Сервера 2) и молчание агента."""
+    rules: list[Rule] = []
+    for node_id, node in sorted(nodes.items()):
+        name = node.get("name") or node_id
+        prefix = f"node_{node_id}_"
+        observed = node.get("observedAt")
+        silent_for = now - observed if observed is not None else None
+        rules.append(Rule(prefix + "silent", silent_for is None or silent_for > NODE_SILENT_SECONDS,
+                          f"{name}: снимка ресурсов нет {minutes_text(silent_for)}"
+                          if silent_for is None or silent_for > NODE_SILENT_SECONDS
+                          else f"{name}: снимки ресурсов приходят"))
+        total, free = node.get("diskTotal"), node.get("diskFree")
+        share = free / total if total and free is not None else None
+        disk_text = (f"{name}: свободно на диске {free / 1e9:.1f} ГБ ({share:.0%})"
+                     if share is not None else f"{name}: диск в порядке")
+        rules.append(Rule(prefix + "disk", share is not None and (free < limits["disk_free_bytes"] or share < 0.12),
+                          disk_text))
+        rules.append(Rule(prefix + "disk_urgent", share is not None and share < limits["disk_urgent_share"],
+                          disk_text, urgent=True))
+        memory_total, available = node.get("memoryTotal"), node.get("memoryAvailable")
+        used = 1 - available / memory_total if memory_total and available is not None else None
+        rules.append(Rule(prefix + "memory", used is not None and used * 100 > limits["memory_percent"],
+                          f"{name}: память занята {used:.0%}" if used is not None else f"{name}: память в порядке"))
+        load1, cpus = node.get("load1"), node.get("cpus")
+        loaded = load1 is not None and bool(cpus) and load1 > NODE_LOAD_FACTOR * cpus
+        rules.append(Rule(prefix + "load", loaded,
+                          f"{name}: load average {load1:.1f} на {cpus} яд." if loaded else f"{name}: нагрузка в порядке"))
+    return rules
+
+
+def suppress(rules: list[Rule]) -> list[Rule]:
+    """Одна причина — одно сообщение. Приём пакетов с Сервера 1 стоит — молчат
+    сбор площадок и вход MAX; вход MAX отозван — молчит сбор MAX; узел молчит —
+    молчат его устаревшие ресурсы. Подавленное правило остаётся в списке с
+    firing=False, чтобы уже открытая тревога закрылась."""
+    firing = {rule.key for rule in rules if rule.firing}
+    muted: set[str] = set()
+    if "ingest" in firing:
+        muted.update(rule.key for rule in rules if rule.key.startswith("collection_") or rule.key == "max_auth")
+    if "max_auth" in firing:
+        muted.add("collection_max")
+    for key in firing:
+        if key.startswith("node_") and key.endswith("_silent"):
+            prefix = key[:-len("silent")]
+            muted.update(rule.key for rule in rules if rule.key.startswith(prefix) and rule.key != key)
+    return [replace(rule, firing=False) if rule.firing and rule.key in muted else rule for rule in rules]
 
 
 def transitions(rules: list[Rule], state: dict, now: float) -> list[Event]:
@@ -384,15 +505,15 @@ def main() -> int:
         "disk_free_bytes": env_int("ALERTS_DISK_FREE_GB", 6) * 10**9,
         "load15": env_int("ALERTS_LOAD15_X10", 60) / 10,
         "cpu_percent": env_int("ALERTS_CPU_PERCENT", 90),
-        "cpu_minutes": env_int("ALERTS_CPU_MINUTES", 45),
+        "cpu_minutes": max(1, env_int("ALERTS_CPU_MINUTES", 45)),
         "page_p95_seconds": float(env_int("ALERTS_PAGE_P95_SECONDS", 3)),
         "memory_percent": env_int("ALERTS_MEMORY_PERCENT", 90),
         "swap_bytes": env_int("ALERTS_SWAP_MB", 1000) * 10**6,
         "disk_urgent_share": env_int("ALERTS_DISK_URGENT_PERCENT", 7) / 100,
         "bots_per_minute": env_int("ALERTS_BOTS_PER_MINUTE", 150),
-        "bot_minutes": env_int("ALERTS_BOT_MINUTES", 5),
-        "ingest_minutes": env_int("ALERTS_INGEST_MINUTES", 20),
-        "analysis_lag_seconds": env_int("ALERTS_ANALYSIS_LAG_MINUTES", 180) * 60,
+        "bot_minutes": max(1, env_int("ALERTS_BOT_MINUTES", 5)),
+        "ingest_minutes": max(1, env_int("ALERTS_INGEST_MINUTES", 20)),
+        "analysis_lag_seconds": max(1, env_int("ALERTS_ANALYSIS_LAG_MINUTES", 180)) * 60,
         "docker_bytes": env_int("ALERTS_DOCKER_GB", 5) * 10**9,
         "human_5xx": env_int("ALERTS_HUMAN_5XX", 20),
         "bot_503_share": env_int("ALERTS_BOT_503_PERCENT", 50) / 100,
@@ -408,7 +529,7 @@ def main() -> int:
                 memory_used_share=memory_share, swap_used_bytes=swap, failed=failed_units(),
                 dump_mtime=newest_dump(Path(os.environ.get("ALERTS_BACKUP_DIR", "/var/backups/m-ranked"))),
                 bots_per_minute=bots_per_minute(state, minute, limits["bot_minutes"]))
-    inputs = None  # выборка ops-sample подключается отдельным шагом; без неё cpu_slow молчит
+    inputs = read_inputs(Path(os.environ.get("ALERTS_INPUTS_PATH", INPUTS_PATH)), now)
     rules = evaluate(now, window(state), metrics(Path(os.environ.get(
         "ALERTS_METRICS_DIR", "/var/lib/node_exporter/textfile_collector"))), host, inputs, limits)
     spool = Path(os.environ.get("ALERTS_BOT_SPOOL_DIR", "/var/lib/m-ranked/telegram-bot/inbox"))

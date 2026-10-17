@@ -26,14 +26,30 @@ def line(path="/", status=200, klass="human", cache="HIT"):
             f'{klass} {cache} "Mozilla/5.0 (X11) Chrome/140"')
 
 
+PLATFORMS = ("telegram", "vk", "max", "rutube")
+
+
+def fresh_inputs(now, **parts):
+    """Файл замеров ops-sample, в котором всё в порядке; parts подменяет верхние ключи."""
+    entry = {"hourOk": 50, "hourFailed": 0, "hourResults": 50, "baselineOk": 50.0,
+             "lastOk": now - 60, "lastResult": now - 60}
+    node = {"name": "Сервер 1 · сбор", "observedAt": now - 60, "diskTotal": 100 * 10**9, "diskFree": 50 * 10**9,
+            "memoryTotal": 2 * 10**9, "memoryAvailable": 10**9, "load1": 0.5, "cpus": 2}
+    inputs = {"at": now - 30, "collection": {name: dict(entry) for name in PLATFORMS},
+              "pageP95Median15m": None, "nodes": {"server-1": node}}
+    inputs.update(parts)
+    return inputs
+
+
 def healthy(now, **overrides):
     values = {"mranked_backup_last_success_unixtime": now - 3600,
               'mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}': now - 30,
               "mranked_anomaly_queue_lag_seconds": 60.0}
     host = dict(disk_free=20 * 10**9, disk_total=50 * 10**9, load5_series=[1.0] * 15, cpu_series=[10.0] * 45,
                 memory_used_share=0.5, swap_used_bytes=0, failed=[], dump_mtime=None, bots_per_minute=[10] * 5)
+    inputs = overrides.pop("inputs", fresh_inputs(now))
     host.update(overrides)
-    return values, dict(host=alerts.Host(**host), inputs=None, limits=LIMITS)
+    return values, dict(host=alerts.Host(**host), inputs=inputs, limits=LIMITS)
 
 
 def test_log_line_carries_class_cache_and_static_flag():
@@ -251,9 +267,7 @@ def test_stale_account_tail_profile_warns(age_days, firing):
 
 
 def firing_rules(now, traffic=None, **overrides):
-    inputs = overrides.pop("inputs", None)
     values, arguments = healthy(now, **overrides)
-    arguments["inputs"] = inputs
     rules = alerts.evaluate(now, traffic or alerts.empty_bucket(), values, **arguments)
     return {rule.key: rule for rule in rules if rule.firing}
 
@@ -270,12 +284,12 @@ def test_load_uses_15_minute_mean():
 def test_cpu_sustained_45_minutes():
     rules = firing_rules(NOW, cpu_series=[90.5] * 45)
     assert "cpu" in rules and rules["cpu"].urgent is False and "cpu_slow" not in rules
-    slow = firing_rules(NOW, cpu_series=[90.5] * 45, inputs={"pageP95Median15m": 3.5})
+    slow = firing_rules(NOW, cpu_series=[90.5] * 45, inputs=fresh_inputs(NOW, pageP95Median15m=3.5))
     assert "cpu" in slow and slow["cpu_slow"].urgent is True
-    assert "cpu_slow" not in firing_rules(NOW, cpu_series=[90.5] * 45, inputs={"pageP95Median15m": 2.5})
+    assert "cpu_slow" not in firing_rules(NOW, cpu_series=[90.5] * 45, inputs=fresh_inputs(NOW, pageP95Median15m=2.5))
     assert not {"cpu", "cpu_slow"} & set(firing_rules(NOW, cpu_series=[99.0] * 44,
-                                                      inputs={"pageP95Median15m": 9.0}))
-    assert "cpu_slow" not in firing_rules(NOW, cpu_series=[10.0] * 45, inputs={"pageP95Median15m": 9.0})
+                                                      inputs=fresh_inputs(NOW, pageP95Median15m=9.0)))
+    assert "cpu_slow" not in firing_rules(NOW, cpu_series=[10.0] * 45, inputs=fresh_inputs(NOW, pageP95Median15m=9.0))
 
 
 def test_memory_and_swap():
@@ -402,3 +416,175 @@ def test_spool_failure_on_resolve_keeps_alert_active(tmp_path, monkeypatch, caps
     assert alerts.main() == 0
     saved = json.loads((tmp_path / "state" / "state.json").read_text())
     assert saved["active"]["disk"] == {"since": now - 500, "sent": now - 400}
+
+
+# --- сбор по площадкам, вход MAX, Сервер 1 ---------------------------------
+
+def with_collection(now, platform, **fields):
+    inputs = fresh_inputs(now)
+    inputs["collection"][platform].update(fields)
+    return inputs
+
+
+def test_rutube_uses_90_minutes():
+    assert "collection_rutube" not in firing_rules(NOW, inputs=with_collection(NOW, "rutube", lastOk=NOW - 80 * 60))
+    assert "collection_rutube" in firing_rules(NOW, inputs=with_collection(NOW, "rutube", lastOk=NOW - 95 * 60))
+    # Ту же давность Telegram уже не прощает.
+    assert "collection_telegram" in firing_rules(NOW, inputs=with_collection(NOW, "telegram", lastOk=NOW - 80 * 60))
+
+
+def test_telegram_45_minutes():
+    assert "collection_telegram" not in firing_rules(NOW, inputs=with_collection(NOW, "telegram", lastOk=NOW - 40 * 60))
+    rule = firing_rules(NOW, inputs=with_collection(NOW, "telegram", lastOk=NOW - 50 * 60))["collection_telegram"]
+    assert rule.urgent is True and "Telegram" in rule.text and "50 мин" in rule.text
+
+
+def test_platform_without_any_success_in_the_window_fires():
+    rules = firing_rules(NOW, inputs=with_collection(NOW, "vk", lastOk=None))
+    assert "collection_vk" in rules and "3 ч" in rules["collection_vk"].text
+    inputs = fresh_inputs(NOW)
+    del inputs["collection"]["vk"]
+    assert "collection_vk" in firing_rules(NOW, inputs=inputs)
+
+
+def test_hour_below_30_percent_of_baseline():
+    def fires(hour_ok, baseline=100.0):
+        inputs = with_collection(NOW, "vk", hourOk=hour_ok, hourResults=hour_ok, baselineOk=baseline)
+        return "collection_vk" in firing_rules(NOW, inputs=inputs)
+    assert fires(29) and not fires(31) and not fires(30)
+    assert not fires(0, baseline=None)
+
+
+def test_failure_share_over_20_percent():
+    def fires(failed, results):
+        inputs = with_collection(NOW, "vk", hourOk=results - failed, hourFailed=failed, hourResults=results,
+                                 baselineOk=None)
+        return firing_rules(NOW, inputs=inputs).get("collection_vk")
+    assert fires(21, 100) is not None and "21%" in fires(21, 100).text
+    assert fires(19, 100) is None and fires(20, 100) is None
+    # Мало результатов — доля шумит и не проверяется.
+    assert fires(19, 19) is None and fires(20, 20) is not None
+
+
+def test_max_without_any_results_is_auth():
+    inputs = with_collection(NOW, "max", lastOk=NOW - 51 * 60, lastResult=NOW - 51 * 60)
+    rules = firing_rules(NOW, inputs=inputs)
+    assert rules["max_auth"].urgent is True
+    assert "переавторизац" in rules["max_auth"].text and "reauth-max-session.sh" in rules["max_auth"].text
+    assert "collection_max" not in rules
+    rules = firing_rules(NOW, inputs=with_collection(NOW, "max", lastOk=None, lastResult=None))
+    assert "max_auth" in rules and "collection_max" not in rules
+    # Результаты идут, но неудачные — это сбор, а не вход.
+    rules = firing_rules(NOW, inputs=with_collection(NOW, "max", lastOk=NOW - 60 * 60, lastResult=NOW - 60))
+    assert "collection_max" in rules and "max_auth" not in rules
+    # Другие площадки без результатов — не вход MAX.
+    rules = firing_rules(NOW, inputs=with_collection(NOW, "vk", lastOk=NOW - 51 * 60, lastResult=NOW - 51 * 60))
+    assert "collection_vk" in rules and "max_auth" not in rules
+
+
+def test_ingest_down_suppresses_collection():
+    inputs = with_collection(NOW, "telegram", lastOk=NOW - 3600)
+    inputs["collection"]["max"].update(lastOk=None, lastResult=None)
+    values, arguments = healthy(NOW, inputs=inputs)
+    values['mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}'] = NOW - 3600
+    rules = alerts.evaluate(NOW, alerts.empty_bucket(), values, **arguments)
+    firing = {rule.key for rule in rules if rule.firing}
+    assert "ingest" in firing
+    assert not {key for key in firing if key.startswith("collection_")} and "max_auth" not in firing
+    # Подавленные правила остаются в списке со сброшенным признаком: открытая тревога закроется.
+    assert {"collection_telegram", "max_auth"} <= {rule.key for rule in rules}
+
+
+def test_suppress_keeps_texts_and_other_rules():
+    rules = [alerts.Rule("ingest", True, "приём"), alerts.Rule("collection_vk", True, "сбор", urgent=True),
+             alerts.Rule("max_auth", True, "вход", urgent=True), alerts.Rule("disk", True, "диск")]
+    result = {rule.key: rule for rule in alerts.suppress(rules)}
+    assert result["collection_vk"] == alerts.Rule("collection_vk", False, "сбор", urgent=True)
+    assert result["max_auth"].firing is False and result["ingest"].firing and result["disk"].firing
+    only_auth = [alerts.Rule("max_auth", True, "вход"), alerts.Rule("collection_max", True, "сбор")]
+    assert [(rule.key, rule.firing) for rule in alerts.suppress(only_auth)] == [
+        ("max_auth", True), ("collection_max", False)]
+
+
+def test_stale_inputs():
+    values, arguments = healthy(NOW, inputs=None)
+    rules = alerts.evaluate(NOW, alerts.empty_bucket(), values, **arguments)
+    assert {rule.key for rule in rules if rule.firing} == {"inputs_stale"}
+    assert next(rule for rule in rules if rule.key == "inputs_stale").urgent is False
+    assert not [rule for rule in rules if rule.key.startswith(("collection_", "node_")) or rule.key == "max_auth"]
+    assert "inputs_stale" not in firing_rules(NOW)
+
+
+def test_read_inputs(tmp_path):
+    path = tmp_path / "alert-inputs.json"
+    assert alerts.read_inputs(path, NOW) is None
+    path.write_text(json.dumps({"at": NOW - 299, "collection": {}}))
+    assert alerts.read_inputs(path, NOW) == {"at": NOW - 299, "collection": {}}
+    path.write_text(json.dumps({"at": NOW - 301}))
+    assert alerts.read_inputs(path, NOW) is None
+    assert alerts.read_inputs(path, NOW, max_age=400) == {"at": NOW - 301}
+    for broken in ("garbage", "[]", json.dumps({"collection": {}}), json.dumps({"at": "yesterday"})):
+        path.write_text(broken)
+        assert alerts.read_inputs(path, NOW) is None
+
+
+def node_inputs(**fields):
+    inputs = fresh_inputs(NOW)
+    inputs["nodes"]["server-1"].update(fields)
+    return inputs
+
+
+def test_node_rules():
+    total = 100 * 10**9
+    rules = firing_rules(NOW, inputs=node_inputs(diskFree=total * 6 // 100))
+    assert {"node_server-1_disk", "node_server-1_disk_urgent"} <= set(rules)
+    assert rules["node_server-1_disk_urgent"].urgent is True and rules["node_server-1_disk"].urgent is False
+    assert "Сервер 1" in rules["node_server-1_disk"].text
+    rules = firing_rules(NOW, inputs=node_inputs(diskFree=total * 10 // 100))
+    assert "node_server-1_disk" in rules and "node_server-1_disk_urgent" not in rules
+    assert "node_server-1_disk" in firing_rules(NOW, inputs=node_inputs(diskFree=5 * 10**9, diskTotal=500 * 10**9))
+    assert "node_server-1_disk" not in firing_rules(NOW, inputs=node_inputs(diskFree=total * 13 // 100))
+
+    assert "node_server-1_memory" in firing_rules(NOW, inputs=node_inputs(memoryAvailable=int(2 * 10**9 * 0.09)))
+    assert "node_server-1_memory" not in firing_rules(NOW, inputs=node_inputs(memoryAvailable=int(2 * 10**9 * 0.11)))
+
+    assert "node_server-1_load" in firing_rules(NOW, inputs=node_inputs(load1=6.2, cpus=2))
+    assert "node_server-1_load" not in firing_rules(NOW, inputs=node_inputs(load1=6.0, cpus=2))
+    assert "node_server-1_load" not in firing_rules(NOW, inputs=node_inputs(load1=9.0, cpus=None))
+
+    silent = firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 31 * 60))
+    assert silent["node_server-1_silent"].urgent is False
+    assert "node_server-1_silent" not in firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 29 * 60))
+
+
+def test_silent_node_suppresses_its_stale_resources():
+    rules = firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 31 * 60, diskFree=1, load1=50.0))
+    assert set(rules) == {"node_server-1_silent"}
+
+
+def test_node_with_missing_values_is_skipped_not_crashing():
+    inputs = node_inputs(diskTotal=None, diskFree=None, memoryTotal=None, memoryAvailable=None, load1=None)
+    assert not firing_rules(NOW, inputs=inputs)
+
+
+def test_minute_limits_are_clamped_to_one(tmp_path, monkeypatch):
+    spool = tmp_path / "inbox"
+    spool.mkdir()
+    _server(tmp_path, monkeypatch, ALERTS_BOT_SPOOL_DIR=spool, ALERTS_BOT_MINUTES="0", ALERTS_CPU_MINUTES="0",
+            ALERTS_INGEST_MINUTES="0", ALERTS_ANALYSIS_LAG_MINUTES="0")
+    assert alerts.main() == 0
+
+
+def test_main_reads_the_inputs_file(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "alert-inputs.json"
+    _server(tmp_path, monkeypatch, ALERTS_INPUTS_PATH=path)
+    alerts.main()
+    assert "Файл замеров" in capsys.readouterr().out
+    path.write_text(json.dumps(fresh_inputs(time.time(), collection={
+        **fresh_inputs(time.time())["collection"], "max": {"hourOk": 0, "hourFailed": 0, "hourResults": 0,
+                                                              "baselineOk": 5.0, "lastOk": None, "lastResult": None}})))
+    state_before = json.loads((tmp_path / "state" / "state.json").read_text())
+    assert "inputs_stale" in state_before["active"]
+    alerts.main()
+    out = capsys.readouterr().out
+    assert "переавторизац" in out and "Прошло: Файл замеров" in out

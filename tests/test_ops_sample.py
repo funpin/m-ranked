@@ -126,13 +126,99 @@ def test_collection_window_starts_where_the_previous_sample_ended() -> None:
             class Cursor:
                 @staticmethod
                 def fetchall():
-                    return [("vk", 80, 2, 0, 1000.5), ("rutube", 0, 1, 0, None)]
+                    return [("vk", 80, 2, 0, 1000.5, 1000.9), ("rutube", 0, 1, 0, None, 990.0)]
             return Cursor()
 
     result = ops_sample.collection(Connection(), 700.0, 1000.0)
     assert calls == [{"since": 700.0, "until": 1000.0}]
-    assert result == {"vk": {"ok": 80, "failed": 2, "other": 0, "lastOk": 1000.5},
-                      "rutube": {"ok": 0, "failed": 1, "other": 0, "lastOk": None}}
+    assert result == {"vk": {"ok": 80, "failed": 2, "other": 0, "lastOk": 1000.5, "lastResult": 1000.9},
+                      "rutube": {"ok": 0, "failed": 1, "other": 0, "lastOk": None, "lastResult": 990.0}}
+
+
+def test_collection_query_reports_last_result() -> None:
+    # Последний результат любого исхода: у отозванного входа MAX его нет вовсе.
+    assert "last_result" in ops_sample.COLLECTION
+    assert "max(result.completed_at)" in ops_sample.COLLECTION
+
+
+def row(**platforms):
+    return {name: {"ok": ok, "failed": failed, "other": other, "lastOk": last_ok, "lastResult": last_result}
+            for name, (ok, failed, other, last_ok, last_result) in platforms.items()}
+
+
+def test_summarize_collection() -> None:
+    hour = [row(telegram=(3, 1, 0, 100.0, 110.0)),
+            {},
+            None,
+            row(telegram=(2, 0, 1, 120.0, 130.0), vk=(5, 5, 0, 90.0, 95.0))]
+    # Три часа: час целиком плюс два предыдущих; значения последних результатов — максимум.
+    window = hour + [row(telegram=(9, 9, 9, 50.0, 60.0), max=(0, 4, 0, None, 70.0))]
+    # Старые строки без lastResult: последним результатом считается последний успех.
+    window.append({"rutube": {"ok": 1, "failed": 0, "other": 0, "lastOk": 80.0}})
+    baseline = [[row(telegram=(10, 0, 0, 1.0, 1.0))],
+                [row(telegram=(20, 5, 0, 1.0, 1.0)), row(telegram=(5, 0, 0, 1.0, 1.0))],
+                [],
+                [row(vk=(1, 0, 0, 1.0, 1.0))]]
+    result = ops_sample.summarize_collection(hour, window, baseline)
+    assert result["telegram"] == {"hourOk": 5, "hourFailed": 1, "hourResults": 7, "baselineOk": 10.0,
+                                  "lastOk": 120.0, "lastResult": 130.0}
+    # Неделя без строк не считается, неделя со строками без площадки считается нулём.
+    assert result["vk"]["baselineOk"] == 0.0 and result["vk"]["hourOk"] == 5
+    assert result["vk"]["hourResults"] == 10
+    assert result["max"] == {"hourOk": 0, "hourFailed": 0, "hourResults": 0, "baselineOk": 0.0,
+                             "lastOk": None, "lastResult": 70.0}
+    assert result["rutube"]["lastOk"] == 80.0 and result["rutube"]["lastResult"] == 80.0
+    assert ops_sample.summarize_collection([], [], [[], [], [], []]) == {}
+    only = ops_sample.summarize_collection(hour, hour, [[], [], [], []])
+    assert only["telegram"]["baselineOk"] is None
+
+
+def test_baseline_is_median_of_weekly_sums() -> None:
+    weeks = [[row(telegram=(value, 0, 0, 1.0, 1.0))] for value in (10, 40, 20, 30)]
+    result = ops_sample.summarize_collection([row(telegram=(1, 0, 0, 1.0, 1.0))], [], weeks)
+    assert result["telegram"]["baselineOk"] == 25.0
+    # Ключ из окна без часа не теряется: у площадки только прошлые недели.
+    result = ops_sample.summarize_collection([], [], weeks)
+    assert result["telegram"]["hourOk"] == 0 and result["telegram"]["baselineOk"] == 25.0
+
+
+def test_page_p95_median_skips_missing_values() -> None:
+    assert ops_sample.page_p95_median([None, 1.0, 3.0, None, 2.0]) == 2.0
+    assert ops_sample.page_p95_median([None, None]) is None
+    assert ops_sample.page_p95_median([]) is None
+
+
+def test_node_inputs_keep_resources_and_cpu_count() -> None:
+    rows = [("server-1", "Сервер 1 · сбор", "1", 1000.5, 100, 40, 200, 80, 0.61),
+            ("storage-1", "Хранилище", None, 900.0, None, None, None, None, None)]
+    nodes = ops_sample.node_inputs(rows)
+    assert nodes["server-1"] == {"name": "Сервер 1 · сбор", "observedAt": 1000.5, "diskTotal": 100, "diskFree": 40,
+                                 "memoryTotal": 200, "memoryAvailable": 80, "load1": 0.61, "cpus": 1}
+    # Узел без показателей остаётся: по его возрасту тревога «молчит» всё равно считается.
+    assert nodes["storage-1"]["observedAt"] == 900.0 and nodes["storage-1"]["load1"] is None
+    assert nodes["storage-1"]["cpus"] is None
+
+
+def test_alert_inputs_file_is_atomic_and_world_readable(tmp_path: Path) -> None:
+    path = tmp_path / "state" / "alert-inputs.json"
+    path.parent.mkdir()
+    ops_sample.write_alert_inputs(path, {"at": 1.0, "collection": {}})
+    assert json.loads(path.read_text()) == {"at": 1.0, "collection": {}}
+    assert path.stat().st_mode & 0o777 == 0o644
+    assert [item.name for item in path.parent.iterdir()] == ["alert-inputs.json"]
+    ops_sample.write_alert_inputs(path, {"at": 2.0})
+    assert json.loads(path.read_text()) == {"at": 2.0}
+
+
+def test_alert_inputs_errors_never_break_the_sample(caplog) -> None:
+    class Connection:
+        def execute(self, *args):
+            raise RuntimeError("secret detail")
+
+    import logging
+    with caplog.at_level(logging.WARNING, logger="ops-sample"):
+        assert ops_sample.refresh_alert_inputs(Connection(), 1000.0, Path("/nonexistent/dir/x.json")) is False
+    assert "RuntimeError" in caplog.text and "secret detail" not in caplog.text
 
 
 def test_backups_list_copies_running_state_and_request(tmp_path: Path) -> None:
@@ -152,3 +238,37 @@ def test_backups_list_copies_running_state_and_request(tmp_path: Path) -> None:
     assert result["files"][1]["verified"] and not result["files"][0]["verified"]
     assert result["running"] and result["requested"] and result["lastExitStatus"] == 0
     assert ops_sample.backups(tmp_path / "none", request, run) is None
+
+
+def test_refresh_builds_file_from_the_three_queries(tmp_path: Path) -> None:
+    now = 1_000_000.0
+    seen = []
+
+    class Connection:
+        def execute(self, sql, params=None):
+            seen.append((sql, params))
+
+            class Cursor:
+                @staticmethod
+                def fetchall():
+                    if sql is ops_sample.RECENT_SAMPLES:
+                        # Новые первыми; последняя строка старше часа, p95 у части строк пуст.
+                        return [({"vk": {"ok": 4, "failed": 0, "other": 0, "lastOk": now - 5, "lastResult": now - 5}},
+                                 "2.0", now - 10),
+                                ({}, None, now - 70),
+                                ({"vk": {"ok": 9, "failed": 1, "other": 0, "lastOk": now - 7000,
+                                         "lastResult": now - 7000}}, "4.0", now - 7000)]
+                    if sql is ops_sample.WEEKLY_SAMPLES:
+                        return [(1, {"vk": {"ok": 8}}), (3, {"vk": {"ok": 12}}), (3, {})]
+                    return [("server-1", "Сервер 1", "2", now - 20, 100, 50, 10, 5, 0.5)]
+            return Cursor()
+
+    path = tmp_path / "alert-inputs.json"
+    assert ops_sample.refresh_alert_inputs(Connection(), now, path) is True
+    written = json.loads(path.read_text())
+    assert written["at"] == now and written["pageP95Median15m"] == 3.0
+    assert written["collection"]["vk"] == {"hourOk": 4, "hourFailed": 0, "hourResults": 4, "baselineOk": 10.0,
+                                           "lastOk": now - 5, "lastResult": now - 5}
+    assert written["nodes"]["server-1"]["cpus"] == 2
+    assert [item[0] for item in seen] == [ops_sample.RECENT_SAMPLES, ops_sample.WEEKLY_SAMPLES,
+                                          ops_sample.NODE_SAMPLES]
