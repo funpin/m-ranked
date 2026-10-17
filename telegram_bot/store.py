@@ -50,7 +50,7 @@ class Recipient:
 
 class Store(Protocol):
     async def get_setting(self, key: str) -> Any: ...
-    async def set_setting(self, key: str, value: Any, by: int) -> None: ...
+    async def set_setting(self, key: str, value: Any, by: int | None) -> None: ...
     async def recipients(self) -> list[Recipient]: ...
     async def upsert_recipient(self, r: Recipient, by: int | None) -> None: ...
     async def remove_recipient(self, chat_id: int) -> None: ...
@@ -85,7 +85,7 @@ class MemoryStore:
     async def get_setting(self, key: str) -> Any:
         return copy.deepcopy(self._settings.get(key))
 
-    async def set_setting(self, key: str, value: Any, by: int) -> None:
+    async def set_setting(self, key: str, value: Any, by: int | None) -> None:
         self._settings[key] = copy.deepcopy(value)
 
     async def recipients(self) -> list[Recipient]:
@@ -230,7 +230,7 @@ class PostgresStore:
         return await self._value(
             "SELECT value FROM ops_and_admin.bot_setting WHERE key = %(key)s", {"key": key})
 
-    async def set_setting(self, key: str, value: Any, by: int) -> None:
+    async def set_setting(self, key: str, value: Any, by: int | None) -> None:
         await self._rows(
             "INSERT INTO ops_and_admin.bot_setting(key, value, updated_at, updated_by) "
             "VALUES (%(key)s, %(value)s, now(), %(by)s) "

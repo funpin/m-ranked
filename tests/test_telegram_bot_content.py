@@ -48,6 +48,7 @@ class FakeSource(_HandlersSource):
         self.spikes: list[dict] = []
         self.anomalies: list[dict] = []
         self.findings_args: list[dict] = []
+        self.top_queries: list = []
         self.forecast_down = False
 
     async def findings(self, *, institution, platform, period, suspicious) -> dict:
@@ -57,6 +58,13 @@ class FakeSource(_HandlersSource):
         if suspicious:
             return {"items": copy.deepcopy(self.spikes)}
         return fixture("findings_all.json" if institution is None else "findings_institution.json")
+
+    async def top_body(self, query, our_id) -> dict:
+        # Как ApiSource.top_body для «наших»: один запрос «Находок» (догрузку
+        # площадок проверяет test_digest_ours_uses_top_body_with_platform_top_up).
+        self.top_queries.append(query)
+        return await self.findings(institution=our_id, platform=query.platform,
+                                   period=query.period, suspicious=query.suspicious)
 
     async def anomalous(self, *, institution, period) -> dict:
         self._call("anomalous")
@@ -355,6 +363,8 @@ def test_digest_contents():
     # Дайджест читает без аномалий: подозрительные посты в «лучшие» не попадают.
     assert all(call["suspicious"] is False for call in source.findings_args)
     assert {call["institution"] for call in source.findings_args} == {OUR_ID, None}
+    from telegram_bot.words import TopQuery
+    assert source.top_queries == [TopQuery()]   # наши лучшие — как /top по умолчанию
 
 
 def test_digest_without_forecast_and_previous():
@@ -385,3 +395,119 @@ def test_send_digest_here_without_our_institution():
     bot, telegram, _, _ = make(our=None)
     run(bot.send_digest_here(GROUP))
     assert group_texts(telegram) == ["админ ещё не выбрал наш вуз: /settings"]
+
+
+# --- смена «нашего вуза» -------------------------------------------------------
+
+def test_changed_institution_seeds_silently_then_announces_new_posts():
+    bot, telegram, source, store = make()
+    seeded(store, "spike")
+    seeded(store, "anomaly")
+    source.spikes, source.anomalies = [post("a")], [flagged("x", 3)]
+    assert run(content.check_spikes(bot)) == 1
+    assert run(content.check_anomalies(bot)) == 1
+    # Админ сменил наш вуз: свежие посты нового вуза — история, а не новость.
+    run(store.set_setting(OUR_INSTITUTION, 12, 7))
+    source.spikes = [post("b"), post("c")]
+    source.anomalies = [flagged("y", 2), flagged("z", 3)]
+    assert run(content.check_spikes(bot)) == 0
+    assert run(content.check_anomalies(bot)) == 0
+    assert len(group_texts(telegram)) == 2
+    assert source.findings_args[-1]["institution"] == 12
+    # Следующий прогон объявляет только новое.
+    source.spikes.append(post("d"))
+    source.anomalies.append(flagged("w", 2))
+    assert run(content.check_spikes(bot)) == 1
+    assert run(content.check_anomalies(bot)) == 1
+    assert len(group_texts(telegram)) == 4
+
+
+def test_same_institution_does_not_seed_again():
+    bot, telegram, source, store = make()
+    assert run(content.check_spikes(bot)) == 0       # первый прогон на установке — пустой
+    run(store.set_setting(OUR_INSTITUTION, OUR_ID, 7))  # админ выбрал тот же вуз
+    source.spikes = [post("a")]
+    assert run(content.check_spikes(bot)) == 1
+    assert len(group_texts(telegram)) == 1
+
+
+def test_source_down_after_institution_change_keeps_seeding_pending():
+    bot, telegram, source, store = make()
+    seeded(store, "spike")
+    run(content.check_spikes(bot))
+    run(store.set_setting(OUR_INSTITUTION, 12, 7))
+    source.down = True
+    assert run(content.check_spikes(bot)) == 0
+    source.down = False
+    source.spikes = [post("b")]
+    assert run(content.check_spikes(bot)) == 0       # засев не потерялся из-за сбоя API
+    assert group_texts(telegram) == []
+
+
+# --- дайджест: наши посты как в /top ------------------------------------------
+
+def test_digest_ours_uses_top_body_with_platform_top_up():
+    import httpx
+
+    from telegram_bot.source import ApiSource, make_client
+
+    base = fixture("findings_institution.json")
+    base["hasMore"] = True
+    base["items"] = [i for i in base["items"] if i["platform"] != "vk"]  # ВК не попал на страницу
+    vk_body = fixture("findings_institution.json")
+    vk_body["items"] = [i for i in vk_body["items"] if i["platform"] == "vk"]
+    seen: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        seen.append({"path": request.url.path, **params})
+        if request.url.path == "/api/v1/compare/dashboard":
+            return httpx.Response(200, json=fixture("dashboard.json"))
+        if request.url.path == "/api/v1/rating/forecast":
+            return httpx.Response(200, json=fixture("forecast.json"))
+        if params.get("mode") == "all":
+            return httpx.Response(200, json=fixture("findings_all.json"))
+        return httpx.Response(200, json=vk_body if params.get("platform") == "vk" else base)
+
+    bot, telegram, _, _ = make()
+    bot.source = ApiSource(make_client("http://api.test", transport=httpx.MockTransport(handler)))
+    messages = run(content.build_digest(bot))
+    ours = "\n".join(m.text for m in messages).split("Лучшие у других вузов")[0]
+    assert "ВКонтакте" in ours
+    ours_requests = [r for r in seen if r.get("mode") == "institution"]
+    assert [r["platform"] for r in ours_requests][0] == "all"
+    assert "vk" in [r["platform"] for r in ours_requests]
+    assert all(r["anomalies"] == "exclude" and r["period"] == "7d" for r in ours_requests)
+
+
+# --- дайджест: недоставленный не отмечается -----------------------------------
+
+def test_digest_not_marked_when_telegram_failed_for_everyone():
+    bot, telegram, _, store = make()
+    telegram.failing = {PERSON, GROUP}
+    run(content.send_digest(bot))
+    assert run(store.job_last_run("digest")) is None   # следующий тик повторит
+    telegram.failing = set()
+    run(content.send_digest(bot))
+    assert group_texts(telegram) and run(store.job_last_run("digest")) == bot.clock()
+
+
+def test_digest_marked_when_delivered_to_someone():
+    bot, telegram, _, store = make()
+    telegram.failing = {PERSON}
+    run(content.send_digest(bot))
+    assert group_texts(telegram) and run(store.job_last_run("digest")) == bot.clock()
+
+
+def test_digest_marked_without_digest_recipients():
+    bot, telegram, _, store = make(recipients=[Recipient(PERSON, "person", "человек")])
+    run(content.send_digest(bot))
+    assert telegram.of("send") == [] and run(store.job_last_run("digest")) == bot.clock()
+
+
+def test_digest_marked_when_nobody_can_receive_it_anyway():
+    # Человек ещё не нажал /start: повтор каждую минуту ему не поможет.
+    bot, telegram, _, store = make(recipients=[Recipient(PERSON, "person", "человек", digest=True)])
+    telegram.not_started = {PERSON}
+    run(content.send_digest(bot))
+    assert run(store.job_last_run("digest")) == bot.clock()

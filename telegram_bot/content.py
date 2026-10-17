@@ -26,6 +26,7 @@ from .render import (
 )
 from .source import SourceUnavailable
 from .store import OUR_INSTITUTION
+from .words import TopQuery
 
 if TYPE_CHECKING:
     from .handlers import Bot
@@ -45,6 +46,8 @@ SPIKE = "spike"
 ANOMALY = "anomaly"
 LEVEL_CONFIDENT = 2
 LEVEL_EXPLICIT = 3
+# Для какого «нашего вуза» уже засеяны объявленные посты (настройка на вид).
+SEEDED_FOR = {SPIKE: "spike_seeded_for", ANOMALY: "anomaly_seeded_for"}
 
 
 class NoOurInstitution(Exception):
@@ -123,6 +126,25 @@ def _publication_id(item: dict[str, Any]) -> str | None:
     return None if value is None else str(value)
 
 
+async def _seeding(bot: Bot, kind: str, job: str, our: int) -> bool:
+    """Первый прогон для этого вуза только запоминает посты, ничего не объявляя.
+
+    Вуз уже засеян — не засеваем. Засеян другой (админ сменил наш вуз) —
+    засеваем: свежие посты нового вуза — история, а не новость. Отметки нет —
+    свежая установка: засеваем, только если ещё ничего не объявлено и задача
+    ни разу не прошла, чтобы пустой первый прогон не съел первый настоящий пост.
+    """
+    seeded_for = await bot.store.get_setting(SEEDED_FOR[kind])
+    if seeded_for is not None:
+        return seeded_for != our
+    return not await bot.store.has_announced_any(kind) and await bot.store.job_last_run(job) is None
+
+
+async def _mark_seeded(bot: Bot, kind: str, our: int) -> None:
+    if await bot.store.get_setting(SEEDED_FOR[kind]) != our:
+        await bot.store.set_setting(SEEDED_FOR[kind], our, None)
+
+
 # --- «выстрелил» --------------------------------------------------------------
 
 def _is_spike(item: dict[str, Any]) -> bool:
@@ -157,7 +179,7 @@ async def check_spikes(bot: Bot) -> int:
         log.warning("spikes: %s", type(error).__name__)
         return 0
     store = bot.store
-    seeding = not await store.has_announced_any(SPIKE) and await store.job_last_run("spikes") is None
+    seeding = await _seeding(bot, SPIKE, "spikes", our)
     announced = 0
     for item in body.get("items") or []:
         publication = _publication_id(item)
@@ -167,6 +189,7 @@ async def check_spikes(bot: Bot) -> int:
             continue  # первый прогон только запоминает: старое не объявляем
         await bot.broadcast(spike_message(item), SPIKE)
         announced += 1
+    await _mark_seeded(bot, SPIKE, our)
     await store.set_job_run("spikes", bot.clock())
     return announced
 
@@ -193,8 +216,7 @@ async def check_anomalies(bot: Bot) -> int:
         log.warning("anomalies: %s", type(error).__name__)
         return 0
     store = bot.store
-    seeding = (not await store.has_announced_any(ANOMALY)
-               and await store.job_last_run("anomalies") is None)
+    seeding = await _seeding(bot, ANOMALY, "anomalies", our)
     announced = 0
     for item in body.get("items") or []:
         publication, level = _publication_id(item), item.get("anomalyLevel")
@@ -205,6 +227,7 @@ async def check_anomalies(bot: Bot) -> int:
             continue
         await bot.broadcast(anomaly_message(item, level), ANOMALY)
         announced += 1
+    await _mark_seeded(bot, ANOMALY, our)
     await store.set_job_run("anomalies", bot.clock())
     return announced
 
@@ -235,8 +258,9 @@ async def build_digest(bot: Bot) -> list[Message]:
     our = await _our(bot)
     if our is None:
         raise NoOurInstitution
-    ours = await bot.source.findings(institution=our, platform="all", period=PERIOD,
-                                     suspicious=False)
+    # Как /top по умолчанию (наши, все площадки, 7 дней, без аномалий): с догрузкой
+    # площадки, которой не хватило постов на первой странице.
+    ours = await bot.source.top_body(TopQuery(), our)
     others = await bot.source.findings(institution=None, platform="all", period=PERIOD,
                                        suspicious=False)
     dashboard = await bot.source.dashboard()
@@ -259,5 +283,9 @@ async def send_digest(bot: Bot) -> None:
     except SourceUnavailable as error:
         log.warning("digest: %s", type(error).__name__)
         return
-    await bot.broadcast(messages, "digest")
+    result = await bot.broadcast_report(messages, "digest")
+    if result.delivered == 0 and result.transient > 0:
+        # Telegram моргнул для всех: не отмечаем, следующий тик повторит.
+        log.warning("digest: не доставлен никому, повтор")
+        return
     await bot.store.set_job_run("digest", bot.clock())

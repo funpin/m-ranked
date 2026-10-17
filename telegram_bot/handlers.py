@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -63,6 +63,12 @@ STATUS_COMMAND = ("status", "главные проверки сервера и �
 SETTINGS_COMMAND = ("settings", "наш вуз, чат, люди и подписки")
 _MEMBER_STATUSES = frozenset({"member", "administrator", "creator"})
 _GONE_STATUSES = frozenset({"left", "kicked"})
+
+
+@dataclass(frozen=True)
+class BroadcastResult:
+    delivered: int  # скольким дошли все части
+    transient: int  # скольким не дошло из-за временного сбоя Telegram
 
 
 class _NoOurs(Exception):
@@ -159,6 +165,12 @@ class Bot:
     async def broadcast(self, text_or_messages: str | Message | list[Message], flag: Flag) -> int:
         """Разослать всем с флагом; вернуть, скольким дошли все части.
         Тревоги — только людям, что бы ни лежало в хранилище."""
+        return (await self.broadcast_report(text_or_messages, flag)).delivered
+
+    async def broadcast_report(self, text_or_messages: str | Message | list[Message],
+                               flag: Flag) -> BroadcastResult:
+        """То же, что broadcast, но ещё и сколько получателей не получили из-за
+        временного сбоя Telegram (их стоит попробовать ещё раз)."""
         if flag not in FLAGS:
             raise ValueError(f"неизвестный флаг рассылки: {flag!r}")
         if isinstance(text_or_messages, str):
@@ -167,7 +179,7 @@ class Bot:
             messages = [text_or_messages]
         else:
             messages = list(text_or_messages)
-        delivered = 0
+        delivered = transient = 0
         for r in await self.store.recipients():
             if not getattr(r, flag) or (flag == "alerts" and r.kind != "person"):
                 continue
@@ -184,9 +196,10 @@ class Bot:
                 continue
             except TelegramError as error:
                 log.warning("broadcast %s: %s", flag, type(error).__name__)
+                transient += 1
                 continue
             delivered += 1
-        return delivered
+        return BroadcastResult(delivered, transient)
 
     # --- отправка -------------------------------------------------------
 

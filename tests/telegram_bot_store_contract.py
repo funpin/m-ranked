@@ -135,6 +135,8 @@ async def settings_roundtrip(env) -> None:
     assert await store.get_setting("our_institution") == 7
     await store.set_setting("complex", {"a": [1, "б", None], "b": {"c": True}}, by=2)
     assert await store.get_setting("complex") == {"a": [1, "б", None], "b": {"c": True}}
+    await store.set_setting("spike_seeded_for", 7, by=None)  # пишет сам бот, не админ
+    assert await store.get_setting("spike_seeded_for") == 7
 
 
 async def week_snapshot_roundtrip(env) -> None:
