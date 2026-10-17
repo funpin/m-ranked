@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Тревоги Сервера 2 в Telegram: раз в минуту, без отдельного стека мониторинга.
+"""Тревоги Сервера 2: раз в минуту, без отдельного стека мониторинга.
 
 Читает то, что уже пишется на машине: хвост журнала nginx с классом клиента
 и исходом кэша (формат m_ranked_traffic), файлы метрик служб, свободное место,
-нагрузку и упавшие юниты m-ranked. Сообщение уходит при входе в проблему, при
+нагрузку и упавшие юниты m-ranked. Событие рождается при входе в проблему, при
 выходе из неё и повторно раз в REPEAT_SECONDS, пока проблема держится.
 
+Сюда в сеть не ходим: событие печатается в журнал службы и, если есть каталог
+очереди ALERTS_BOT_SPOOL_DIR, кладётся туда JSON-файлом для Telegram-бота.
+
 Состояние (позиция в журнале, поминутные счётчики, открытые тревоги) лежит в
-STATE_DIR. Без токена бота тревоги только пишутся в журнал службы.
+STATE_DIR.
 """
 
 from __future__ import annotations
@@ -22,12 +25,12 @@ import shutil
 import subprocess
 import sys
 import time
-import urllib.parse
-import urllib.request
+from typing import Literal
 
 BOT_CLASSES = ("ai_user", "ai_search", "ai_training", "crawler")
 WINDOW_MINUTES = 5
 REPEAT_SECONDS = 6 * 3600
+SPOOL_LIMIT = 500  # файлов очереди; при переполнении самые старые отбрасываются
 
 # 127.0.0.1 [25/Sep/2026:22:55:35 +0300] "GET / HTTP/1.1" 200 724 0.000 human HIT "UA"
 LINE = re.compile(
@@ -40,6 +43,16 @@ class Rule:
     key: str
     firing: bool
     text: str
+    urgent: bool = False
+
+
+@dataclass(frozen=True)
+class Event:
+    key: str
+    kind: Literal["open", "repeat", "resolve"]
+    urgent: bool
+    text: str
+    since: float
 
 
 def env_int(name: str, default: int) -> int:
@@ -207,38 +220,54 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], *, disk_free: 
     return rules
 
 
-def transitions(rules: list[Rule], state: dict, now: float) -> list[str]:
-    """Что отправить: вход в тревогу, выход из неё и напоминание раз в REPEAT_SECONDS."""
+def transitions(rules: list[Rule], state: dict, now: float) -> list[Event]:
+    """Что произошло: вход в тревогу, выход из неё и напоминание раз в REPEAT_SECONDS."""
     active = state.setdefault("active", {})
-    messages = []
+    events = []
     for rule in rules:
         opened = active.get(rule.key)
         if rule.firing and opened is None:
             active[rule.key] = {"since": now, "sent": now}
-            messages.append(f"🔴 {rule.text}")
+            events.append(Event(rule.key, "open", rule.urgent, rule.text, now))
         elif rule.firing and now - opened["sent"] >= REPEAT_SECONDS:
             opened["sent"] = now
-            messages.append(f"🔴 Всё ещё: {rule.text} (с {time.strftime('%d.%m %H:%M', time.localtime(opened['since']))})")
+            events.append(Event(rule.key, "repeat", rule.urgent, rule.text, opened["since"]))
         elif not rule.firing and opened is not None:
             del active[rule.key]
-            messages.append(f"🟢 Прошло: {rule.text}")
-    return messages
+            events.append(Event(rule.key, "resolve", rule.urgent, rule.text, opened["since"]))
+    return events
 
 
-def send(token: str, chat: str, text: str) -> None:
-    body = urllib.parse.urlencode({"chat_id": chat, "text": text, "disable_web_page_preview": "true"}).encode()
-    request = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body)
-    with urllib.request.urlopen(request, timeout=15) as response:
-        response.read()
+def format_event(event: Event) -> str:
+    if event.kind == "open":
+        return f"🔴 {event.text}"
+    if event.kind == "repeat":
+        return f"🔴 Всё ещё: {event.text} (с {time.strftime('%d.%m %H:%M', time.localtime(event.since))})"
+    return f"🟢 Прошло: {event.text}"
 
 
-def token() -> str:
-    """Токен бота — файл 0600, который кладёт владелец; без него тревоги только в журнал."""
-    path = Path(os.environ.get("ALERTS_TELEGRAM_TOKEN_FILE", "/etc/m-ranked/credentials/alerts-telegram-token"))
+def write_event(spool: Path, event: Event, server: str, now: float) -> None:
+    """Положить событие в очередь бота: временный файл, затем атомарное переименование.
+
+    Служба работает с UMask=0077, а бот читает очередь от своего пользователя,
+    поэтому права файла выставляются явно.
+    """
+    existing = sorted(path.name for path in spool.glob("*.json"))
+    for name in existing[:max(0, len(existing) - SPOOL_LIMIT + 1)]:
+        (spool / name).unlink(missing_ok=True)
+    name = f"{time.time_ns()}-{event.key}.json"
+    payload = {"version": 1, "server": server, "key": event.key, "kind": event.kind, "urgent": event.urgent,
+               "text": event.text, "since": event.since, "at": now}
+    temporary = spool / f".{name}.tmp"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        return path.read_text().strip()
-    except OSError:
-        return ""
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            os.fchmod(stream.fileno(), 0o644)
+            json.dump(payload, stream, ensure_ascii=False)
+        os.replace(temporary, spool / name)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def main() -> int:
@@ -268,22 +297,19 @@ def main() -> int:
         disk_free=disk.free, disk_total=disk.total, load5=os.getloadavg()[1], failed=failed_units(),
         dump_mtime=newest_dump(Path(os.environ.get("ALERTS_BACKUP_DIR", "/var/backups/m-ranked"))),
         limits=limits)
-    messages = transitions(rules, state, now)
-    bot, chat = token(), os.environ.get("ALERTS_TELEGRAM_CHAT_ID", "")
-    unsent = []
-    for message in messages:
-        print(message, flush=True)
-        if bot and chat:
-            try:
-                send(bot, chat, f"m-ranked · Сервер 2\n{message}")
-            except OSError as error:
-                print(f"telegram send failed class={type(error).__name__}", file=sys.stderr)
-                unsent.append(message)
-    if unsent:
-        # Не удалось отправить — откатить отметку, чтобы попробовать в следующую минуту.
-        for rule in rules:
-            if any(rule.text in message for message in unsent) and rule.firing:
-                state["active"].pop(rule.key, None)
+    spool = Path(os.environ.get("ALERTS_BOT_SPOOL_DIR", "/var/lib/m-ranked/telegram-bot/inbox"))
+    server = os.environ.get("ALERTS_SERVER_NAME", "Сервер 2")
+    for event in transitions(rules, state, now):
+        print(format_event(event), flush=True)
+        if not spool.is_dir():
+            continue
+        try:
+            write_event(spool, event, server, now)
+        except OSError as error:
+            print(f"spool write failed class={type(error).__name__}", file=sys.stderr)
+            if event.kind == "open":
+                # Не удалось записать — откатить отметку, чтобы попробовать в следующую минуту.
+                state["active"].pop(event.key, None)
     state_dir.mkdir(parents=True, exist_ok=True)
     temporary = state_path.with_suffix(".tmp")
     temporary.write_text(json.dumps(state))

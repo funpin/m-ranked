@@ -1,7 +1,9 @@
 """Тревоги Сервера 2: разбор журнала nginx, пороги и порядок сообщений."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
+import time
 
 import pytest
 
@@ -91,12 +93,37 @@ def test_missing_backup_metric_falls_back_to_the_newest_dump():
 def test_alert_is_sent_on_entry_repeat_and_resolution_only():
     state, now = {}, 1_800_000_000.0
     fire = [alerts.Rule("disk", True, "мало места")]
-    assert alerts.transitions(fire, state, now) == ["🔴 мало места"]
+    assert [alerts.format_event(event) for event in alerts.transitions(fire, state, now)] == ["🔴 мало места"]
     assert alerts.transitions(fire, state, now + 60) == []
-    assert alerts.transitions(fire, state, now + alerts.REPEAT_SECONDS)[0].startswith("🔴 Всё ещё: мало места")
-    assert alerts.transitions([alerts.Rule("disk", False, "места хватает")], state, now + 7 * 3600) == [
-        "🟢 Прошло: места хватает"]
+    repeat = alerts.transitions(fire, state, now + alerts.REPEAT_SECONDS)
+    assert alerts.format_event(repeat[0]).startswith("🔴 Всё ещё: мало места")
+    resolved = alerts.transitions([alerts.Rule("disk", False, "места хватает")], state, now + 7 * 3600)
+    assert [alerts.format_event(event) for event in resolved] == ["🟢 Прошло: места хватает"]
     assert state["active"] == {}
+
+
+def test_transitions_return_events():
+    state, now = {}, 1_800_000_000.0
+    fire = [alerts.Rule("disk", True, "мало места", urgent=True), alerts.Rule("load", True, "нагрузка")]
+    opened = alerts.transitions(fire, state, now)
+    assert opened == [alerts.Event("disk", "open", True, "мало места", now),
+                      alerts.Event("load", "open", False, "нагрузка", now)]
+    repeated = alerts.transitions(fire, state, now + alerts.REPEAT_SECONDS + 1)
+    assert [(event.key, event.kind, event.urgent, event.since) for event in repeated] == [
+        ("disk", "repeat", True, now), ("load", "repeat", False, now)]
+    quiet = [alerts.Rule("disk", False, "места хватает", urgent=True), alerts.Rule("load", True, "нагрузка")]
+    resolved = alerts.transitions(quiet, state, now + alerts.REPEAT_SECONDS + 2)
+    assert resolved == [alerts.Event("disk", "resolve", True, "места хватает", now)]
+
+
+def test_format_event_keeps_current_texts():
+    since = 1_800_000_000.0
+    stamp = time.strftime("%d.%m %H:%M", time.localtime(since))
+    assert alerts.format_event(alerts.Event("disk", "open", False, "мало места", since)) == "🔴 мало места"
+    assert alerts.format_event(alerts.Event("disk", "repeat", False, "мало места", since)) == (
+        f"🔴 Всё ещё: мало места (с {stamp})")
+    assert alerts.format_event(alerts.Event("disk", "resolve", False, "места хватает", since)) == (
+        "🟢 Прошло: места хватает")
 
 
 def test_metrics_files_are_read_by_full_series_name(tmp_path):
@@ -106,34 +133,75 @@ def test_metrics_files_are_read_by_full_series_name(tmp_path):
 
 def _server(tmp_path, monkeypatch, **env):
     """Сервер без бэкапа и метрик: тревоги точно будут."""
-    monkeypatch.delenv("ALERTS_TELEGRAM_CHAT_ID", raising=False)
     for name, value in {"ALERTS_STATE_DIR": tmp_path / "state", "ALERTS_ACCESS_LOG": tmp_path / "access.log",
                         "ALERTS_METRICS_DIR": tmp_path / "metrics", "ALERTS_BACKUP_DIR": tmp_path / "backups",
-                        "ALERTS_TELEGRAM_TOKEN_FILE": tmp_path / "no-token", **env}.items():
+                        "ALERTS_BOT_SPOOL_DIR": tmp_path / "no-spool", **env}.items():
         monkeypatch.setenv(name, str(value))
     monkeypatch.setattr(alerts, "failed_units", lambda: [])
 
 
-def test_without_telegram_alerts_go_to_the_journal_only(tmp_path, monkeypatch, capsys):
-    # Telegram необязателен: без токена и чата тревоги пишутся в журнал службы,
-    # запуск успешен, и в сеть ничего не уходит.
+def test_write_event_is_atomic_and_world_readable(tmp_path):
+    spool = tmp_path / "inbox"
+    spool.mkdir()
+    event = alerts.Event("disk", "open", True, "мало места", 1_800_000_000.0)
+    alerts.write_event(spool, event, "Сервер 2", 1_800_000_060.5)
+    files = list(spool.iterdir())
+    assert len(files) == 1 and files[0].suffix == ".json" and files[0].name.endswith("-disk.json")
+    assert files[0].stat().st_mode & 0o777 == 0o644
+    assert json.loads(files[0].read_text()) == {
+        "version": 1, "server": "Сервер 2", "key": "disk", "kind": "open", "urgent": True,
+        "text": "мало места", "since": 1_800_000_000.0, "at": 1_800_000_060.5}
+
+
+def test_spool_is_capped_at_500_files(tmp_path):
+    spool = tmp_path / "inbox"
+    spool.mkdir()
+    for number in range(500):
+        (spool / f"{number:019d}-disk.json").write_text("{}")
+    alerts.write_event(spool, alerts.Event("load", "open", False, "нагрузка", 1.0), "Сервер 2", 2.0)
+    names = sorted(path.name for path in spool.glob("*.json"))
+    assert len(names) == 500
+    assert f"{0:019d}-disk.json" not in names and f"{1:019d}-disk.json" in names
+    assert names[-1].endswith("-load.json")
+
+
+def test_without_spool_dir_only_prints(tmp_path, monkeypatch, capsys):
     _server(tmp_path, monkeypatch)
-    monkeypatch.setattr(alerts, "send", lambda *args: (_ for _ in ()).throw(AssertionError("send without Telegram")))
     assert alerts.main() == 0
     assert capsys.readouterr().out.strip()
+    assert not (tmp_path / "no-spool").exists()
     assert (tmp_path / "state" / "state.json").exists()
 
 
-def test_unreachable_telegram_does_not_break_the_run(tmp_path, monkeypatch, capsys):
-    token = tmp_path / "token"
-    token.write_text("123:abc\n")
-    _server(tmp_path, monkeypatch, ALERTS_TELEGRAM_TOKEN_FILE=token, ALERTS_TELEGRAM_CHAT_ID="42")
-
-    def unreachable(*args):
-        raise OSError("network is unreachable")
-    monkeypatch.setattr(alerts, "send", unreachable)
+def test_events_reach_the_spool_when_it_exists(tmp_path, monkeypatch, capsys):
+    spool = tmp_path / "inbox"
+    spool.mkdir()
+    _server(tmp_path, monkeypatch, ALERTS_BOT_SPOOL_DIR=spool, ALERTS_SERVER_NAME="Сервер Т")
     assert alerts.main() == 0
-    assert "telegram send failed" in capsys.readouterr().err
+    printed = capsys.readouterr().out.strip().splitlines()
+    payloads = [json.loads(path.read_text()) for path in spool.glob("*.json")]
+    assert payloads and len(payloads) == len(printed)
+    assert {payload["server"] for payload in payloads} == {"Сервер Т"}
+    assert {payload["kind"] for payload in payloads} == {"open"}
+
+
+def test_spool_failure_reopens_next_minute(tmp_path, monkeypatch, capsys):
+    spool = tmp_path / "inbox"
+    spool.mkdir()
+    _server(tmp_path, monkeypatch, ALERTS_BOT_SPOOL_DIR=spool)
+
+    def broken(*args):
+        raise OSError("disk full")
+    monkeypatch.setattr(alerts, "write_event", broken)
+    assert alerts.main() == 0
+    assert "spool write failed" in capsys.readouterr().err
+    state = json.loads((tmp_path / "state" / "state.json").read_text())
+    assert state["active"] == {}
+
+
+def test_no_direct_telegram_path():
+    assert not hasattr(alerts, "send")
+    assert "api.telegram.org" not in SCRIPT.read_text()
 
 
 @pytest.mark.parametrize(("accounts", "remaining", "firing"), [
@@ -164,7 +232,7 @@ def test_renewed_reference_resolves_existing_alert():
     assert alerts.transitions(first, state, now + 60) == []
     values["mranked_anomaly_reference_expires_at_unixtime"] = now + 28 * 86400
     renewed = alerts.evaluate(now + 120, alerts.empty_bucket(), values, **arguments)
-    messages = alerts.transitions(renewed, state, now + 120)
+    messages = [alerts.format_event(event) for event in alerts.transitions(renewed, state, now + 120)]
     assert len(messages) == 1 and messages[0].startswith("🟢 Прошло:")
     assert "analysis_reference" not in state["active"]
 

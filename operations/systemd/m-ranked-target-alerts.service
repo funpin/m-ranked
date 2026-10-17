@@ -1,5 +1,5 @@
 [Unit]
-Description=M-Ranked alerts to Telegram (backup, disk, load, traffic, units)
+Description=M-Ranked alerts (backup, disk, load, traffic, units)
 Documentation=file:/opt/m-ranked/current/operations/runbooks/TRAFFIC.md
 
 [Service]
@@ -11,6 +11,8 @@ EnvironmentFile=-/etc/m-ranked/alerts.env
 ExecStart=/usr/bin/python3 /usr/local/libexec/m-ranked/alerts.py
 StateDirectory=m-ranked/alerts
 StateDirectoryMode=0700
+# Очередь событий для Telegram-бота; каталога нет — события только в журнал.
+ReadWritePaths=-/var/lib/m-ranked/telegram-bot/inbox
 TimeoutStartSec=45s
 Nice=5
 NoNewPrivileges=true
@@ -31,7 +33,7 @@ LockPersonality=true
 # только читать их. Писать можно лишь в свой каталог состояния.
 CapabilityBoundingSet=CAP_DAC_READ_SEARCH
 AmbientCapabilities=
-# Telegram по HTTPS и systemctl через D-Bus.
+# systemctl через D-Bus.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallArchitectures=native
 UMask=0077
