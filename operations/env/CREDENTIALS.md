@@ -20,6 +20,7 @@ belong in an EnvironmentFile, command line, journal, metric or repository.
 | `redis.acl` | Redis | copy `redis.acl.example`, replace its placeholder once |
 | `redis-url` | API | copy `redis-url.credential.example` with the same password |
 | `anomaly-pgpass`, `maintenance-pgpass` | background workers | PostgreSQL `.pgpass` line |
+| `telegram-bot-token`, `telegram-bot-pgpass` | optional Telegram bot (`TELEGRAM_BOT.md`) | one token line; PostgreSQL `.pgpass` line |
 | `pgbackrest-repository.conf`, `pgbackrest-restore.conf` | backup/restore | rendered from the reviewed examples under `operations/backup/` |
 
 Certificate issuance, distribution and revocation require separate production

@@ -1,0 +1,70 @@
+[Unit]
+Description=M-Ranked Telegram bot (optional)
+Documentation=file:/opt/m-ranked/current/operations/runbooks/TELEGRAM_BOT.md
+# Без файла токена служба тихо пропускается, а не падает: падение подняло бы
+# тревогу «упали юниты». Юнит не входит ни в один *.target, его включают
+# отдельно (TELEGRAM_BOT.md).
+ConditionPathExists=/etc/m-ranked/credentials/telegram-bot-token
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=15min
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=m-ranked-telegram-bot
+Group=m-ranked-telegram-bot
+# status.py импортирует api.system_overview, поэтому корень репозитория.
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=-/etc/m-ranked/telegram-bot.env
+LoadCredential=telegram-bot-token:/etc/m-ranked/credentials/telegram-bot-token
+Environment=TELEGRAM_BOT_TOKEN_FILE=%d/telegram-bot-token
+LoadCredential=pgpass:/etc/m-ranked/credentials/telegram-bot-pgpass
+# Копия pgpass в приватный файл: libpq игнорирует credential с групповым
+# доступом, который отдаёт systemd 257 (см. m-ranked-target-maintenance).
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-telegram-bot -g m-ranked-telegram-bot %d/pgpass /run/m-ranked-telegram-bot/pgpass
+Environment=PGPASSFILE=/run/m-ranked-telegram-bot/pgpass
+# Очередь тревог. alerts.py работает от root с одним CAP_DAC_READ_SEARCH и
+# пишет в каталог только через группу root (0770); читает и удаляет файлы бот
+# как владелец каталога. Родитель нужен бот-пользователю и без записи для чужих.
+ExecStartPre=+/usr/bin/install -d -o m-ranked-telegram-bot -g m-ranked-telegram-bot -m 0755 /var/lib/m-ranked/telegram-bot
+ExecStartPre=+/usr/bin/install -d -o m-ranked-telegram-bot -g root -m 0770 /var/lib/m-ranked/telegram-bot/inbox
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=TZ=Europe/Moscow
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m telegram_bot
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=20s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Telegram по HTTPS, локальный API и Postgres.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/m-ranked/telegram-bot/inbox
+RuntimeDirectory=m-ranked-telegram-bot
+RuntimeDirectoryMode=0700
+UMask=0077
+# Опрос Telegram и минутный тик — доли процента ядра; потолки ради соседей
+# по Серверу 2 (2 ядра, процессор и так загружен).
+CPUQuota=20%
+Nice=10
+MemoryMax=128M
+LimitNOFILE=1024
+TasksMax=16

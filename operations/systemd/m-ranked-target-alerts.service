@@ -33,8 +33,9 @@ LockPersonality=true
 # только читать их. Писать можно лишь в свой каталог состояния.
 CapabilityBoundingSet=CAP_DAC_READ_SEARCH
 AmbientCapabilities=
-# systemctl через D-Bus.
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Только systemctl через D-Bus (сокет AF_UNIX): в Telegram скрипт не ходит,
+# события уходят файлами в очередь бота.
+RestrictAddressFamilies=AF_UNIX
 SystemCallArchitectures=native
 UMask=0077
 TasksMax=16
