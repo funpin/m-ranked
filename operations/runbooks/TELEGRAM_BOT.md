@@ -50,11 +50,18 @@ root пишет туда как член группы, а бот читает и
 
 Всё выполняется на Сервере 2 от root, после выпуска релиза с ботом.
 
-1. Системный пользователь:
+1. Системный пользователь. Релизы лежат как `root:m-ranked-release-readers`
+   с режимом `0750` (см. `DEPLOY.md`, «Доставка дерева»), а юнит работает из
+   `/opt/m-ranked/current` и его `.venv`, поэтому пользователь бота — член этой
+   группы:
 
    ```bash
-   useradd --system --no-create-home --shell /usr/sbin/nologin m-ranked-telegram-bot
+   useradd --system --no-create-home --shell /usr/sbin/nologin -G m-ranked-release-readers m-ranked-telegram-bot
+   # уже созданному раньше: usermod -a -G m-ranked-release-readers m-ranked-telegram-bot
+   runuser -u m-ranked-telegram-bot -- test -r /opt/m-ranked/current/telegram_bot/__main__.py && echo ok
    ```
+
+   Без `ok` юнит падает с `status=200/CHDIR` или на импорте.
 
 2. Токен:
 
@@ -164,6 +171,8 @@ ALTER ROLE telegram_bot NOLOGIN;
   отозван. Пустой `TELEGRAM_BOT_ADMIN_IDS` — не ошибка, а режим первого запуска
   (бот отвечает только на `/start` и `/id`). Устранив причину, сбросьте счётчик
   сбоев: `systemctl reset-failed m-ranked-target-telegram-bot`.
-- Тревоги не приходят, файлы копятся в `inbox` — нет получателей с включёнными
-  тревогами (`/settings`) или Telegram недоступен; событий старше 6 часов бот
-  отбрасывает.
+- Тревоги не приходят. Если нет получателей с включёнными тревогами
+  (`/settings`), бот файлы из `inbox` отбрасывает сразу, ничего не копится:
+  включите тревоги человеку. Если Telegram недоступен, файлы ждут в `inbox`
+  до 6 часов (следующий тик пробует снова), затем отбрасываются; открытая
+  тревога всё равно напомнит о себе повтором `alerts.py`.

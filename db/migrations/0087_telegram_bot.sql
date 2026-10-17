@@ -20,6 +20,16 @@
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
+-- Без роли миграция упала бы на первом GRANT невнятной ошибкой; говорим прямо, что делать.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'telegram_bot') THEN
+        RAISE EXCEPTION 'роль telegram_bot не создана: создайте её до 0087 на каждой базе с этими миграциями, см. operations/runbooks/DEPLOY.md, раздел «Telegram-бот»'
+            USING HINT = 'от mranked_bootstrap: CREATE ROLE telegram_bot NOLOGIN; GRANT CONNECT ON DATABASE <база> TO telegram_bot;';
+    END IF;
+END
+$$;
+
 CREATE TABLE ops_and_admin.bot_setting (
     key text PRIMARY KEY,
     value jsonb NOT NULL,

@@ -382,7 +382,7 @@ SECRET
 1. **Корень релиза обязан быть доступен runtime-пользователям.** Создавайте
    `/opt/m-ranked/releases/<релиз>` как `root:m-ranked-release-readers` с
    режимом `0750`; добавьте в эту системную группу существующих пользователей
-   API, collectors и maintenance до их перезапуска. Режим `0700`, который
+   API, collectors, maintenance и Telegram-бота (если он включён) до их перезапуска. Режим `0700`, который
    оставляет `mktemp -d`, ломает поздние Python imports у ещё работающих
    процессов и даёт `status=200/CHDIR` при следующем старте unit. Проверка:
 
@@ -393,6 +393,10 @@ SECRET
        m-ranked-collector-max m-ranked-collector-rutube; do
        usermod -a -G m-ranked-release-readers "$user"
    done
+   # Telegram-бот необязателен (TELEGRAM_BOT.md): только если пользователь заведён.
+   if id -u m-ranked-telegram-bot >/dev/null 2>&1; then
+       usermod -a -G m-ranked-release-readers m-ranked-telegram-bot
+   fi
    chown root:m-ranked-release-readers /opt/m-ranked/releases/<релиз>
    chmod 0750 /opt/m-ranked/releases/<релиз>
    stat -c '%U:%G %a %n' /opt/m-ranked/releases/<релиз>

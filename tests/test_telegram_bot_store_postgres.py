@@ -230,3 +230,21 @@ def test_cancelled_query_discards_the_shared_connection(destructive_dsn) -> None
         finally:
             await store.aclose()
     asyncio.run(scenario())
+
+
+def _role_guard() -> str:
+    from pathlib import Path
+    migration = (Path(__file__).parents[1] / "db" / "migrations" / "0087_telegram_bot.sql").read_text(
+        encoding="utf-8")
+    start = migration.index("DO $$")
+    return migration[start:migration.index("$$;", start) + 3]
+
+
+def test_migration_role_guard_passes_with_role_and_raises_without(connection):
+    guard = _role_guard()
+    connection.execute(guard)  # роль создана init-скриптом: проходит молча
+    missing = guard.replace("'telegram_bot'", "'telegram_bot_absent_for_test'")
+    assert missing != guard
+    with pytest.raises(psycopg.errors.RaiseException) as raised:
+        connection.execute(missing)
+    assert "operations/runbooks/DEPLOY.md" in str(raised.value)

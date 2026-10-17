@@ -98,3 +98,31 @@ def test_runbook_exists_without_addresses_or_ids() -> None:
 
 def test_deploy_runbook_links_bot_runbook() -> None:
     assert "TELEGRAM_BOT.md" in DEPLOY.read_text(encoding="utf-8")
+
+
+def test_bot_user_can_read_the_release_tree() -> None:
+    # Релизы — root:m-ranked-release-readers 0750: без группы юнит не войдёт в
+    # WorkingDirectory=/opt/m-ranked/current и не прочитает .venv.
+    runbook = RUNBOOK.read_text(encoding="utf-8")
+    assert ("useradd --system --no-create-home --shell /usr/sbin/nologin "
+            "-G m-ranked-release-readers m-ranked-telegram-bot") in runbook
+    assert ("runuser -u m-ranked-telegram-bot -- test -r "
+            "/opt/m-ranked/current/telegram_bot/__main__.py") in runbook
+    deploy = DEPLOY.read_text(encoding="utf-8")
+    assert "usermod -a -G m-ranked-release-readers m-ranked-telegram-bot" in deploy
+
+
+def test_runbook_tells_dropped_from_kept_alert_files() -> None:
+    text = " ".join(RUNBOOK.read_text(encoding="utf-8").split())
+    assert "копятся в `inbox` — нет получателей" not in text
+    assert "нет получателей с включёнными тревогами" in text and "отбрасывает сразу" in text
+    assert "Telegram недоступен" in text and "до 6 часов" in text
+
+
+def test_migration_refuses_to_run_without_the_role() -> None:
+    migration = (ROOT / "db" / "migrations" / "0087_telegram_bot.sql").read_text(encoding="utf-8")
+    body = migration.split("BEGIN;", 1)[1]
+    guard, rest = body.split("CREATE TABLE", 1)
+    assert "pg_roles WHERE rolname = 'telegram_bot'" in guard
+    assert "RAISE EXCEPTION" in guard and "operations/runbooks/DEPLOY.md" in guard
+    assert not re.search(r"^\s*(GRANT|CREATE)\b", guard, re.M)   # только проверка, ничего не создаёт
