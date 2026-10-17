@@ -159,7 +159,7 @@ class Settings:
         Path(value) if (value := os.environ.get("API_CACHE_WARMUP_METRICS_FILE", "").strip())
         else None
     ))
-    retention_days: int = field(default_factory=lambda: _int("PUBLICATION_RETENTION_DAYS", 70, 1, 3650))
+    retention_days: int = field(default_factory=lambda: _int("PUBLICATION_RETENTION_DAYS", 100, 1, 3650))
 
     health_mode: str = field(default_factory=lambda: os.environ.get("HEALTH_DATA_SOURCE", "public_web"))
     poll_interval_minutes: int = field(default_factory=lambda: _int("HEALTH_POLL_INTERVAL_MINUTES", 60, 1, 1440))
