@@ -48,8 +48,9 @@ def test_unit_prepares_inbox_for_root_alerts() -> None:
                and line.endswith("/var/lib/m-ranked/telegram-bot/inbox") for line in install)
     assert any("-m 0755" in line and line.endswith(" /var/lib/m-ranked/telegram-bot")
                for line in install)
-    assert any(line.startswith("ReadWritePaths=") and "/var/lib/m-ranked/telegram-bot/inbox" in line
-               for line in lines)
+    # «-»: каталог создаёт ExecStartPre, к моменту настройки пространства имён
+    # первого запуска его ещё нет (иначе status=226/NAMESPACE).
+    assert "ReadWritePaths=-/var/lib/m-ranked/telegram-bot/inbox" in lines
 
 
 def test_unit_is_hardened_like_other_units() -> None:
@@ -65,7 +66,9 @@ def test_not_wanted_by_profiles() -> None:
     assert targets
     for target in targets:
         assert "telegram-bot" not in target.read_text(encoding="utf-8"), target.name
-    assert not any("WantedBy" in line for line in unit_lines())
+    # Включение — явный `systemctl enable` оператора; после него бот переживает
+    # перезагрузку, но в цели профиля не входит.
+    assert "WantedBy=multi-user.target" in unit_lines()
 
 
 def test_alerts_unit_does_not_open_inet_for_telegram() -> None:

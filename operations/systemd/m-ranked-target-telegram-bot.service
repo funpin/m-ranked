@@ -57,7 +57,8 @@ AmbientCapabilities=
 # Telegram по HTTPS, локальный API и Postgres.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallArchitectures=native
-ReadWritePaths=/var/lib/m-ranked/telegram-bot/inbox
+# «-»: каталог создаёт ExecStartPre выше; при первом запуске его ещё нет.
+ReadWritePaths=-/var/lib/m-ranked/telegram-bot/inbox
 RuntimeDirectory=m-ranked-telegram-bot
 RuntimeDirectoryMode=0700
 UMask=0077
@@ -68,3 +69,8 @@ Nice=10
 MemoryMax=128M
 LimitNOFILE=1024
 TasksMax=16
+
+[Install]
+# Включает только оператор (`systemctl enable`, runbook TELEGRAM_BOT.md); в цели
+# профиля бот не входит.
+WantedBy=multi-user.target
