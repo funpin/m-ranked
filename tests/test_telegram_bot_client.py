@@ -62,7 +62,7 @@ def test_empty_token_file_exits(tmp_path):
 
 
 @pytest.mark.parametrize("name", [
-    "TELEGRAM_BOT_TOKEN_FILE", "TELEGRAM_BOT_ADMIN_IDS", "TELEGRAM_BOT_DSN",
+    "TELEGRAM_BOT_TOKEN_FILE", "TELEGRAM_BOT_DSN",
 ])
 def test_required_env_missing_exits(tmp_path, name):
     env = _env(tmp_path)
@@ -70,6 +70,16 @@ def test_required_env_missing_exits(tmp_path, name):
     with pytest.raises(SystemExit) as raised:
         BotConfig.from_env(env)
     assert name in str(raised.value)
+
+
+@pytest.mark.parametrize("raw", [None, "", "  ", " , "])
+def test_empty_admin_ids_is_bootstrap_mode(tmp_path, raw):
+    env = _env(tmp_path)
+    if raw is None:
+        del env["TELEGRAM_BOT_ADMIN_IDS"]
+    else:
+        env["TELEGRAM_BOT_ADMIN_IDS"] = raw
+    assert BotConfig.from_env(env).admin_ids == frozenset()
 
 
 def test_bad_admin_ids_exit(tmp_path):

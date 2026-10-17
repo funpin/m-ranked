@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import logging
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -222,6 +223,20 @@ def test_stranger_gets_only_id_hint():
     assert str(STRANGER) in sent_texts(telegram)[-1]
     handle(bot, private_message(STRANGER, "/start"))
     assert str(STRANGER) in sent_texts(telegram)[-1]
+    assert source.calls == []
+
+
+def test_bootstrap_mode_without_admins(caplog):
+    bot, telegram, source, store = make_bot(recipients=[])
+    bot.config = replace(bot.config, admin_ids=frozenset())
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(bot.setup())
+    assert "администраторы не заданы" in caplog.text
+    assert asyncio.run(store.recipients()) == []
+    handle(bot, private_message(STRANGER, "/id"))
+    assert str(STRANGER) in sent_texts(telegram)[-1]
+    handle(bot, private_message(STRANGER, "/top все тг"))
+    assert "/id" in sent_texts(telegram)[-1] and "Лучшие" not in sent_texts(telegram)[-1]
     assert source.calls == []
 
 

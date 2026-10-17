@@ -44,8 +44,8 @@ def _parse_admin_ids(raw: str) -> frozenset[int]:
             raise SystemExit(
                 "TELEGRAM_BOT_ADMIN_IDS: ожидается список целых чисел через запятую."
             ) from None
-    if not ids:
-        raise SystemExit("TELEGRAM_BOT_ADMIN_IDS не содержит ни одного идентификатора.")
+    # Пусто — режим первого запуска: бот отвечает только на /start и /id, чтобы
+    # владелец узнал свой ID до того, как впишет его сюда.
     return frozenset(ids)
 
 
@@ -64,7 +64,7 @@ class BotConfig:
         token = _read_token(Path(_required(environ, "TELEGRAM_BOT_TOKEN_FILE")))
         return cls(
             token=token,
-            admin_ids=_parse_admin_ids(_required(environ, "TELEGRAM_BOT_ADMIN_IDS")),
+            admin_ids=_parse_admin_ids(environ.get("TELEGRAM_BOT_ADMIN_IDS", "")),
             api_base_url=(
                 environ.get("TELEGRAM_BOT_API_BASE_URL", "").strip()
                 or DEFAULT_API_BASE_URL

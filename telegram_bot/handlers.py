@@ -100,6 +100,8 @@ class Bot:
     # --- запуск ---------------------------------------------------------
 
     async def setup(self) -> None:
+        if not self.config.admin_ids:
+            log.warning("администраторы не заданы: бот отвечает только на /start и /id")
         try:
             self.username = (await self.telegram.get_me()).get("username") or None
         except TelegramError as error:
