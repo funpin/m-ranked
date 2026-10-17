@@ -74,7 +74,7 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
   const reader = catalogReader(incoming);
   const now = renderedAt();
   // Каждая вкладка читает только своё: панель не ходит в API за чужими данными.
-  const header = (count?: number) => (
+  const header = (counts?: { institutions: number; accounts: number }) => (
     <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl"><PageTitle text={meta.title} /></h1>
@@ -83,8 +83,9 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
       <div className="flex flex-wrap items-center gap-3">
         {/* Мониторинг — каждые 15 с, каталог — каждые 30 с. */}
         <LiveRefresh intervalMs={tab === "channels" ? 30_000 : 15_000} />
-        {count !== undefined ? <div className="bg-muted flex items-baseline gap-2 rounded-full px-4 py-2 text-xs [&>b]:text-lg">
-          <b>{count}</b><span>{plural(count, "канал добавлен", "канала добавлено", "каналов добавлено")}</span>
+        {counts !== undefined ? <div className="bg-muted flex items-baseline gap-2 rounded-full px-4 py-2 text-xs [&>b]:text-lg">
+          <b>{counts.institutions}</b><span>{plural(counts.institutions, "вуз", "вуза", "вузов")}</span>
+          <b>{counts.accounts}</b><span>{plural(counts.accounts, "аккаунт", "аккаунта", "аккаунтов")}</span>
         </div> : null}
         <AdminSignOut csrf={csrf} />
       </div>
@@ -124,11 +125,13 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
   const textOrder = (a: string | null, b: string | null) => a === b ? 0 : a === null ? -1 : b === null ? 1 : a < b ? -1 : 1;
   for (const institution of institutions) institution.accounts.sort((a, b) => textOrder(a.platform, b.platform) || textOrder(a.title, b.title) || textOrder(a.username, b.username) || a.legacyId - b.legacyId);
   const status = statusResult.status === "fulfilled" ? statusResult.value : null;
-  const channelCount = status?.channelCount ?? institutions.flatMap((row) => row.accounts).filter((row) => row.channelId !== null).length;
+  // В шапке — весь каталог: вузы и аккаунты всех площадок, а не только Telegram-каналы.
+  const counts = { institutions: status?.institutionCount ?? institutions.length,
+    accounts: status?.platformCount ?? institutions.reduce((sum, row) => sum + row.accounts.length, 0) };
   const selected = Number(first(query.institution_id));
   const selectedId = institutions.some((row) => row.legacyId === selected) ? selected : institutions[0]?.legacyId ?? null;
   return <>
-    {header(channelCount)}
+    {header(counts)}
     <ManageTabs active={tab} />
     <ChannelsTab institutions={institutions} status={status} selectedId={selectedId} csrf={csrf} canEdit={canEdit} canDelete={canDelete}
       message={statuses[first(query.platform_status) ?? ""]} commandError={commandErrors[first(query.command_error) ?? ""]}

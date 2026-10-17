@@ -6,6 +6,18 @@ SELECT institutions, accounts, accounts_by_platform, publications, snapshots, co
  WHERE id = 1
 """
 
+# Вузы и аккаунты берутся из каталога при каждом построении: это сотня-другая
+# строк, а суточная сводка отставала от добавленных вузов до следующего
+# обслуживания. Публикации и замеры по-прежнему из суточной строки (0044).
+CATALOG_COUNTS = """
+SELECT (SELECT count(*) FROM catalog.visible_institution)::integer AS institutions,
+       (SELECT count(*) FROM catalog.visible_platform_account)::integer AS accounts,
+       (SELECT coalesce(jsonb_object_agg(per.platform, per.accounts), '{}'::jsonb)
+          FROM (SELECT account.platform::text AS platform, count(*) AS accounts
+                  FROM catalog.visible_platform_account account
+                 GROUP BY 1) per) AS accounts_by_platform
+"""
+
 # Вузы М-Рейтинга (подведомственные Минобрнауки), у которых мы отслеживаем
 # хотя бы одну официальную соцсеть: у них есть действующий код m-rating.ru
 # (миграция 0078). Тем же запросом кнопка панели снимает число в checkpoint.
