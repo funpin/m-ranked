@@ -105,6 +105,21 @@ def test_due_digest_monday_10():
     assert "digest" in content.due(at(19, 10), {"digest": sent})
 
 
+def test_due_digest_fresh_install_waits_for_monday():
+    assert "digest" not in content.due(at(14, 12), {})            # среда, дайджестов ещё не было
+    assert "digest" not in content.due(at(12, 9, 59), {})
+    assert "digest" in content.due(at(12, 10), {})                # понедельник 10:00
+    previous_week = at(8, 10, 1).timestamp()                      # прошлая неделя, дайджест был
+    assert "digest" in content.due(at(13, 9), {"digest": previous_week})   # вторник — догоняем
+    assert "digest" not in content.due(at(13, 9), {"digest": at(13, 9, 1).timestamp()})
+
+
+def test_due_requires_aware_now():
+    import pytest
+    with pytest.raises(ValueError):
+        content.due(datetime(2026, 10, 12, 10, 0), {})
+
+
 def test_due_every_15_minutes():
     now = at(14, 12)
     stamp = now.timestamp()
@@ -149,6 +164,17 @@ def test_spike_thresholds():
     assert run(content.check_spikes(bot)) == 0  # повторный прогон ничего не повторяет
     assert len(group_texts(telegram)) == 1
     assert run(store.job_last_run("spikes")) is not None
+
+
+def test_spike_skips_flagged_posts():
+    bot, telegram, source, store = make()
+    seeded(store, "spike")
+    source.spikes = [post("a", index=4.0, age=10.0, level=2), post("b", level=3),
+                     post("c", level=1)]
+    assert run(content.check_spikes(bot)) == 1          # только уровень 1 («спорный») проходит
+    assert len(group_texts(telegram)) == 1
+    assert run(store.mark_announced("spike", "a", 1))   # «a» не помечен как объявленный
+    assert run(store.mark_announced("spike", "b", 1))
 
 
 def test_spike_text():

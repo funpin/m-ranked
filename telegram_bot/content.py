@@ -63,7 +63,9 @@ def _digest_due(now: datetime, last: float | None) -> bool:
         return False  # на этой ISO-неделе уже был
     if now.weekday() == DIGEST_WEEKDAY:
         return now.hour >= DIGEST_HOUR
-    return now.weekday() > DIGEST_WEEKDAY  # пропущенный в понедельник — догоняем один раз
+    # Пропущенный в понедельник догоняем один раз, но только если дайджесты уже шли:
+    # на свежей установке посреди недели ждём ближайшего понедельника.
+    return last is not None and now.weekday() > DIGEST_WEEKDAY
 
 
 def _daily_due(now: datetime, last: float | None, hour: int) -> bool:
@@ -72,7 +74,11 @@ def _daily_due(now: datetime, last: float | None, hour: int) -> bool:
 
 def due(now: datetime, last: Mapping[str, float | None]) -> list[str]:
     """Какие задачи пора запускать. `now` — с часовым поясом Москвы,
-    `last` — имя задачи → время последнего запуска (epoch) или None."""
+    `last` — имя задачи → время последнего запуска (epoch) или None.
+    `now` обязан быть с часовым поясом (Europe/Moscow): дни и недели считаются
+    по его календарю; без пояса ValueError."""
+    if now.tzinfo is None:
+        raise ValueError("due(): now должен быть с часовым поясом (Europe/Moscow)")
     names = ["alerts"]
     for name in ("spikes", "anomalies"):
         previous = last.get(name)
@@ -120,6 +126,9 @@ def _publication_id(item: dict[str, Any]) -> str | None:
 # --- «выстрелил» --------------------------------------------------------------
 
 def _is_spike(item: dict[str, Any]) -> bool:
+    level = item.get("anomalyLevel")
+    if isinstance(level, int) and level >= LEVEL_CONFIDENT:
+        return False  # накрученный пост — не успех, о нём скажет «накрутка»
     index, age = item.get("interactionIndex"), item.get("ageHours")
     if not isinstance(index, (int, float)) or not isinstance(age, (int, float)):
         return False
