@@ -28,6 +28,8 @@ from .render import (
     render_top,
     render_week,
     split_message,
+    text_only,
+    week_label,
 )
 from .source import ApiSource, SourceUnavailable
 from .status import STATUS_WINDOW_SECONDS, render_status
@@ -102,6 +104,21 @@ def foreign_press(author: int | None, access: Access) -> bool:
     if access.private or author is None or author < 0:
         return False
     return access.user_id != author
+
+
+def largest_file_id(result: dict | None) -> str | None:
+    """file_id самого большого размера из ответа sendPhoto (порядок размеров
+    Telegram не обещает)."""
+    def number(value: object) -> int:
+        return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+    sizes = [size for size in (result or {}).get("photo") or []
+             if isinstance(size, dict) and isinstance(size.get("file_id"), str)]
+    if not sizes:
+        return None
+    best = max(sizes, key=lambda size: (number(size.get("width")) * number(size.get("height")),
+                                        number(size.get("file_size"))))
+    return best["file_id"]
 
 
 def _is_member(member: dict) -> bool:
@@ -199,12 +216,12 @@ class Bot:
         else:
             messages = list(text_or_messages)
         delivered = transient = 0
+        uploaded: dict[bytes, str] = {}  # картинка грузится один раз, дальше — file_id
         for r in await self.store.recipients():
             if not getattr(r, flag) or (flag == "alerts" and r.kind != "person"):
                 continue
             try:
-                for message in messages:
-                    await self.telegram.send_message(r.chat_id, message.text, message.keyboard)
+                await self._send_parts(r.chat_id, messages, uploaded)
             except BotBlocked:
                 log.info("broadcast %s: recipient %s unreachable, removed", flag, r.kind)
                 await self.store.remove_recipient(r.chat_id)
@@ -226,8 +243,35 @@ class Bot:
         return await self.telegram.send_message(chat_id, text, keyboard)
 
     async def send_all(self, chat_id: int, messages: list[Message]) -> None:
-        for message in messages:
-            await self.telegram.send_message(chat_id, message.text, message.keyboard)
+        await self._send_parts(chat_id, messages, {})
+
+    async def _send_parts(self, chat_id: int, messages: list[Message],
+                          uploaded: dict[bytes, str]) -> None:
+        """Все части одному чату. Картинка: если её уже загружали (`uploaded`:
+        байты → file_id), уходит по file_id. Telegram её не принял (TelegramError,
+        не BotBlocked/CannotInitiate) — этому чату только текст, подпись встаёт
+        в начало следующей части; картинку не повторяем."""
+        parts = list(messages)
+        index = 0
+        while index < len(parts):
+            message = parts[index]
+            if message.photo is None:
+                await self.telegram.send_message(chat_id, message.text, message.keyboard)
+                index += 1
+                continue
+            try:
+                result = await self.telegram.send_photo(
+                    chat_id, uploaded.get(message.photo, message.photo), message.text)
+            except (BotBlocked, CannotInitiate):
+                raise
+            except TelegramError as error:
+                log.warning("send_photo: %s", type(error).__name__)
+                parts[index:] = text_only(parts[index:])
+                continue
+            file_id = largest_file_id(result)
+            if file_id is not None:
+                uploaded.setdefault(message.photo, file_id)
+            index += 1
 
     async def edit_and_answer(self, callback_id: str, chat_id: int, message_id: int, text: str,
                               keyboard: list[list[dict]] | None, note: str | None = None) -> None:
@@ -443,8 +487,10 @@ class Bot:
             return
         today = datetime.fromtimestamp(self.clock(), ZoneInfo(self.config.timezone)).date()
         previous = await self.store.week_snapshot(today - timedelta(days=7))
-        message = render_week(our_week_stats(dashboard, our), previous, forecast, our)
-        await self.reply(chat_id, message.text, message.keyboard)
+        current, label = our_week_stats(dashboard, our), week_label(dashboard)
+        data = content.cover_for(dashboard, our, current, previous, label)
+        messages = render_week(current, previous, forecast, our, cover=data, label=label)
+        await self.send_all(chat_id, await content.with_cover(messages, data))
 
     # --- кнопки ---------------------------------------------------------
 

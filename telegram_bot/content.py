@@ -8,8 +8,10 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -24,12 +26,15 @@ from .render import (
     format_index,
     our_week_stats,
     render_digest,
+    text_only,
+    week_label,
 )
 from .source import SourceUnavailable
 from .store import OUR_INSTITUTION
 from .words import TopQuery
 
 if TYPE_CHECKING:
+    from .cover import CoverData
     from .handlers import Bot
 
 log = logging.getLogger(__name__)
@@ -251,6 +256,34 @@ async def record_week(bot: Bot) -> None:
     await bot.store.set_job_run("week_snapshot", bot.clock())
 
 
+# --- обложка -------------------------------------------------------------------
+# cover (и с ним Pillow) импортируется при первом рисовании, а не при запуске бота.
+
+def cover_for(dashboard: dict[str, Any], our: int, current: dict[str, dict[str, int]],
+              previous: dict[str, dict[str, int]] | None, label: str | None) -> CoverData:
+    """Обложка дайджеста и /week: короткое имя нашего вуза из каталога сводки
+    (иначе полное), неделя и просмотры по площадкам к прошлой неделе."""
+    from . import cover
+
+    entry = next((e for e in dashboard.get("institutions") or [] if e.get("legacyId") == our), {})
+    title = entry.get("shortName") or entry.get("name") or f"вуз №{our}"
+    subtitle = f"{label} · просмотры за неделю" if label else "просмотры за неделю"
+    return cover.CoverData(title, subtitle, cover.cover_rows(current, previous))
+
+
+async def with_cover(messages: list[Message], data: CoverData) -> list[Message]:
+    """Нарисовать обложку вне цикла событий и подставить в первое сообщение
+    (подпись-шапку). Не нарисовалась — только текст, в журнале класс ошибки."""
+    from . import cover
+
+    try:
+        photo = await asyncio.to_thread(cover.draw, data)
+    except Exception as error:  # шрифт, Pillow, память: дайджест важнее картинки
+        log.warning("cover: %s", type(error).__name__)
+        return text_only(messages)
+    return [replace(messages[0], photo=photo), *messages[1:]]
+
+
 # --- дайджест -----------------------------------------------------------------
 
 async def build_digest(bot: Bot) -> list[Message]:
@@ -272,7 +305,10 @@ async def build_digest(bot: Bot) -> list[Message]:
         log.warning("digest forecast: %s", type(error).__name__)
         forecast = None
     previous = await bot.store.week_snapshot(_today(bot) - timedelta(days=7))
-    return render_digest(ours, others, our_week_stats(dashboard, our), previous, forecast, our)
+    current = our_week_stats(dashboard, our)
+    data = cover_for(dashboard, our, current, previous, week_label(ours))
+    messages = render_digest(ours, others, current, previous, forecast, our, cover=data)
+    return await with_cover(messages, data)
 
 
 async def send_digest(bot: Bot) -> None:

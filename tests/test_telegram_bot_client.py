@@ -359,3 +359,103 @@ def test_token_never_in_errors_or_logs(caplog):
         assert error.__cause__ is None
         assert error.__suppress_context__ or error.__context__ is None
     assert TOKEN not in caplog.text
+
+
+# --- sendPhoto -------------------------------------------------------------
+
+PNG = b"\x89PNG\r\n\x1a\nfake-cover"
+
+
+def _multipart_fields(request: httpx.Request) -> dict[str, tuple[str | None, bytes]]:
+    """Разбор multipart/form-data: имя поля → (имя файла, содержимое)."""
+    content_type = request.headers["content-type"]
+    assert content_type.startswith("multipart/form-data")
+    boundary = content_type.split("boundary=", 1)[1].encode()
+    fields: dict[str, tuple[str | None, bytes]] = {}
+    for part in request.content.split(b"--" + boundary)[1:-1]:
+        head, _, body = part.strip(b"\r\n").partition(b"\r\n\r\n")
+        disposition = next(line for line in head.split(b"\r\n")
+                           if line.lower().startswith(b"content-disposition"))
+        name = disposition.split(b'name="', 1)[1].split(b'"', 1)[0].decode()
+        filename = (disposition.split(b'filename="', 1)[1].split(b'"', 1)[0].decode()
+                    if b'filename="' in disposition else None)
+        fields[name] = (filename, body)
+    return fields
+
+
+def test_send_photo_uploads_bytes_as_multipart():
+    recorder = Recorder(ok({"message_id": 8, "photo": [{"file_id": "a"}]}))
+
+    async def go():
+        async with _client(recorder) as client:
+            return await client.send_photo(5, PNG, "<b>Дайджест · Дельта</b>")
+
+    assert _run(go) == {"message_id": 8, "photo": [{"file_id": "a"}]}
+    request = recorder.requests[0]
+    assert request.url.path == f"/bot{TOKEN}/sendPhoto"
+    fields = _multipart_fields(request)
+    assert fields["photo"] == ("cover.png", PNG)
+    assert fields["caption"] == (None, "<b>Дайджест · Дельта</b>".encode())
+    assert fields["chat_id"] == (None, b"5")
+    assert fields["parse_mode"] == (None, b"HTML")
+
+
+def test_send_photo_by_file_id():
+    recorder = Recorder(ok({"message_id": 9}))
+
+    async def go():
+        async with _client(recorder) as client:
+            await client.send_photo(5, "file-id-1", "подпись")
+
+    _run(go)
+    body = recorder.body()
+    assert body == {"chat_id": 5, "photo": "file-id-1", "caption": "подпись", "parse_mode": "HTML"}
+
+
+@pytest.mark.parametrize(("response", "error"), [
+    (fail(403, "Forbidden: bot was blocked by the user"), BotBlocked),
+    (fail(400, "Bad Request: chat not found"), BotBlocked),
+    (fail(403, "Forbidden: bot can't initiate conversation with a user"), CannotInitiate),
+    (fail(400, "Bad Request: wrong file identifier"), TelegramError),
+])
+@pytest.mark.parametrize("photo", [PNG, "file-id-1"])
+def test_send_photo_errors_like_send_message(response, error, photo):
+    recorder = Recorder(response)
+
+    async def go():
+        async with _client(recorder) as client:
+            await client.send_photo(42, photo, "x")
+
+    with pytest.raises(error) as raised:
+        _run(go)
+    if error is TelegramError:
+        assert not isinstance(raised.value, (BotBlocked, CannotInitiate))
+    else:
+        assert raised.value.chat_id == 42
+
+
+def test_send_photo_upload_retries_after_429_with_same_file():
+    sleeps: list[float] = []
+    recorder = Recorder(fail(429, "Too Many Requests", retry_after=2), ok({"message_id": 1}))
+
+    async def go():
+        async with _client(recorder, sleeps) as client:
+            await client.send_photo(5, PNG, "x")
+
+    _run(go)
+    assert sleeps == [2.0]
+    assert [_multipart_fields(r)["photo"] for r in recorder.requests] == [("cover.png", PNG)] * 2
+
+
+def test_send_photo_token_not_in_errors(caplog):
+    caplog.set_level(logging.DEBUG)
+    recorder = Recorder(httpx.ConnectError(f"boom https://api.telegram.org/bot{TOKEN}/sendPhoto"))
+
+    async def go():
+        async with _client(recorder) as client:
+            await client.send_photo(5, PNG, "x")
+
+    with pytest.raises(TelegramError) as raised:
+        _run(go)
+    assert TOKEN not in str(raised.value) and raised.value.__cause__ is None
+    assert TOKEN not in caplog.text

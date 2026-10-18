@@ -366,7 +366,7 @@ def test_digest_contents():
     run(content.send_digest(bot))
     texts = group_texts(telegram)
     text = "\n".join(texts)
-    assert texts[0].startswith("<b>Дайджест")
+    assert texts[0].startswith("🏆 <b>НАШИ ЛУЧШИЕ</b>")   # шапка — в подписи к обложке
     assert "<b>НАШИ ЛУЧШИЕ</b>" in text and "<b>ДРУГИЕ ВУЗЫ</b>" in text
     assert "<b>НЕДЕЛЯ</b>" in text and "<b>ПРОГНОЗ</b>" in text
     assert "постов 20 (+100 %)" in text            # неделя к неделе по сохранённому снимку
@@ -405,6 +405,10 @@ def test_send_digest_here_matches_scheduled_digest():
     telegram.calls.clear()
     run(bot.send_digest_here(GROUP))
     assert group_texts(telegram) == scheduled and sent_texts(telegram, PERSON) == []
+    photos = telegram.of("photo")
+    assert [call[1] for call in photos] == [GROUP]
+    assert photos[0][2].startswith(b"\x89PNG")       # один чат — своя загрузка
+    assert photos[0][3] == "<b>Дайджест · Дельта · 10–16 окт</b>"
 
 
 def test_send_digest_here_without_our_institution():
@@ -527,3 +531,61 @@ def test_digest_marked_when_nobody_can_receive_it_anyway():
     telegram.not_started = {PERSON}
     run(content.send_digest(bot))
     assert run(store.job_last_run("digest")) == bot.clock()
+
+
+# --- дайджест: обложка ---------------------------------------------------------
+
+def test_build_digest_starts_with_cover():
+    bot, _, _, _ = make()
+    messages = run(content.build_digest(bot))
+    first = messages[0]
+    assert first.photo is not None and first.photo.startswith(b"\x89PNG")
+    assert first.text == "<b>Дайджест · Дельта · 10–16 окт</b>"
+    assert all(m.photo is None for m in messages[1:])
+    assert messages[1].text.startswith("🏆 <b>НАШИ ЛУЧШИЕ</b>")
+
+
+def test_send_digest_delivers_cover_and_text_to_everyone():
+    bot, telegram, _, store = make()
+    run(content.send_digest(bot))
+    photos = telegram.of("photo")
+    assert {call[1] for call in photos} == {PERSON, GROUP} and len(photos) == 2
+    assert isinstance(photos[0][2], bytes)                  # первому — загрузка
+    assert photos[1][2] == f"big-{photos[0][4]}"            # второму — file_id
+    assert group_texts(telegram) == sent_texts(telegram, PERSON)
+    assert group_texts(telegram)[0].startswith("🏆 <b>НАШИ ЛУЧШИЕ</b>")
+    assert run(store.job_last_run("digest")) == bot.clock()
+
+
+def test_digest_cover_draw_failure_sends_text_only(monkeypatch, caplog):
+    from telegram_bot import cover
+
+    def broken(data):
+        raise MemoryError
+
+    monkeypatch.setattr(cover, "draw", broken)
+    bot, telegram, _, store = make()
+    run(content.send_digest(bot))
+    assert telegram.of("photo") == []
+    texts = group_texts(telegram)
+    assert texts[0].startswith("<b>Дайджест · Дельта · 10–16 окт</b>\n\n🏆 <b>НАШИ ЛУЧШИЕ</b>")
+    assert "MemoryError" in caplog.text
+    assert run(store.job_last_run("digest")) == bot.clock()
+
+
+def test_cover_for_title_subtitle_rows():
+    dashboard = fixture("dashboard.json")
+    current = {"telegram": {"posts": 20, "views": 112000, "reactions": 1},
+               "vk": {"posts": 8, "views": 15000, "reactions": 1}}
+    previous = {"telegram": {"posts": 10, "views": 100000, "reactions": 1}}
+    data = content.cover_for(dashboard, OUR_ID, current, previous, "10–16 окт")
+    assert data.title == "Дельта"
+    assert data.subtitle == "10–16 окт · просмотры за неделю"
+    assert [(row.platform, row.value, row.previous) for row in data.rows] == [
+        ("telegram", 112000, 100000), ("vk", 15000, None)]
+    for entry in dashboard["institutions"]:
+        if entry["legacyId"] == OUR_ID:
+            entry["shortName"] = None
+    assert content.cover_for(dashboard, OUR_ID, current, None, None).title == "Университет Дельта"
+    assert content.cover_for(dashboard, OUR_ID, {}, None, None).subtitle == "просмотры за неделю"
+    assert content.cover_for({}, OUR_ID, {}, None, None).title == f"вуз №{OUR_ID}"

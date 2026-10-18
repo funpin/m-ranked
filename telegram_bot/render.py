@@ -13,13 +13,17 @@ import re
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from .emoji import band, icon
 from .words import TopQuery
 
+if TYPE_CHECKING:  # cover импортирует render: во время работы — только аннотации
+    from .cover import CoverData
+
 TELEGRAM_LIMIT = 4096
+CAPTION_LIMIT = 1024  # подпись к картинке в Telegram
 CALLBACK_PREFIX = "t|"
 CALLBACK_LIMIT = 64
 DEFAULT_COUNT = 3
@@ -27,6 +31,7 @@ DEFAULT_COUNT_ALL = 10
 DIGEST_OTHERS_COUNT = 10
 MOSCOW = ZoneInfo("Europe/Moscow")
 MINUS = "−"
+ELLIPSIS = "…"
 
 PLATFORM_ORDER = ("telegram", "vk", "max", "rutube")
 PLATFORM_NAMES = {"telegram": "Telegram", "vk": "ВКонтакте", "max": "MAX", "rutube": "Rutube"}
@@ -54,7 +59,7 @@ _AUTHOR_LIMIT = 10**19  # 19 цифр — с запасом больше люб�
 class Message:
     text: str  # при photo — подпись к картинке
     keyboard: list[list[dict]] | None = None
-    photo: bytes | None = None
+    photo: bytes | None = None  # PNG; пустое у подписи-шапки, пока обложку не нарисовали
 
 
 def esc(value: object) -> str:
@@ -129,6 +134,45 @@ def _messages(text: str, keyboard: list[list[dict]] | None = None) -> list[Messa
     parts = split_message(text)
     return [Message(part, keyboard if index == len(parts) - 1 else None)
             for index, part in enumerate(parts)]
+
+
+# --- подпись-шапка обложки ----------------------------------------------------
+
+def _units(text: str) -> int:
+    """Длина так, как её считает Telegram: в кодовых единицах UTF-16."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def cover_caption(prefix: str, name: str, label: str | None) -> str:
+    """«<b>Дайджест · МФТИ · 12–18 окт</b>» не длиннее CAPTION_LIMIT: длинное
+    название режется с «…». Меряем уже экранированный HTML — видимый текст
+    подписи после разбора разметки никогда не длиннее."""
+    head = f"<b>{esc(prefix)} · "
+    tail = f" · {esc(label)}</b>" if label else "</b>"
+    room = CAPTION_LIMIT - _units(head) - _units(tail)
+    if _units(esc(name)) <= room:
+        return head + esc(name) + tail
+    pieces, used = [], _units(ELLIPSIS)
+    for char in name:  # html.escape меняет символы по одному
+        piece = esc(char)
+        if used + _units(piece) > room:
+            break
+        pieces.append(piece)
+        used += _units(piece)
+    return head + "".join(pieces).rstrip() + ELLIPSIS + tail
+
+
+def text_only(messages: list[Message]) -> list[Message]:
+    """Обложки нет (не нарисовалась или Telegram её не принял): подпись-шапка
+    первого сообщения становится текстом и встаёт в начало следующей части,
+    если влезает в одно сообщение, иначе уходит отдельной."""
+    if not messages:
+        return []
+    caption, rest = Message(messages[0].text, messages[0].keyboard), list(messages[1:])
+    if rest and rest[0].photo is None and \
+            len(caption.text) + 2 + len(rest[0].text) <= TELEGRAM_LIMIT:
+        return [replace(rest[0], text=f"{caption.text}\n\n{rest[0].text}"), *rest[1:]]
+    return [caption, *rest]
 
 
 # --- /top -------------------------------------------------------------------
@@ -398,30 +442,40 @@ def _week_stats(current: dict, previous: dict | None) -> list[str]:
     return lines
 
 
-def _week_lines(current: dict, previous: dict | None, forecast: dict | None,
-                our_id: int) -> list[str]:
+def week_label(body: dict[str, Any]) -> str | None:
+    """Подпись недели по `asOf` ответа API («10–16 окт»); нет даты — None."""
+    try:
+        return period_label("7d", datetime.fromisoformat(body["asOf"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _with_cover(caption: str | None, body: list[str]) -> list[Message]:
+    """Без обложки — текст как есть; с обложкой первое сообщение — подпись-шапка
+    (картинку подставит вызывающий), тело — следующими, без повтора шапки."""
+    if caption is None:
+        return _messages("\n".join(body))
+    return [Message(caption), *_messages("\n".join(body[1:]).lstrip("\n"))]
+
+
+def render_week(current: dict, previous: dict | None, forecast: dict | None,
+                our_id: int, *, cover: CoverData | None = None,
+                label: str | None = None) -> list[Message]:
     lines = ["<b>Неделя к неделе</b>", *_week_stats(current, previous)]
     forecast_line = _forecast_line(forecast, our_id)
     if forecast_line:
         lines += ["", esc(forecast_line)]
-    return lines
-
-
-def render_week(current: dict, previous: dict | None, forecast: dict | None,
-                our_id: int) -> Message:
-    return Message("\n".join(_week_lines(current, previous, forecast, our_id)))
+    caption = None if cover is None else cover_caption("Неделя к неделе", cover.title, label)
+    return _with_cover(caption, lines)
 
 
 def render_digest(ours: dict, others: dict, current: dict, previous: dict | None,
-                  forecast: dict | None, our_id: int) -> list[Message]:
-    label = "за неделю"
-    try:
-        label = period_label("7d", datetime.fromisoformat(ours["asOf"]))
-    except (KeyError, TypeError, ValueError):
-        pass
+                  forecast: dict | None, our_id: int, *,
+                  cover: CoverData | None = None) -> list[Message]:
+    label = week_label(ours)
     foreign = [item for item in others.get("items") or []
                if item.get("institutionLegacyId") != our_id]
-    lines = [f"<b>Дайджест · {esc(label)}</b>",
+    lines = [f"<b>Дайджест · {esc(label or 'за неделю')}</b>",
              "", band("band_ours", "НАШИ ЛУЧШИЕ"),
              *_own_list(list(ours.get("items") or []), "all", DEFAULT_COUNT),
              "", band("band_others", "ДРУГИЕ ВУЗЫ"),
@@ -430,7 +484,8 @@ def render_digest(ours: dict, others: dict, current: dict, previous: dict | None
     forecast_line = _forecast_line(forecast, our_id)
     if forecast_line:
         lines += ["", band("band_forecast", "ПРОГНОЗ"), esc(forecast_line)]
-    return _messages("\n".join(lines))
+    caption = None if cover is None else cover_caption("Дайджест", cover.title, label)
+    return _with_cover(caption, lines)
 
 
 # --- /help ------------------------------------------------------------------

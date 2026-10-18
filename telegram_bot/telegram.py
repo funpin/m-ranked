@@ -22,6 +22,10 @@ CONNECT_TIMEOUT = 10.0
 LONG_POLL_MARGIN = 15.0
 # Дольше этого ждать по retry_after не стоит: цикл бота встанет.
 MAX_RETRY_AFTER = 60.0
+PHOTO_NAME = "cover.png"
+
+# Поле файла multipart: имя поля → (имя файла, байты, тип).
+Files = dict[str, tuple[str, bytes, str]]
 
 
 class TelegramError(Exception):
@@ -81,15 +85,23 @@ class TelegramClient:
 
     async def _post_once(
         self, method: str, payload: dict[str, Any], read_timeout: float | None,
+        files: Files | None = None,
     ) -> tuple[int, dict[str, Any]]:
         timeout = (
             httpx.Timeout(CALL_TIMEOUT, connect=CONNECT_TIMEOUT, read=read_timeout)
             if read_timeout is not None else httpx.USE_CLIENT_DEFAULT
         )
         try:
-            response = await self._http.post(
-                self._prefix + method, json=payload, timeout=timeout,
-            )
+            if files is None:
+                response = await self._http.post(
+                    self._prefix + method, json=payload, timeout=timeout,
+                )
+            else:
+                # multipart: поля формы — строки, файл — отдельной частью.
+                response = await self._http.post(
+                    self._prefix + method, timeout=timeout, files=files,
+                    data={key: str(value) for key, value in payload.items()},
+                )
         except httpx.HTTPError as error:
             # Сообщение httpx может содержать URL с токеном: берём только
             # класс ошибки и обрываем цепочку исключений.
@@ -113,10 +125,11 @@ class TelegramClient:
         *,
         chat_id: int | None = None,
         read_timeout: float | None = None,
+        files: Files | None = None,
     ) -> Any:
         retried = False
         while True:
-            status, body = await self._post_once(method, payload, read_timeout)
+            status, body = await self._post_once(method, payload, read_timeout, files)
             if body.get("ok") is True:
                 return body.get("result")
             code = body.get("error_code", status)
@@ -168,6 +181,16 @@ class TelegramClient:
         if markup is not None:
             payload["reply_markup"] = markup
         return await self._call("sendMessage", payload, chat_id=chat_id)
+
+    async def send_photo(self, chat_id: int, photo: bytes | str, caption: str) -> dict:
+        """Картинка с подписью (HTML): байты — загрузка файла, строка — file_id
+        уже загруженной. Ошибки — как у send_message."""
+        payload: dict[str, Any] = {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"}
+        if isinstance(photo, str):
+            payload["photo"] = photo
+            return await self._call("sendPhoto", payload, chat_id=chat_id) or {}
+        files = {"photo": (PHOTO_NAME, bytes(photo), "image/png")}
+        return await self._call("sendPhoto", payload, chat_id=chat_id, files=files) or {}
 
     async def edit_message(
         self,

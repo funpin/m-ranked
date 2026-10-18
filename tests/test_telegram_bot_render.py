@@ -22,8 +22,11 @@ from telegram_bot.render import (
     render_top,
     render_week,
     split_message,
+    text_only,
     top_keyboard,
+    week_label,
 )
+from telegram_bot.cover import CoverData
 from telegram_bot.words import TopQuery
 
 FIXTURES = Path(__file__).parent / "fixtures" / "telegram_bot"
@@ -383,17 +386,25 @@ PREVIOUS = {"telegram": {"posts": 10, "views": 117900, "reactions": 3000},
             "vk": {"posts": 8, "views": 15000, "reactions": 0}}
 
 
+def week_text(*args, **kwargs) -> str:
+    messages = render_week(*args, **kwargs)
+    assert isinstance(messages, list) and all(isinstance(m, Message) for m in messages)
+    return text_of(messages)
+
+
 def test_week_without_previous():
-    message = render_week(CURRENT, None, None, OUR_ID)
-    assert isinstance(message, Message)
-    assert "сравнение появится через неделю" in message.text
-    assert "%" not in message.text
-    assert "Telegram" in message.text and "112,0 тыс." in message.text
-    assert "Прогноз" not in message.text
+    messages = render_week(CURRENT, None, None, OUR_ID)
+    assert len(messages) == 1 and messages[0].photo is None
+    text = messages[0].text
+    assert text.startswith("<b>Неделя к неделе</b>")
+    assert "сравнение появится через неделю" in text
+    assert "%" not in text
+    assert "Telegram" in text and "112,0 тыс." in text
+    assert "Прогноз" not in text
 
 
 def test_week_changes():
-    text = render_week(CURRENT, PREVIOUS, None, OUR_ID).text
+    text = week_text(CURRENT, PREVIOUS, None, OUR_ID)
     assert "+100 %" in text   # посты Telegram 10 -> 20
     assert "−5 %" in text     # просмотры Telegram 117900 -> 112000
     assert "0 %" in text      # посты ВК без изменений
@@ -402,20 +413,20 @@ def test_week_changes():
 
 def test_week_forecast_line():
     forecast = fixture("forecast.json")
-    text = render_week(CURRENT, PREVIOUS, forecast, OUR_ID).text
+    text = week_text(CURRENT, PREVIOUS, forecast, OUR_ID)
     assert "Прогноз места в М-Рейтинге (соцсети): ≈12-е ± 7" in text
     assert "ранний" not in text
     forecast["early"] = True
-    text = render_week(CURRENT, PREVIOUS, forecast, OUR_ID).text
+    text = week_text(CURRENT, PREVIOUS, forecast, OUR_ID)
     assert "≈12-е ± 7 — ранний прогноз, месяц только начался" in text
 
 
 def test_week_forecast_missing_pieces_are_omitted():
     forecast = fixture("forecast.json")
-    assert "Прогноз" not in render_week(CURRENT, PREVIOUS, None, OUR_ID).text
-    assert "Прогноз" not in render_week(CURRENT, PREVIOUS, forecast, 999).text
+    assert "Прогноз" not in week_text(CURRENT, PREVIOUS, None, OUR_ID)
+    assert "Прогноз" not in week_text(CURRENT, PREVIOUS, forecast, 999)
     forecast["rows"][0]["categories"]["social"]["rank"] = None
-    assert "Прогноз" not in render_week(CURRENT, PREVIOUS, forecast, OUR_ID).text
+    assert "Прогноз" not in week_text(CURRENT, PREVIOUS, forecast, OUR_ID)
 
 
 def digest_args():
@@ -467,6 +478,80 @@ def test_digest_does_not_mutate_inputs_and_is_stable():
     first = render_digest(ours, others, CURRENT, None, None, OUR_ID)
     assert (ours, others) == before
     assert first == render_digest(ours, others, CURRENT, None, None, OUR_ID)
+
+
+# --- обложка: подпись-шапка --------------------------------------------------
+
+CAPTION_LIMIT = 1024
+
+
+def cover_data(title: str = "Дельта") -> CoverData:
+    return CoverData(title, f"{LABEL} · просмотры за неделю", [])
+
+
+def test_digest_with_cover_starts_with_caption_header():
+    ours, others = digest_args()
+    messages = render_digest(ours, others, CURRENT, PREVIOUS, fixture("forecast.json"), OUR_ID,
+                             cover=cover_data())
+    assert messages[0] == Message("<b>Дайджест · Дельта · 10–16 окт</b>")  # картинку рисует вызывающий
+    rest = text_of(messages[1:])
+    assert "Дайджест" not in rest                        # шапка не повторяется в тексте
+    assert rest.startswith(BANDS[0])
+    assert all(band in rest for band in BANDS)
+    plain = text_of(render_digest(ours, others, CURRENT, PREVIOUS, fixture("forecast.json"), OUR_ID))
+    assert plain.split("\n", 2)[2] == rest              # тело то же, что без обложки
+
+
+def test_week_with_cover_starts_with_caption_header():
+    messages = render_week(CURRENT, PREVIOUS, fixture("forecast.json"), OUR_ID,
+                           cover=cover_data(), label=LABEL)
+    assert messages[0] == Message("<b>Неделя к неделе · Дельта · 10–16 окт</b>")
+    rest = text_of(messages[1:])
+    assert "Неделя к неделе" not in rest
+    assert rest.startswith("Telegram: постов 20 (+100 %)") and "≈12-е ± 7" in rest
+    no_label = render_week(CURRENT, PREVIOUS, None, OUR_ID, cover=cover_data())
+    assert no_label[0].text == "<b>Неделя к неделе · Дельта</b>"
+
+
+def utf16(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2  # так считает длину Telegram
+
+
+@pytest.mark.parametrize("name", ["Я" * 300, "&" * 300, "<b>" * 150, "😀" * 600],
+                         ids=["letters", "amps", "tags", "astral"])
+def test_caption_fits_telegram_limit(name):
+    ours, others = digest_args()
+    captions = [
+        render_digest(ours, others, CURRENT, None, None, OUR_ID, cover=cover_data(name))[0].text,
+        render_week(CURRENT, None, None, OUR_ID, cover=cover_data(name), label=LABEL)[0].text,
+    ]
+    for caption in captions:
+        assert utf16(caption) <= CAPTION_LIMIT
+        assert caption.startswith("<b>") and caption.endswith(" · 10–16 окт</b>")
+        assert caption.count("<b>") == 1                  # имя экранировано
+    if name == "Я" * 300:
+        assert name in captions[0]                        # влезает — не режем
+    else:
+        assert "…" in captions[0]                         # не влезает — обрезано с «…»
+
+
+def test_text_only_merges_caption_into_first_text():
+    ours, others = digest_args()
+    messages = render_digest(ours, others, CURRENT, PREVIOUS, None, OUR_ID, cover=cover_data())
+    drawn = [Message(messages[0].text, photo=b"png"), *messages[1:]]
+    merged = text_only(drawn)
+    assert all(m.photo is None for m in merged)
+    assert merged[0].text == messages[0].text + "\n\n" + messages[1].text
+    assert merged[1:] == messages[2:]
+    # Не влезает в одно сообщение — шапка уходит отдельным текстом.
+    long = [Message("<b>шапка</b>", photo=b"png"), Message("x" * 4096)]
+    assert text_only(long) == [Message("<b>шапка</b>"), Message("x" * 4096)]
+    assert text_only([Message("<b>шапка</b>", photo=b"png")]) == [Message("<b>шапка</b>")]
+
+
+def test_week_label_from_as_of():
+    assert week_label({"asOf": "2026-10-16T12:00:00+00:00"}) == LABEL
+    assert week_label({}) is None and week_label({"asOf": "мусор"}) is None
 
 
 def test_help_lists_all_word_kinds():
