@@ -1,10 +1,10 @@
 """Слоты значков бота: запасное обычное эмодзи и id кастомного из нашего набора.
 
-Все значки в тексте берутся отсюда, по имени слота. Пока набора нет (часть 2
-спека 2026-10-18), id пустые и выводится обычное эмодзи. Когда набор появится,
-id из ответа createNewStickerSet вписываются в таблицу — тексты править не надо.
-id кастомных эмодзи публичны, это не секрет. У читателей без Premium и в
-уведомлениях Telegram сам покажет запасное эмодзи из тега.
+Все значки в тексте берутся отсюда, по имени слота. id набора лежат не в
+репозитории, а в файле на сервере (IDS_FILE): по id эмодзи любой узнаёт имя
+набора, а в нём — имя бота. Файл печатает operations/scripts/create-bot-emoji-set.py;
+нет файла — выводится обычное эмодзи, тексты править не надо. В уведомлениях и
+пересылке Telegram сам покажет запасное эмодзи из тега.
 
 На кнопках кастомных эмодзи нет (решение владельца): кнопки — обычный текст.
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 from pathlib import Path
 
@@ -55,7 +56,7 @@ BANNERS: dict[str, tuple[str, str]] = {
 }
 BANNER_TILES = 5
 BANNER_FILL = "➖"
-IDS_FILE = Path(__file__).resolve().parent / "emoji-ids.json"
+IDS_FILE = Path(os.environ.get("TELEGRAM_BOT_EMOJI_IDS_FILE", "").strip() or "/etc/m-ranked/telegram-bot-emoji.json")
 
 
 def load_ids(path: Path) -> dict[str, str]:

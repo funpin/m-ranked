@@ -58,7 +58,7 @@ def test_band_is_icon_and_bold_label(monkeypatch):
     assert emoji.band("band_week", "НЕДЕЛЯ") == f'<tg-emoji emoji-id="{FAKE_ID}">📅</tg-emoji> <b>НЕДЕЛЯ</b>'
 
 
-# --- набор m-ranked: id из telegram_bot/emoji-ids.json, плашки из пяти эмодзи ------
+# --- набор m-ranked: id из файла на сервере, плашки из пяти эмодзи ---------------
 
 def test_load_ids_keeps_only_digit_ids(tmp_path):
     from telegram_bot.emoji import load_ids
