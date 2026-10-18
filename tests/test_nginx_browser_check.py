@@ -81,6 +81,10 @@ def site(tmp_path_factory):
     (inner / "build.conf").write_text('map $host $m_ranked_build { default "test"; }\n', encoding="utf-8")
     (inner / "pass-secret.conf").write_text('map "" $m_ranked_pass_secret { default "' + "ab" * 32 + '"; }\n',
                                             encoding="utf-8")
+    # Лимит по странам: все «свои»; тест лимита помечает «чужим» адрес самого
+    # контейнера и перечитывает конфигурацию.
+    (inner / "geo-home.conf").write_text("geo $http_x_mranked_client $m_ranked_home_country { default 1; }\n",
+                                         encoding="utf-8")
     upstream = f"host.docker.internal:{stub.server_address[1]}"
     (conf / "nginx.conf").write_text(f"""
 load_module /usr/lib/nginx/modules/ngx_http_js_module.so;
@@ -119,7 +123,7 @@ http {{
         else:
             logs = subprocess.run(["docker", "logs", container], capture_output=True, text=True)
             pytest.fail("nginx не поднялся:\n" + logs.stdout + logs.stderr)
-        yield base, container
+        yield base, container, inner
     finally:
         subprocess.run(["docker", "rm", "-f", container], capture_output=True)
         stub.shutdown()
@@ -162,7 +166,7 @@ def pass_cookie(base: str, path: str) -> str:
 
 
 def test_anonymous_miss_gets_challenge_not_render(site):
-    base, _ = site
+    base, _, _ = site
     status, headers, body = get(base + "/publications/a1")
     assert status == 429
     assert Stub.renders["/publications/a1"] == 0
@@ -174,7 +178,7 @@ def test_anonymous_miss_gets_challenge_not_render(site):
 
 
 def test_solved_challenge_gives_cookie_and_page_is_then_cached_for_everyone(site):
-    base, _ = site
+    base, _, _ = site
     cookie = pass_cookie(base, "/publications/b2")
     status, headers, body = get(base + "/publications/b2", cookie=cookie)
     assert status == 200 and "page /publications/b2" in body
@@ -186,7 +190,7 @@ def test_solved_challenge_gives_cookie_and_page_is_then_cached_for_everyone(site
 
 
 def test_stale_copy_beats_challenge(site):
-    base, _ = site
+    base, _, _ = site
     cookie = pass_cookie(base, "/accounts/c3")
     assert get(base + "/accounts/c3?ttl=1", cookie=cookie)[0] == 200
     time.sleep(2.5)  # срок в nginx — целые секунды: «1» живёт до двух
@@ -197,7 +201,7 @@ def test_stale_copy_beats_challenge(site):
 def test_app_cache_lifetime_reaches_the_public_layer(site):
     """Срок из X-Accel-Expires приложения доходит через шлюз до кэша страниц:
     через 6 с (дольше запасных 5 с) страница всё ещё свежая, без рендера."""
-    base, _ = site
+    base, _, _ = site
     cookie = pass_cookie(base, "/accounts/k9")
     assert get(base + "/accounts/k9?ttl=60", cookie=cookie)[0] == 200
     time.sleep(6)
@@ -207,19 +211,19 @@ def test_app_cache_lifetime_reaches_the_public_layer(site):
 
 
 def test_rsc_navigation_without_cookie_is_challenged_and_prefetch_is_not(site):
-    base, _ = site
+    base, _, _ = site
     assert get(base + "/institutions/4", headers={"RSC": "1"})[0] == 429
     assert get(base + "/institutions/5", headers={"Next-Router-Prefetch": "1", "RSC": "1"})[0] == 200
 
 
 def test_search_engines_and_next_files_are_not_challenged(site):
-    base, _ = site
+    base, _, _ = site
     assert get(base + "/publications/d4", agent=GOOGLE)[0] == 200
     assert get(base + "/_next/data/x.json")[0] == 200
 
 
 def test_forged_or_expired_tokens_are_rejected(site):
-    base, _ = site
+    base, _, _ = site
     assert get(base + "/publications/e5", cookie="mr_pass=9999999999.forged")[0] == 429
     status, _, body = get(base + "/publications/e5")
     challenge = re.search(r'var c="([^"]+)"', body).group(1)
@@ -230,7 +234,7 @@ def test_forged_or_expired_tokens_are_rejected(site):
 
 
 def test_pass_redirect_stays_on_site(site):
-    base, _ = site
+    base, _, _ = site
     _, _, body = get(base + "/publications/f6")
     challenge = re.search(r'var c="([^"]+)"', body).group(1)
     nonce = solve(challenge)
@@ -240,7 +244,7 @@ def test_pass_redirect_stays_on_site(site):
 
 
 def test_requests_from_the_server_itself_are_not_challenged(site):
-    _, container = site
+    _, container, _ = site
     probe = subprocess.run(["docker", "exec", container, "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
                             "-A", CHROME, "http://127.0.0.1:8080/publications/g7"],
                            capture_output=True, text=True)
@@ -249,7 +253,7 @@ def test_requests_from_the_server_itself_are_not_challenged(site):
 
 def test_challenge_page_solves_in_a_real_browser(site):
     playwright = pytest.importorskip("playwright.sync_api")
-    base, _ = site
+    base, _, _ = site
     with playwright.sync_playwright() as p:
         try:
             browser = p.chromium.launch()
@@ -268,7 +272,7 @@ def test_challenge_overhead_in_chromium(site):
     """Цена проверки для человека: первое открытие (задача + /__pass + страница)
     против следующей холодной страницы с кукой. Печатает медианы (pytest -s)."""
     playwright = pytest.importorskip("playwright.sync_api")
-    base, _ = site
+    base, _, _ = site
     first, again = [], []
     with playwright.sync_playwright() as p:
         try:
@@ -289,3 +293,35 @@ def test_challenge_overhead_in_chromium(site):
     print(f"\nпервое открытие с проверкой: медиана {first[4] * 1000:.0f} мс, макс {first[-1] * 1000:.0f} мс; "
           f"холодная страница с кукой: медиана {again[4] * 1000:.0f} мс, макс {again[-1] * 1000:.0f} мс")
     assert first[4] < 2.0
+
+
+def _foreign_rejections(container: str) -> int:
+    logs = subprocess.run(["docker", "logs", container], capture_output=True, text=True)
+    return (logs.stdout + logs.stderr).count('by zone "m_ranked_foreign_detail"')
+
+
+def test_foreign_visitors_with_cookie_share_a_cold_page_limit(site):
+    """Чужая страна с кукой: свой общий лимит (10/мин, всплеск 10) — его отказы
+    видны в журнале по имени зоны. Свой посетитель в эту зону не попадает."""
+    base, container, inner = site
+    cookie = pass_cookie(base, "/publications/geo0")
+    address = subprocess.run(["docker", "exec", container, "sh", "-c", "hostname -i | cut -d' ' -f1"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+    (inner / "geo-home.conf").write_text(
+        f"geo $http_x_mranked_client $m_ranked_home_country {{ default 1; {address}/32 0; }}\n", encoding="utf-8")
+    subprocess.run(["docker", "exec", container, "nginx", "-s", "reload", "-c", "/etc/m-ranked-test/nginx.conf"],
+                   capture_output=True, check=True)
+    time.sleep(1)
+    before = _foreign_rejections(container)
+    # Не чаще 2 в секунду: иначе раньше сработает лимит промахов на адрес.
+    script = (f'for i in $(seq 1 25); do curl -s -o /dev/null -w "%{{http_code}}\\n" -A "{CHROME}" '
+              f'-H "Cookie: {cookie}" http://{address}:8080/publications/geo-$i; sleep 0.55; done')
+    codes = subprocess.run(["docker", "exec", container, "sh", "-c", script],
+                           capture_output=True, text=True, check=True).stdout.split()
+    assert codes.count("200") <= 13 and codes.count("503") >= 12, codes
+    assert _foreign_rejections(container) > before
+    seen = _foreign_rejections(container)
+    for i in range(5):
+        get(f"{base}/publications/home-{i}", cookie=cookie)
+        time.sleep(0.55)
+    assert _foreign_rejections(container) == seen
