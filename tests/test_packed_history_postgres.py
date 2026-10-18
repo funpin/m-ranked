@@ -315,3 +315,15 @@ def test_released_partition_keeps_packed_points_readable():
                                    "WHERE publication_id = %s ORDER BY id", (publication_id,)).fetchall()
     assert size_after < size_before / 4
     assert after == before and len(after) == 3000
+
+
+def test_analyze_does_not_sample_packed_arrays():
+    """0088: ANALYZE не распаковывает массивы ряда — новый массив тоже без статистики."""
+    with connect() as connection:
+        sampled = connection.execute("""
+            SELECT attname FROM pg_attribute
+             WHERE attrelid = 'ingest.publication_metric_history'::regclass AND attnum > 0 AND NOT attisdropped
+               AND (attndims > 0 OR format_type(atttypid, atttypmod) LIKE '%%[]' OR attname = 'block_sha256')
+               AND attstattarget IS DISTINCT FROM 0
+             ORDER BY attname""").fetchall()
+    assert sampled == []
