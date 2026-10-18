@@ -366,10 +366,24 @@ class Bot:
         elif command == "digest":
             await self.send_digest_here(chat_id)
         elif command == "status":
-            rows = await self.store.status_rows(STATUS_WINDOW_SECONDS)
-            await self.reply(chat_id, render_status(rows, self.clock()))
+            message = await self._status_message()
+            await self.reply(chat_id, message.text, message.keyboard)
         elif command == "settings":
             await settings.open_menu(self, access)
+
+    async def _status_message(self) -> Message:
+        rows = await self.store.status_rows(STATUS_WINDOW_SECONDS)
+        return render_status(rows, self.clock(), self.config.timezone)
+
+    async def _status_callback(self, callback: dict, access: Access, message: dict) -> None:
+        """«Обновить» под /status: те же условия, что у самой команды."""
+        if not (access.alerts and access.private):
+            await self.telegram.answer_callback(callback["id"], "недоступно")
+            return
+        fresh = await self._status_message()
+        # Текст не изменился — Telegram ответит «not modified», клиент это глотает.
+        await self.edit_and_answer(callback["id"], access.chat_id, message["message_id"],
+                                   fresh.text, fresh.keyboard, "обновлено")
 
     def _addressed_elsewhere(self, text: str) -> bool:
         head = text.strip().split(None, 1)[0]
@@ -508,6 +522,8 @@ class Bot:
             await self._top_callback(callback, access, message)
         elif data.startswith("s|"):
             await settings.on_callback(self, callback, access, message)
+        elif data.startswith("st|"):
+            await self._status_callback(callback, access, message)
         elif data.startswith("m|"):
             if access.alerts and access.private:
                 await self.on_mute_callback(callback, access)

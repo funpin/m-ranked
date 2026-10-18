@@ -1,44 +1,97 @@
 """Текст /status: главные проверки из тех же снимков и той же арифметики, что
-панель администратора (api/system_overview.status_summary)."""
+панель администратора (api/system_overview.status_summary).
+
+Вердикт первой строкой, проблемы сверху, потом сбор по площадкам и сервер.
+Картинки нет: ответ должен приходить мгновенно и копироваться текстом."""
 from __future__ import annotations
+
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from api.system_overview import PROFILE_B_FRESHNESS, status_summary
 
-from .render import esc
+from .emoji import icon
+from .render import Message, esc
 
 # Окно снимков для /status: три часа проверок сбора плюс запас на опорный снимок.
 STATUS_WINDOW_SECONDS = 3 * 3600 + 900
 COLLECTION_SPAN_SECONDS = 3 * 3600
+REFRESH_DATA = "st|r"
+REFRESH_KEYBOARD = [[{"text": "🔄 Обновить", "callback_data": REFRESH_DATA}]]
+# Кружки состояния — светофор, не бренд: слотов у них нет.
 ICONS = {"ok": "🟢", "warn": "🟡", "fail": "🔴", "unknown": "⚪"}
-_RANK = {"ok": 0, "unknown": 1, "warn": 2, "fail": 3}
-# Порядок строк после сбора; «sample» появляется вместо них, если снимки устарели.
-LINE_KEYS = ("ingest", "analysis", "units", "disk", "memory", "sample")
+# Порядок проверок сервера; «sample» отдельно — это строка о самом снимке.
+SERVER_KEYS = ("ingest", "analysis", "units", "disk", "memory", "backup", "errors")
+PLATFORM_SLOTS = ("telegram", "vk", "max", "rutube")
 
 
-def _worst(states: list[str]) -> str:
-    return max(states, key=lambda state: _RANK.get(state, 1)) if states else "unknown"
+def _thousands(value: int) -> str:
+    """Точный счёт с пробелом между тысячами: 2916 → «2 916»."""
+    return f"{value:,}".replace(",", " ")
 
 
-def render_status(rows: list[dict], now: float) -> str:
+def _light(state: str) -> str:
+    return ICONS.get(state, ICONS["unknown"])
+
+
+def _snapshot_time(sampled_at: str | None, tz: str) -> str | None:
+    if not sampled_at:
+        return None
+    try:
+        moment = datetime.fromisoformat(sampled_at)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(ZoneInfo(tz)).strftime("%H:%M")
+
+
+def _verdict(states: list[str]) -> str:
+    failed, warned = states.count("fail"), states.count("warn")
+    if failed:
+        tail = f", предупреждений: {warned}" if warned else ""
+        return f"🔴 <b>Проблем: {failed}{tail}</b>"
+    if warned:
+        return f"🟡 <b>Предупреждений: {warned}</b>"
+    if "unknown" in states:
+        return "⚪ <b>Часть проверок без данных</b>"
+    return "🟢 <b>Всё в порядке</b>"
+
+
+def render_status(rows: list[dict], now: float, tz: str = "Europe/Moscow") -> Message:
     summary = status_summary(rows, now, lambda platform: PROFILE_B_FRESHNESS[platform],
                              span=COLLECTION_SPAN_SECONDS)
     checks = summary["checks"]
-    collection = [check for check in checks if check["key"].startswith("collection.")]
-    parts = []
-    for check in collection:
-        name = check["label"].split(" · ", 1)[-1]
-        part = f"{name} {ICONS.get(check['state'], '⚪')}"
-        if check["state"] != "ok":
-            part += f" ({check['detail']})"
-        parts.append(part)
+    by_key = {check["key"]: check for check in checks}
+    snapshot = _snapshot_time(summary["sampledAt"], tz)
+    head = f"{icon('logo')} <b>Состояние m-ranked</b> · "
+    head += f"снимок {snapshot}" if snapshot else "снимков нет"
+    if summary["sampledAt"] is None:
+        # Без снимков остальные строки только вводят в заблуждение: один вердикт.
+        return Message("\n".join([head, "🔴 <b>Снимков сервера нет</b>"]), REFRESH_KEYBOARD)
+
+    lines = [head, _verdict([check["state"] for check in checks])]
+    if by_key.get("sample", {}).get("state") == "fail":
+        lines.append("снимок сервера устарел — данные ниже могут быть старыми")
+
+    problems = [check for state in ("fail", "warn") for check in checks if check["state"] == state]
+    if problems:
+        lines += ["", f"{icon('alert_urgent')} <b>ПРОБЛЕМЫ</b>"]
+        lines += [f"{_light(check['state'])} <b>{esc(check['label'])}</b>: {esc(check['detail'])}"
+                  for check in problems]
+
+    lines += ["", "<b>СБОР</b>"]
+    for platform in PLATFORM_SLOTS:
+        check = by_key.get(f"collection.{platform}")
+        if check is not None:
+            lines.append(f"{icon(platform)} {_light(check['state'])} {esc(check['detail'])}")
     ok = sum(entry["ok"] for entry in summary["collection"])
     failed = sum(entry["failed"] for entry in summary["collection"])
-    first = (f"{ICONS[_worst([check['state'] for check in collection])]} Сбор: "
-             f"{'; '.join(parts)}. За 3 ч успешно {ok}, ошибок {failed}")
-    lines = [esc(first)]
-    by_key = {check["key"]: check for check in checks}
-    for key in LINE_KEYS:
-        check = by_key.get(key)
-        if check is not None:
-            lines.append(esc(f"{ICONS.get(check['state'], '⚪')} {check['label']}: {check['detail']}"))
-    return "\n".join(lines)
+    lines.append(f"<i>за 3 ч: успешно {_thousands(ok)}, ошибок {_thousands(failed)}</i>")
+
+    server = [by_key[key] for key in SERVER_KEYS if key in by_key]
+    if server:
+        lines += ["", "<b>СЕРВЕР 2</b>"]
+        lines += [f"{_light(check['state'])} {esc(check['label'])} · {esc(check['detail'])}"
+                  for check in server]
+    return Message("\n".join(lines), REFRESH_KEYBOARD)

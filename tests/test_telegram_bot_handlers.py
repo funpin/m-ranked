@@ -283,34 +283,47 @@ def test_status_refused_in_group():
     handle(bot, private_message(ADMIN, "/status"))
     rows = asyncio.run(store.status_rows(3 * 3600 + 900))
     assert rows
-    assert sent_texts(telegram, ADMIN)[-1] == render_status(rows, NOW)
+    expected = render_status(rows, NOW)
+    sent = telegram.of("send")[-1]
+    assert sent[1] == ADMIN and sent[2] == expected.text and sent[3] == expected.keyboard
+    assert button_by_text(sent[3], "Обновить")["callback_data"] == "st|r"
 
 
-def test_render_status_lines():
-    now = NOW
-    observed = datetime.fromtimestamp(now - 60, timezone.utc)
-    sample = {
-        "collection": {"telegram": {"ok": 5, "failed": 1, "lastOk": now - 120},
-                       "vk": {"ok": 3, "failed": 0, "lastOk": now - 4000}},
-        "pipeline": {"ingestAcceptedAt": now - 60, "analysisLag": 120, "analysisBacklog": 5},
-        "units": {"failed": ["m-ranked-target-web.service"]},
-        "disk": {"total": 100 * 10**9, "free": 40 * 10**9},
-        "memory": {"total": 100, "available": 50},
-    }
-    rows = [{"observed_at": datetime.fromtimestamp(now - 120, timezone.utc), "sample": {}},
-            {"observed_at": observed, "sample": sample}]
-    lines = render_status(rows, now).split("\n")
-    assert 5 <= len(lines) <= 6
-    assert lines[0].startswith("🔴") and "Сбор" in lines[0]  # MAX и Rutube без успешных циклов
-    assert "Telegram 🟢" in lines[0] and "ВКонтакте 🟡" in lines[0]
-    assert any(line.startswith("🟢") and "Приём с Сервера 1" in line for line in lines)
-    assert any("Очередь анализа" in line and "отставание 2 мин" in line for line in lines)
-    assert any(line.startswith("🔴") and "m-ranked-target-web.service" in line for line in lines)
-    assert any(line.startswith("🟢") and "Диск" in line for line in lines)
-    assert any(line.startswith("🟢") and "Память" in line and "50%" in line for line in lines)
-    # Без снимков: строка сбора и строка о снимке, без исключения.
-    empty = render_status([], now).split("\n")
-    assert len(empty) == 2 and "Снимок сервера" in empty[1]
+def status_store(store) -> None:
+    store.host_samples.append({"observed_at": datetime.now(timezone.utc) - timedelta(seconds=60),
+                               "sample": {"disk": {"total": 100 * 10**9, "free": 40 * 10**9}}})
+
+
+def test_status_refresh_edits_same_message():
+    bot, telegram, _, store = make_bot()
+    status_store(store)
+    handle(bot, private_message(ADMIN, "/status"))
+    sent = telegram.of("send")[-1]
+    handle(bot, callback(ADMIN, ADMIN, sent[4], "st|r"))
+    edits = telegram.of("edit")
+    assert len(edits) == 1 and edits[0][1] == ADMIN and edits[0][2] == sent[4]
+    assert "Состояние m-ranked" in edits[0][3]
+    assert button_by_text(edits[0][4], "Обновить")["callback_data"] == "st|r"
+    assert telegram.of("answer") == [("answer", "cb1", "обновлено")]
+    assert len(telegram.of("send")) == 1
+
+
+def test_status_refresh_answers_even_if_edit_fails():
+    bot, telegram, _, store = make_bot()
+    status_store(store)
+    telegram.edit_error = TelegramError("editMessageText: Telegram ответил 500")
+    handle(bot, callback(ADMIN, ADMIN, 55, "st|r"))
+    assert telegram.of("answer") == [("answer", "cb1", "обновлено")]
+
+
+def test_status_refresh_refused_in_group_and_for_non_alerts():
+    bot, telegram, _, store = make_bot()
+    status_store(store)
+    handle(bot, callback(ADMIN, GROUP, 55, "st|r", chat_type="supergroup"))  # в группе
+    handle(bot, callback(PERSON, PERSON, 56, "st|r"))  # не в списке тревог
+    handle(bot, callback(STRANGER, STRANGER, 57, "st|r"))  # чужой
+    assert telegram.of("edit") == []
+    assert telegram.of("answer") == [("answer", "cb1", "недоступно")] * 3
 
 
 def test_callback_edits_same_message():
