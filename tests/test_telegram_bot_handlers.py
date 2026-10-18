@@ -304,7 +304,8 @@ def test_callback_edits_same_message():
     edits = telegram.of("edit")
     assert len(edits) == 1 and edits[0][1] == PERSON and edits[0][2] == message_id
     assert "Лучшие посты всех вузов" in edits[0][3]
-    assert button_by_text(edits[0][4], "Все вузы")["text"].startswith("✓")
+    assert button_by_text(edits[0][4], "Все вузы")["text"] == "✅ Все вузы"
+    assert button_by_text(edits[0][4], "Наши")["text"] == "⬜ Наши"
     assert telegram.of("answer") == [("answer", "cb1", None)]
     assert len(telegram.of("send")) == 1
 
@@ -383,8 +384,84 @@ def test_ambiguous_institution_asks_which():
     sent = telegram.of("send")[-1]
     assert "Какой" in sent[2] and "top_body" not in source.calls
     choices = [decode_callback(b["callback_data"]) for b in buttons(sent[3])]
-    assert {query.institution for query in choices} == {4, 11, 12, 13}
-    assert all(query.who == "institution" for query in choices)
+    assert {query.institution for query, _ in choices} == {4, 11, 12, 13}
+    assert all(query.who == "institution" for query, _ in choices)
+    assert all(author is None for _, author in choices)  # в личке замок не нужен
+
+
+# --- замок на автора меню ---------------------------------------------------
+
+FOREIGN_MENU = "Это меню вызвал другой участник — напишите свой /top"
+
+
+def group_callback(user: int, data: str, message_id: int = 55) -> dict:
+    return callback(user, GROUP, message_id, data, chat_type="supergroup")
+
+
+def authors(keyboard) -> set:
+    return {decode_callback(b["callback_data"])[1] for b in buttons(keyboard)}
+
+
+def test_group_menu_obeys_only_its_author():
+    bot, telegram, source, _ = make_bot()
+    handle(bot, group_message(STRANGER, "/top"))
+    sent = telegram.of("send")[-1]
+    assert authors(sent[3]) == {STRANGER}
+    pressed = button_by_text(sent[3], "Все вузы")["callback_data"]
+    calls_before = list(source.calls)
+    handle(bot, group_callback(PERSON, pressed, sent[4]))
+    assert telegram.of("edit") == []
+    assert telegram.of("answer") == [("answer", "cb1", FOREIGN_MENU)]
+    assert source.calls == calls_before  # чужое нажатие не читает API
+    handle(bot, group_callback(STRANGER, pressed, sent[4]))
+    edits = telegram.of("edit")
+    assert len(edits) == 1 and "Лучшие посты всех вузов" in edits[0][3]
+    assert authors(edits[0][4]) == {STRANGER}  # новое меню тоже под замком
+    assert telegram.of("answer")[-1] == ("answer", "cb1", None)
+
+
+def test_old_button_without_author_works_for_anyone():
+    bot, telegram, _, _ = make_bot()
+    handle(bot, group_callback(PERSON, "t|a|a|w||0"))
+    edits = telegram.of("edit")
+    assert len(edits) == 1 and "Лучшие посты всех вузов" in edits[0][3]
+    assert telegram.of("answer") == [("answer", "cb1", None)]
+    assert authors(edits[0][4]) == {None}
+
+
+def test_no_lock_in_private():
+    bot, telegram, _, _ = make_bot()
+    handle(bot, private_message(PERSON, "/top"))
+    assert authors(telegram.of("send")[-1][3]) == {None}
+    handle(bot, callback(PERSON, PERSON, 55, encode_callback(TopQuery(who="all"), STRANGER)))
+    assert len(telegram.of("edit")) == 1
+    assert telegram.of("answer") == [("answer", "cb1", None)]
+
+
+def test_which_one_keyboard_is_locked_too():
+    bot, telegram, source, _ = make_bot()
+    handle(bot, group_message(STRANGER, "/top университет"))
+    sent = telegram.of("send")[-1]
+    assert "Какой" in sent[2] and authors(sent[3]) == {STRANGER}
+    choice = buttons(sent[3])[0]["callback_data"]
+    handle(bot, group_callback(PERSON, choice, sent[4]))
+    assert telegram.of("edit") == [] and telegram.of("answer")[-1][2] == FOREIGN_MENU
+    assert "top_body" not in source.calls
+    handle(bot, group_callback(STRANGER, choice, sent[4]))
+    assert len(telegram.of("edit")) == 1 and authors(telegram.of("edit")[0][4]) == {STRANGER}
+
+
+def test_anonymous_admin_menu_author_is_sender_chat():
+    bot, telegram, _, _ = make_bot()
+    update = group_message(ADMIN, "/top")
+    update["message"]["sender_chat"] = {"id": GROUP, "type": "supergroup"}
+    handle(bot, update)
+    sent = telegram.of("send")[-1]
+    assert authors(sent[3]) == {GROUP}
+    # Кто нажал от имени чата, Telegram не говорит: такое меню слушается всех.
+    handle(bot, group_callback(PERSON, button_by_text(sent[3], "Все вузы")["callback_data"], sent[4]))
+    assert len(telegram.of("edit")) == 1
+    assert authors(telegram.of("edit")[0][4]) == {GROUP}
 
 
 def test_no_institution_yet():

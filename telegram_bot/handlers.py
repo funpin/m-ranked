@@ -50,6 +50,7 @@ NOT_UNDERSTOOD = "Не понял. Команды — в /help."
 ANSWER_BELOW = "ответ ниже"
 MUTE_REFUSED = "заглушать тревоги можно только в личке, из списка тревог"
 STALE_BUTTON = "кнопка устарела"
+FOREIGN_MENU = "Это меню вызвал другой участник — напишите свой /top"
 MAX_CHOICES = 8
 
 BASE_COMMANDS = [
@@ -83,6 +84,24 @@ def person_commands(r: Recipient) -> list[tuple[str, str]]:
     if r.is_admin:
         commands.append(SETTINGS_COMMAND)
     return commands
+
+
+def menu_author(message: dict) -> int | None:
+    """Кто вызвал меню: id человека, а от имени чата (анонимный админ группы,
+    пост канала) — id этого чата: «from» тогда — служебный бот Telegram."""
+    sender = message.get("sender_chat")
+    value = (sender or {}).get("id") if sender else (message.get("from") or {}).get("id")
+    return value if isinstance(value, int) and not isinstance(value, bool) and value != 0 else None
+
+
+def foreign_press(author: int | None, access: Access) -> bool:
+    """Нажал не тот, кто вызвал меню. Замок — только в группах; кнопки без автора
+    (отправленные до замка) слушаются всех. Автор-чат (отрицательный id): кто
+    нажимает от имени чата, Telegram в callback не сообщает — в «from» всегда
+    живой человек, и сверить его с чатом нельзя, поэтому такое меню слушается всех."""
+    if access.private or author is None or author < 0:
+        return False
+    return access.user_id != author
 
 
 def _is_member(member: dict) -> bool:
@@ -267,9 +286,11 @@ class Bot:
             if access.private:
                 await self.reply(chat["id"], NOT_UNDERSTOOD if access.known_person else NO_ACCESS)
             return
-        await self._on_command(command, args, access)
+        # Автор меню нужен только в группах: в личке нажимать больше некому.
+        await self._on_command(command, args, access, None if private else menu_author(message))
 
-    async def _on_command(self, command: str, args: str, access: Access) -> None:
+    async def _on_command(self, command: str, args: str, access: Access,
+                          author: int | None = None) -> None:
         chat_id = access.chat_id
         if not allowed(command, access):
             if not access.known:
@@ -293,7 +314,7 @@ class Bot:
         elif command == "help":
             await self.reply(chat_id, self._help(access))
         elif command == "top":
-            await self._top_command(chat_id, args)
+            await self._top_command(chat_id, args, author)
         elif command == "week":
             await self._week(chat_id)
         elif command == "digest":
@@ -330,7 +351,7 @@ class Bot:
 
     # --- /top -----------------------------------------------------------
 
-    async def _top_messages(self, query: TopQuery) -> list[Message]:
+    async def _top_messages(self, query: TopQuery, author: int | None = None) -> list[Message]:
         """Ответ на запрос; SourceUnavailable и _NoOurs — вызывающему."""
         our = await self.store.get_setting(OUR_INSTITUTION)
         if query.who == "ours" and our is None:
@@ -340,9 +361,9 @@ class Bot:
             as_of = datetime.fromisoformat(body["asOf"])
         except (KeyError, TypeError, ValueError):
             as_of = datetime.fromtimestamp(self.clock(), ZoneInfo(self.config.timezone))
-        return render_top(query, body, our, period_label(query.period, as_of))
+        return render_top(query, body, our, period_label(query.period, as_of), author)
 
-    async def _top_command(self, chat_id: int, args: str) -> None:
+    async def _top_command(self, chat_id: int, args: str, author: int | None = None) -> None:
         try:
             institutions = await self.source.institutions()
             query = parse_top(args, institutions)
@@ -352,11 +373,12 @@ class Bot:
                 names = {inst.legacy_id: inst.short_name or inst.name for inst in institutions}
                 base = replace(query, who="institution", unknown=(), candidates=(), suggestions=())
                 keyboard = [[{"text": names.get(legacy_id, f"вуз №{legacy_id}"),
-                              "callback_data": encode_callback(replace(base, institution=legacy_id))}]
+                              "callback_data": encode_callback(replace(base, institution=legacy_id),
+                                                               author)}]
                             for legacy_id in options[:MAX_CHOICES]]
                 await self.reply(chat_id, "Какой из них?", keyboard)
                 return
-            messages = await self._top_messages(query)
+            messages = await self._top_messages(query, author)
         except SourceUnavailable as error:
             log.warning("top: %s", type(error).__name__)
             await self.reply(chat_id, SOURCE_DOWN)
@@ -376,15 +398,20 @@ class Bot:
 
     async def _top_callback(self, callback: dict, access: Access, message: dict) -> None:
         callback_id = callback["id"]
-        query = decode_callback(callback.get("data") or "")
-        if query is None:
+        decoded = decode_callback(callback.get("data") or "")
+        if decoded is None:
             await self.telegram.answer_callback(callback_id, STALE_BUTTON)
             return
+        query, author = decoded
         if not allowed("top", access):
             await self.telegram.answer_callback(callback_id, NO_ACCESS)
             return
+        if foreign_press(author, access):
+            # Сообщение не трогаем и API не читаем: только подсказка нажавшему.
+            await self.telegram.answer_callback(callback_id, FOREIGN_MENU)
+            return
         try:
-            messages = await self._top_messages(query)
+            messages = await self._top_messages(query, author)
         except SourceUnavailable as error:
             log.warning("top callback: %s", type(error).__name__)
             await self.telegram.answer_callback(callback_id, SOURCE_DOWN)

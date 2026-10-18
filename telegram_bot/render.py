@@ -2,8 +2,9 @@
 
 Сообщения идут в режиме HTML, поэтому всё динамическое (названия, ссылки,
 подписи периода) проходит через html.escape. Текста постов в API нет, строка
-поста — вуз, площадка и тип, ссылка, индекс «во сколько раз выше нормы»,
-просмотры.
+поста — значок площадки, место, ссылка на слове типа поста, индекс «во сколько
+раз выше нормы», просмотры; вуз — только там, где вузы смешаны. Значки — через
+слоты emoji.py.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .emoji import band, icon
 from .words import TopQuery
 
 TELEGRAM_LIMIT = 4096
@@ -39,15 +41,20 @@ _PLATFORM_CODES = {"all": "a", "telegram": "t", "vk": "v", "max": "m", "rutube":
 _PERIOD_CODES = {"1d": "d", "7d": "w", "30d": "m"}
 _CALLBACK_RE = re.compile(
     r"t\|(?P<who>o|a|i[1-9][0-9]{0,9})\|(?P<platform>[atvmr])\|(?P<period>[dwm])"
-    r"\|(?P<count>[1-9]|1[0-9]|20)?\|(?P<suspicious>[01])",
+    r"\|(?P<count>[1-9]|1[0-9]|20)?\|(?P<suspicious>[01])"
+    # Автор меню (необязателен: кнопки до замка — без него). Со знаком: от имени
+    # чата (анонимный админ, канал) автор — отрицательный id чата.
+    r"(?:\|(?P<author>-?[1-9][0-9]{0,18}))?",
     re.ASCII,
 )
+_AUTHOR_LIMIT = 10**19  # 19 цифр — с запасом больше любых id Telegram
 
 
 @dataclass(frozen=True)
 class Message:
-    text: str
+    text: str  # при photo — подпись к картинке
     keyboard: list[list[dict]] | None = None
+    photo: bytes | None = None
 
 
 def esc(value: object) -> str:
@@ -136,45 +143,81 @@ def _name(item: dict[str, Any]) -> str:
     return item.get("institutionShortName") or item.get("institutionCanonicalName") or "—"
 
 
-def _line(number: int, item: dict[str, Any], our_id: int | None) -> str:
-    parts = [f"{number}. <b>{esc(_name(item))}</b>"]
-    # our_id задан только там, где вузы смешаны (/top все): в своих выборках метка лишняя.
-    if our_id is not None and item.get("institutionLegacyId") == our_id:
-        parts[0] += " (мы)"
-    platform = PLATFORM_NAMES.get(item.get("platform"), esc(item.get("platform") or "—"))
+def _rank(number: int) -> str:
+    return icon(f"rank_{number}") if number <= 3 else f"{number}."
+
+
+def _platform_icon(code: object) -> str:
+    return icon(code) if code in PLATFORM_ORDER else esc(code or "—")
+
+
+def _post_link(item: dict[str, Any]) -> str:
+    """Ссылка на слове типа поста; ссылки не http(s) не рисуем — остаётся слово."""
     kind = PUBLICATION_TYPES.get(item.get("publicationType"), "пост")
-    parts.append(f"{platform}, {kind}")
     url = item.get("publicUrl")
     if isinstance(url, str) and url.startswith(("https://", "http://")):
-        parts.append(f'<a href="{esc(url)}">ссылка</a>')
+        return f'<a href="{esc(url)}">{kind}</a>'
+    return kind
+
+
+def _numbers(item: dict[str, Any], views: bool) -> list[str]:
+    parts = []
     if item.get("interactionIndex") is not None:
         parts.append(format_index(item["interactionIndex"]))
-    if item.get("views") is not None:
+    if views and item.get("views") is not None:
         parts.append(f"{format_count(int(item['views']))} просм.")
     if item.get("promotion"):
-        parts.append("📣 продвижение")
-    return " · ".join(parts)
+        parts.append(f"{icon('promo')} продвижение")
+    return parts
 
 
-def _section(title: str | None, items: list[dict[str, Any]], count: int,
-             our_id: int | None) -> list[str]:
-    lines = [f"<b>{esc(title)}</b>"] if title else []
-    lines += [_line(number, item, our_id) for number, item in enumerate(items[:count], 1)]
+def _own_line(number: int, item: dict[str, Any]) -> str:
+    """Строка поста одного вуза: вуз — в шапке, площадка — значком."""
+    head = f"{_platform_icon(item.get('platform'))} {_rank(number)} {_post_link(item)}"
+    return " · ".join([head, *_numbers(item, views=True)])
+
+
+def _mixed_line(number: int, item: dict[str, Any], our_id: int | None, views: bool) -> str:
+    """Строка поста среди всех вузов: место, вуз, площадка значком."""
+    name = f"{_rank(number)} <b>{esc(_name(item))}</b>"
+    # our_id задан только там, где мы среди других (/top все); в «Других вузах» нас нет.
+    if our_id is not None and item.get("institutionLegacyId") == our_id:
+        name += " (мы)"
+    post = f"{_platform_icon(item.get('platform'))} {_post_link(item)}"
+    return " · ".join([name, post, *_numbers(item, views)])
+
+
+def _mixed_list(items: list[dict[str, Any]], count: int, our_id: int | None,
+                views: bool) -> list[str]:
+    if not items:
+        return ["Постов выше нормы за период нет."]
+    lines = [_mixed_line(number, item, our_id, views) for number, item in enumerate(items[:count], 1)]
     if len(items) < count:
-        lines.append(f"<i>выше нормы только {len(items)}</i>" if items
-                     else "<i>выше нормы постов нет</i>")
+        lines.append(f"<i>выше нормы только {len(items)}</i>")
     return lines
 
 
-def _platform_sections(items: list[dict[str, Any]], platform: str, count: int,
-                       our_id: int | None) -> list[str]:
-    """Секции по площадкам; пустые площадки не рисуем, если не просили их явно."""
+def _own_list(items: list[dict[str, Any]], platform: str, count: int) -> list[str]:
+    """Посты одного вуза плоским списком в порядке площадок, без подзаголовков.
+
+    API в режиме вуза отдаёт все его посты; пост без индекса (у счёта мало
+    истории для нормы) выше нормы не считается. Площадку, где у вуза постов
+    нет вовсе, не рисуем, если её не просили явно; где есть, но выше нормы
+    ни одного — одна строка «выше нормы постов нет».
+    """
     lines: list[str] = []
     wanted = PLATFORM_ORDER if platform == "all" else (platform,)
     for code in wanted:
-        chosen = [item for item in items if item.get("platform") == code]
-        if chosen or platform != "all":
-            lines += ([""] if lines else []) + _section(PLATFORM_NAMES[code], chosen, count, our_id)
+        present = [item for item in items if item.get("platform") == code]
+        if not present and platform == "all":
+            continue
+        above = [item for item in present if item.get("interactionIndex") is not None]
+        if not above:
+            lines.append(f"{icon(code)} <i>выше нормы постов нет</i>")
+            continue
+        lines += [_own_line(number, item) for number, item in enumerate(above[:count], 1)]
+        if len(above) < count:
+            lines.append(f"{icon(code)} <i>выше нормы только {len(above)}</i>")
     return lines or ["Постов выше нормы за период нет."]
 
 
@@ -189,7 +232,7 @@ def _institution_title(query: TopQuery, body: dict[str, Any]) -> str:
 
 
 def render_top(query: TopQuery, body: dict[str, Any], our_id: int | None,
-               period_label: str) -> list[Message]:
+               period_label: str, author: int | None = None) -> list[Message]:
     items = list(body.get("items") or [])
     count = default_count(query)
     scope = "" if query.platform == "all" else f" · {PLATFORM_NAMES[query.platform]}"
@@ -207,18 +250,20 @@ def render_top(query: TopQuery, body: dict[str, Any], our_id: int | None,
         lines.append("<i>Включая подозрительные посты.</i>")
     lines.append("")
     if query.who == "all":
-        lines += _section(None, items, count, our_id) if items else ["Постов выше нормы за период нет."]
+        lines += _mixed_list(items, count, our_id, views=True)
     else:
-        lines += _platform_sections(items, query.platform, count, None)
+        lines += _own_list(items, query.platform, count)
     hidden = body.get("hiddenAnomalous") or 0
     if hidden > 0 and not query.suspicious:
         lines += ["", f"Скрыто подозрительных: {int(hidden)}"]
-    return _messages("\n".join(lines), top_keyboard(query))
+    return _messages("\n".join(lines), top_keyboard(query, author))
 
 
 # --- кнопки и callback data -------------------------------------------------
 
-def encode_callback(query: TopQuery) -> str:
+def encode_callback(query: TopQuery, author: int | None = None) -> str:
+    """`t|кто|площадка|период|сколько|подозрительные[|автор]`; автор — кто вызвал меню
+    (id человека или, от имени чата, отрицательный id чата)."""
     if query.who == "institution":
         if query.institution is None:
             raise ValueError("для вуза нужен legacy id")
@@ -229,12 +274,18 @@ def encode_callback(query: TopQuery) -> str:
         "t", who, _PLATFORM_CODES[query.platform], _PERIOD_CODES[query.period],
         "" if query.count is None else str(query.count), "1" if query.suspicious else "0",
     ))
-    if len(data.encode()) > CALLBACK_LIMIT:
+    if author is not None:
+        if (not isinstance(author, int) or isinstance(author, bool) or author == 0
+                or abs(author) >= _AUTHOR_LIMIT):
+            raise ValueError("автор меню — ненулевой id Telegram")
+        data += f"|{author}"
+    if len(data.encode("utf-8")) > CALLBACK_LIMIT:
         raise ValueError("callback data длиннее 64 байт")
     return data
 
 
-def decode_callback(data: str) -> TopQuery | None:
+def decode_callback(data: str) -> tuple[TopQuery, int | None] | None:
+    """(запрос, автор меню или None для кнопок без автора) или None для мусора."""
     match = _CALLBACK_RE.fullmatch(data) if isinstance(data, str) else None
     if match is None:
         return None
@@ -242,7 +293,7 @@ def decode_callback(data: str) -> TopQuery | None:
     who = {"o": "ours", "a": "all"}.get(who_code, "institution")
     platform = next(key for key, code in _PLATFORM_CODES.items() if code == match["platform"])
     period = next(key for key, code in _PERIOD_CODES.items() if code == match["period"])
-    return TopQuery(
+    query = TopQuery(
         who=who,  # type: ignore[arg-type]
         institution=int(who_code[1:]) if who == "institution" else None,
         platform=platform,  # type: ignore[arg-type]
@@ -250,14 +301,17 @@ def decode_callback(data: str) -> TopQuery | None:
         count=int(match["count"]) if match["count"] else None,
         suspicious=match["suspicious"] == "1",
     )
+    return query, int(match["author"]) if match["author"] else None
 
 
-def top_keyboard(query: TopQuery) -> list[list[dict]]:
-    """Кнопки под ответом: каждая даёт запрос с одним изменённым полем."""
+def top_keyboard(query: TopQuery, author: int | None = None) -> list[list[dict]]:
+    """Кнопки под ответом: каждая даёт запрос с одним изменённым полем.
+    Выбранное — «✅», остальное — «⬜» (как в «Моих уведомлениях»)."""
     base = replace(query, unknown=(), candidates=(), suggestions=())
 
     def button(label: str, chosen: bool, target: TopQuery) -> dict:
-        return {"text": ("✓ " if chosen else "") + label, "callback_data": encode_callback(target)}
+        return {"text": ("✅ " if chosen else "⬜ ") + label,
+                "callback_data": encode_callback(target, author)}
 
     return [
         [button("Наши", query.who == "ours", replace(base, who="ours", institution=None)),
@@ -266,9 +320,7 @@ def top_keyboard(query: TopQuery) -> list[list[dict]]:
          for code, label in PLATFORM_BUTTONS],
         [button(label, query.period == code, replace(base, period=code))
          for code, label in PERIOD_BUTTONS],
-        [button("Показать подозрительные", False, replace(base, suspicious=True))
-         if not query.suspicious else
-         button("Подозрительные показаны", True, replace(base, suspicious=False))],
+        [button("Подозрительные", query.suspicious, replace(base, suspicious=not query.suspicious))],
     ]
 
 
@@ -326,9 +378,8 @@ def _forecast_line(forecast: dict[str, Any] | None, our_id: int) -> str | None:
     return line
 
 
-def _week_lines(current: dict, previous: dict | None, forecast: dict | None,
-                our_id: int) -> list[str]:
-    lines = ["<b>Неделя к неделе</b>"]
+def _week_stats(current: dict, previous: dict | None) -> list[str]:
+    lines = []
     empty = {"posts": 0, "views": 0, "reactions": 0}
     codes = [code for code in PLATFORM_ORDER if code in current or code in (previous or {})]
     if not codes:
@@ -344,6 +395,12 @@ def _week_lines(current: dict, previous: dict | None, forecast: dict | None,
         lines.append(_stats_line("Всего", totals[0], totals[1], previous is not None))
     if previous is None:
         lines.append("<i>Первая неделя наблюдений: сравнение появится через неделю.</i>")
+    return lines
+
+
+def _week_lines(current: dict, previous: dict | None, forecast: dict | None,
+                our_id: int) -> list[str]:
+    lines = ["<b>Неделя к неделе</b>", *_week_stats(current, previous)]
     forecast_line = _forecast_line(forecast, our_id)
     if forecast_line:
         lines += ["", esc(forecast_line)]
@@ -364,12 +421,15 @@ def render_digest(ours: dict, others: dict, current: dict, previous: dict | None
         pass
     foreign = [item for item in others.get("items") or []
                if item.get("institutionLegacyId") != our_id]
-    lines = [f"<b>Дайджест · {esc(label)}</b>", "", "<b>Наши лучшие посты</b>",
-             *_platform_sections(list(ours.get("items") or []), "all", DEFAULT_COUNT, None),
-             "", "<b>Лучшие у других вузов</b>",
-             *(_section(None, foreign, DIGEST_OTHERS_COUNT, None)
-               if foreign else ["Постов выше нормы за период нет."]),
-             "", *_week_lines(current, previous, forecast, our_id)]
+    lines = [f"<b>Дайджест · {esc(label)}</b>",
+             "", band("band_ours", "НАШИ ЛУЧШИЕ"),
+             *_own_list(list(ours.get("items") or []), "all", DEFAULT_COUNT),
+             "", band("band_others", "ДРУГИЕ ВУЗЫ"),
+             *_mixed_list(foreign, DIGEST_OTHERS_COUNT, None, views=False),
+             "", band("band_week", "НЕДЕЛЯ"), *_week_stats(current, previous)]
+    forecast_line = _forecast_line(forecast, our_id)
+    if forecast_line:
+        lines += ["", band("band_forecast", "ПРОГНОЗ"), esc(forecast_line)]
     return _messages("\n".join(lines))
 
 

@@ -16,7 +16,8 @@ from test_telegram_bot_handlers import (
     sent_texts,
 )
 
-from telegram_bot import content
+from telegram_bot import content, emoji
+from telegram_bot.emoji import icon
 from telegram_bot.source import SourceUnavailable
 from telegram_bot.store import OUR_INSTITUTION, Recipient
 
@@ -192,13 +193,28 @@ def test_spike_text():
                           url="https://example.org/p?a=1&b=2")]
     run(content.check_spikes(bot))
     text = group_texts(telegram)[0]
-    assert text.startswith("🚀 Наш пост выстрелил: ")
+    assert text.startswith(icon("spike") + " Наш пост выстрелил: ")
     assert '<a href="https://example.org/p?a=1&amp;b=2">ссылка</a>' in text
     assert "Telegram" in text and "×8,4" in text and "20 ч" in text and "9,2 тыс. просм." in text
-    assert text.endswith("📣 продвижение")
+    assert text.endswith(icon("promo") + " продвижение")
     source.spikes = [post("b")]
     run(content.check_spikes(bot))
     assert "продвижение" not in group_texts(telegram)[-1]
+
+
+def test_notification_icons_come_from_slots(monkeypatch):
+    item = post("a", promotion=True)
+    assert content.spike_message(item).text.startswith("🚀 ")
+    assert content.anomaly_message(flagged("x", 3), 3).text.startswith("⚠️ ")
+    # Когда у слотов появятся id набора, значки станут кастомными без правок текстов.
+    fake = "1234567890123456789"
+    for slot in ("spike", "anomaly", "promo"):
+        monkeypatch.setitem(emoji.SLOTS, slot, (emoji.SLOTS[slot][0], fake))
+    spike = content.spike_message(item).text
+    assert spike.startswith(f'<tg-emoji emoji-id="{fake}">🚀</tg-emoji> Наш пост выстрелил: ')
+    assert spike.endswith(f'<tg-emoji emoji-id="{fake}">📣</tg-emoji> продвижение')
+    assert content.anomaly_message(flagged("x", 3), 3).text.startswith(
+        f'<tg-emoji emoji-id="{fake}">⚠️</tg-emoji> Накрутка на нашем посте: ')
 
 
 def test_spike_missing_numbers_are_skipped():
@@ -251,13 +267,13 @@ def test_anomaly_levels():
     assert run(content.check_anomalies(bot)) == 1
     assert source.calls.count("anomalous") == 1
     first = group_texts(telegram)[0]
-    assert first.startswith("⚠️ Вероятно, накрутка на нашем посте: ")
+    assert first.startswith(icon("anomaly") + " Вероятно, накрутка на нашем посте: ")
     assert "ВКонтакте" in first and "3,4 тыс. просм." in first
     assert '<a href="https://example.org/a/1">ссылка</a>' in first
     source.anomalies = [flagged("a", 3), flagged("b", 1)]
     assert run(content.check_anomalies(bot)) == 1
     second = group_texts(telegram)[1]
-    assert second.startswith("⚠️ Накрутка на нашем посте: ")
+    assert second.startswith(icon("anomaly") + " Накрутка на нашем посте: ")
     assert run(content.check_anomalies(bot)) == 0   # дальше без повторов
     assert len(group_texts(telegram)) == 2
     source.anomalies = [flagged("a", 2)]            # спад уровня не объявляется заново
@@ -351,11 +367,11 @@ def test_digest_contents():
     texts = group_texts(telegram)
     text = "\n".join(texts)
     assert texts[0].startswith("<b>Дайджест")
-    assert "Наши лучшие посты" in text and "Лучшие у других вузов" in text
-    assert "Неделя к неделе" in text
+    assert "<b>НАШИ ЛУЧШИЕ</b>" in text and "<b>ДРУГИЕ ВУЗЫ</b>" in text
+    assert "<b>НЕДЕЛЯ</b>" in text and "<b>ПРОГНОЗ</b>" in text
     assert "постов 20 (+100 %)" in text            # неделя к неделе по сохранённому снимку
     assert "Прогноз места в М-Рейтинге" in text and "±" in text
-    others = text.split("Лучшие у других вузов")[1].split("Неделя к неделе")[0]
+    others = text.split("<b>ДРУГИЕ ВУЗЫ</b>")[1].split("<b>НЕДЕЛЯ</b>")[0]
     assert "(мы)" not in others and "Дельта" not in others   # наш вуз среди «других» не показываем
     assert sent_texts(telegram, PERSON) == texts            # получатели с digest
     assert len(texts) >= 1
@@ -472,8 +488,8 @@ def test_digest_ours_uses_top_body_with_platform_top_up():
     bot, telegram, _, _ = make()
     bot.source = ApiSource(make_client("http://api.test", transport=httpx.MockTransport(handler)))
     messages = run(content.build_digest(bot))
-    ours = "\n".join(m.text for m in messages).split("Лучшие у других вузов")[0]
-    assert "ВКонтакте" in ours
+    ours = "\n".join(m.text for m in messages).split("<b>ДРУГИЕ ВУЗЫ</b>")[0]
+    assert f'{icon("vk")} {icon("rank_1")} <a href="https://example.org/vk/19">' in ours
     ours_requests = [r for r in seen if r.get("mode") == "institution"]
     assert [r["platform"] for r in ours_requests][0] == "all"
     assert "vk" in [r["platform"] for r in ours_requests]

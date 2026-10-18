@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
+from .emoji import icon
 from .render import (
     PLATFORM_NAMES,
     PUBLICATION_TYPES,
@@ -163,8 +164,8 @@ def spike_message(item: dict[str, Any]) -> Message:
     if item.get("views") is not None:
         parts.append(f"{format_count(int(item['views']))} просм.")
     if item.get("promotion"):
-        parts.append("📣 продвижение")
-    return Message("🚀 Наш пост выстрелил: " + " · ".join(parts))
+        parts.append(f"{icon('promo')} продвижение")
+    return Message(f"{icon('spike')} Наш пост выстрелил: " + " · ".join(parts))
 
 
 async def check_spikes(bot: Bot) -> int:
@@ -201,7 +202,7 @@ def anomaly_message(item: dict[str, Any], level: int) -> Message:
     parts = [part for part in (_link(item), _kind(item)) if part]
     if item.get("views") is not None:
         parts.append(f"{format_count(int(item['views']))} просм.")
-    return Message(f"⚠️ {title}: " + " · ".join(parts))
+    return Message(f"{icon('anomaly')} {title}: " + " · ".join(parts))
 
 
 async def check_anomalies(bot: Bot) -> int:

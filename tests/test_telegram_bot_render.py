@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from telegram_bot.emoji import icon
 from telegram_bot.render import (
     Message,
     decode_callback,
@@ -43,19 +44,58 @@ def with_items(body: dict, items: list[dict]) -> dict:
     return body
 
 
-def test_render_ours_groups_by_platform():
+def post_lines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if "<a href" in line]
+
+
+def test_render_ours_flat_list_in_platform_order():
     body = fixture("findings_institution.json")
     text = text_of(render_top(TopQuery(), body, OUR_ID, LABEL))
     assert "Наши лучшие посты" in text and LABEL in text
-    for title in ("Telegram", "ВКонтакте", "Rutube"):
-        assert f"<b>{title}</b>" in text
-    assert "MAX" not in text  # у площадки нет находок: пустую секцию не рисуем
-    assert text.index("<b>Telegram</b>") < text.index("<b>ВКонтакте</b>") < text.index("<b>Rutube</b>")
+    # Подзаголовков площадок нет: значок площадки — в каждой строке.
+    for title in ("Telegram", "ВКонтакте", "MAX", "Rutube"):
+        assert title not in text
+    assert icon("max") not in text  # у площадки нет постов вовсе: строку не рисуем
+    lines = post_lines(text)
+    assert [line.split(" ", 1)[0] for line in lines] == [icon("telegram")] * 3 + [icon("vk")] * 2 + [icon("rutube")]
+    # Название нашего вуза — только в шапке, в строках его нет.
+    assert "Дельта" not in text
     # В Telegram четыре поста, показаны три; ВК и Rutube набрали меньше трёх.
     assert text.count("https://t.me/example/") == 3
     assert text.count("выше нормы только") == 2
-    assert "выше нормы только 2" in text  # ВКонтакте
-    assert "выше нормы только 1" in text  # Rutube
+    assert f"{icon('vk')} <i>выше нормы только 2</i>" in text
+    assert f"{icon('rutube')} <i>выше нормы только 1</i>" in text
+    assert text.index("выше нормы только 2") < text.index("https://example.org/rutube/")
+
+
+def test_own_line_format():
+    body = fixture("findings_institution.json")
+    lines = post_lines(text_of(render_top(TopQuery(count=4, platform="telegram"), body, OUR_ID, LABEL)))
+    assert lines == [
+        f'{icon("telegram")} {icon("rank_1")} <a href="https://t.me/example/15">видео</a> · ×7,9 · 15,0 тыс. просм.',
+        f'{icon("telegram")} {icon("rank_2")} <a href="https://t.me/example/16">фото</a> · ×5,1 · 9,2 тыс. просм.',
+        f'{icon("telegram")} {icon("rank_3")} <a href="https://t.me/example/17">текст</a> · ×3,3 · 700 просм.',
+        f'{icon("telegram")} 4. <a href="https://t.me/example/18">текст</a> · ×3,1 · 650 просм.',
+    ]
+    promo = post_lines(text_of(render_top(TopQuery(platform="vk"), body, OUR_ID, LABEL)))[1]
+    assert promo.endswith(f"· {icon('promo')} продвижение")
+
+
+def test_own_platform_without_posts_above_norm_is_one_line():
+    body = fixture("findings_institution.json")
+    # Индекса нет (мало истории для нормы) — пост не «выше нормы»: одна строка вместо трёх.
+    for item in body["items"]:
+        if item["platform"] == "rutube":
+            item["interactionIndex"] = None
+    text = text_of(render_top(TopQuery(), body, OUR_ID, LABEL))
+    assert f"{icon('rutube')} <i>выше нормы постов нет</i>" in text
+    assert "example.org/rutube" not in text
+    # Явно запрошенная площадка без постов — та же строка.
+    single = text_of(render_top(TopQuery(platform="max"), body, OUR_ID, LABEL))
+    assert f"{icon('max')} <i>выше нормы постов нет</i>" in single
+    inst = text_of(render_top(TopQuery(who="institution", institution=OUR_ID, platform="max"),
+                              body, OUR_ID, LABEL))
+    assert f"{icon('max')} <i>выше нормы постов нет</i>" in inst
 
 
 def test_render_counts_follow_query():
@@ -72,7 +112,7 @@ def test_render_all_marks_us_and_promotion():
     messages = render_top(TopQuery(who="all"), body, OUR_ID, LABEL)
     text = text_of(messages)
     assert "Лучшие посты всех вузов" in text
-    lines = [line for line in text.splitlines() if line[:1].isdigit()]
+    lines = post_lines(text)
     assert len(lines) == 10
     ours = [line for line in lines if "Дельта" in line]
     assert ours and all("мы" in line for line in ours)
@@ -102,12 +142,12 @@ def test_line_format():
     first = body["items"][0]  # Альфа, Telegram, фото, ×8,4, 9200
     first["interactionIndex"] = 5.1
     text = text_of(render_top(TopQuery(who="all", count=3), body, OUR_ID, LABEL))
-    line = next(line for line in text.splitlines() if line.startswith("1."))
-    assert "Альфа" in line
-    assert f'<a href="{first["publicUrl"]}">' in line
-    assert "×5,1" in line
-    assert "9,2 тыс." in line
-    assert "Telegram" in line and "фото" in line
+    lines = post_lines(text)
+    assert lines[0] == (f'{icon("rank_1")} <b>Альфа</b> · {icon("telegram")} '
+                        f'<a href="{first["publicUrl"]}">фото</a> · ×5,1 · 9,2 тыс. просм.')
+    assert lines[1] == (f'{icon("rank_2")} <b>Дельта</b> (мы) · {icon("telegram")} '
+                        '<a href="https://t.me/example/2">видео</a> · ×7,9 · 15,0 тыс. просм.')
+    assert "Telegram" not in text  # площадка — значком, не текстом
 
 
 @pytest.mark.parametrize("views, expected", [
@@ -147,8 +187,8 @@ def test_long_output_is_split_on_lines():
     for platform in ("telegram", "vk", "rutube"):
         for number in range(20):
             item = copy.deepcopy(base)
-            item.update(platform=platform, publicUrl=f"https://example.org/{platform}/{number}",
-                        institutionShortName="Очень длинное название " * 12)
+            item.update(platform=platform,
+                        publicUrl=f"https://example.org/{platform}/{'длинный-путь-' * 6}{number}")
             items.append(item)
     body = with_items(fixture("findings_all.json"), items)
     query = TopQuery(count=20)
@@ -224,18 +264,40 @@ def test_callback_roundtrip_under_64_bytes():
         data = encode_callback(query)
         assert len(data.encode()) <= 64
         assert data.startswith("t|")
-        assert decode_callback(data) == query
+        assert decode_callback(data) == (query, None)
+        for author in (42, -1009999999999, -1001234567890, 10**19 - 1, -(10**19 - 1)):
+            data = encode_callback(query, author)
+            assert len(data.encode("utf-8")) <= 64
+            assert decode_callback(data) == (query, author)
+
+
+def test_callback_old_format_without_author_still_decodes():
+    # Кнопки, отправленные до выкатки (шесть полей), работают как раньше.
+    assert decode_callback("t|a|v|m||1") == (
+        TopQuery(who="all", platform="vk", period="30d", suspicious=True), None)
+    assert decode_callback("t|i7|a|w|20|0") == (TopQuery(who="institution", institution=7, count=20), None)
+    assert encode_callback(TopQuery(who="all", platform="vk", period="30d", suspicious=True)) == "t|a|v|m||1"
+    assert encode_callback(TopQuery(), 42) == "t|o|a|w||0|42"
+    assert encode_callback(TopQuery(), -1001234567890) == "t|o|a|w||0|-1001234567890"
+
+
+@pytest.mark.parametrize("author", [0, True, 10**19, -(10**19), "42"])
+def test_callback_rejects_bad_author(author):
+    with pytest.raises(ValueError):
+        encode_callback(TopQuery(), author)
 
 
 def test_callback_ignores_parse_artifacts():
     noisy = TopQuery(who="all", unknown=("абв",), candidates=(1, 2), suggestions=("МФТИ",))
-    assert decode_callback(encode_callback(noisy)) == TopQuery(who="all")
+    assert decode_callback(encode_callback(noisy)) == (TopQuery(who="all"), None)
 
 
 @pytest.mark.parametrize("data", [
     "", "t", "t|", "s|a|a|w||0", "t|x|a|w||0", "t|i|a|w||0", "t|i0|a|w||0", "t|i-1|a|w||0",
     "t|a|z|w||0", "t|a|a|q||0", "t|a|a|w|0|0", "t|a|a|w|21|0", "t|a|a|w|03|0", "t|a|a|w||2",
     "t|a|a|w||0|extra", "t|a|a|w|х|0", "t|i99999999999999|a|w||0", "t|ο|a|w||0", "\x00",
+    "t|a|a|w||0|", "t|a|a|w||0|0", "t|a|a|w||0|-0", "t|a|a|w||0|--5", "t|a|a|w||0|+5",
+    "t|a|a|w||0|042", "t|a|a|w||0|12345678901234567890", "t|a|a|w||0|5|6", "t|a|a|w||0|٥",
 ])
 def test_callback_garbage_is_none(data):
     assert decode_callback(data) is None
@@ -248,19 +310,18 @@ def labels(keyboard):
 def test_keyboard_marks_current_choice():
     query = TopQuery(who="all", platform="vk", period="30d", suspicious=True)
     keyboard = top_keyboard(query)
-    marked = [button["text"] for row in keyboard for button in row if button["text"].startswith("✓")]
-    assert len(marked) == 4
-    assert "✓ Все вузы" in marked
-    assert any("ВК" in text for text in marked)
-    assert "✓ Месяц" in marked
-    assert any("одозр" in text for text in marked)
+    assert labels(keyboard) == [
+        ["⬜ Наши", "✅ Все вузы"],
+        ["⬜ Все", "⬜ Telegram", "✅ ВК", "⬜ MAX", "⬜ Rutube"],
+        ["⬜ Сутки", "⬜ Неделя", "✅ Месяц"],
+        ["✅ Подозрительные"],
+    ]
     # Нажатие даёт запрос с изменённым полем и остальным прежним.
-    by_text = {button["text"]: decode_callback(button["callback_data"])
+    by_text = {button["text"]: decode_callback(button["callback_data"])[0]
                for row in keyboard for button in row}
-    assert by_text["Наши"].who == "ours" and by_text["Наши"].platform == "vk"
-    assert by_text["Сутки"].period == "1d" and by_text["Сутки"].who == "all"
-    suspicious_button = next(b for row in keyboard for b in row if "одозр" in b["text"])
-    assert decode_callback(suspicious_button["callback_data"]).suspicious is False
+    assert by_text["⬜ Наши"].who == "ours" and by_text["⬜ Наши"].platform == "vk"
+    assert by_text["⬜ Сутки"].period == "1d" and by_text["⬜ Сутки"].who == "all"
+    assert by_text["✅ Подозрительные"].suspicious is False
     for row in keyboard:
         for button in row:
             assert len(button["callback_data"].encode()) <= 64
@@ -268,14 +329,32 @@ def test_keyboard_marks_current_choice():
 
 def test_keyboard_defaults_and_institution_mode():
     keyboard = top_keyboard(TopQuery())
-    assert "✓ Наши" in labels(keyboard)[0]
-    assert "✓ Неделя" in [text for row in labels(keyboard) for text in row]
-    assert any("Показать подозрительные" in text for row in labels(keyboard) for text in row)
+    assert labels(keyboard) == [
+        ["✅ Наши", "⬜ Все вузы"],
+        ["✅ Все", "⬜ Telegram", "⬜ ВК", "⬜ MAX", "⬜ Rutube"],
+        ["⬜ Сутки", "✅ Неделя", "⬜ Месяц"],
+        ["⬜ Подозрительные"],
+    ]
+    assert decode_callback(keyboard[3][0]["callback_data"])[0].suspicious is True
+    assert not any("✓" in text for row in labels(keyboard) for text in row)
     inst = top_keyboard(TopQuery(who="institution", institution=7))
-    assert not any(text.startswith("✓") and text in ("✓ Наши", "✓ Все вузы")
-                   for text in labels(inst)[0])
+    assert labels(inst)[0] == ["⬜ Наши", "⬜ Все вузы"]
     to_all = decode_callback(inst[0][1]["callback_data"])
-    assert to_all == TopQuery(who="all")
+    assert to_all == (TopQuery(who="all"), None)
+
+
+def test_keyboard_carries_author():
+    for author in (42, -1001234567890):
+        keyboard = top_keyboard(TopQuery(who="institution", institution=2_147_483_647, count=20,
+                                         suspicious=True), author)
+        assert len(keyboard) == 4
+        for button in (b for row in keyboard for b in row):
+            assert len(button["callback_data"].encode("utf-8")) <= 64
+            assert decode_callback(button["callback_data"])[1] == author
+    messages = render_top(TopQuery(), fixture("findings_institution.json"), OUR_ID, LABEL, author=42)
+    assert messages[-1].keyboard == top_keyboard(TopQuery(), 42)
+    assert render_top(TopQuery(), fixture("findings_institution.json"), OUR_ID, LABEL)[-1].keyboard \
+        == top_keyboard(TopQuery())
 
 
 def test_period_label():
@@ -342,18 +421,43 @@ def digest_args():
     return (fixture("findings_institution.json"), fixture("findings_all.json"))
 
 
+BANDS = ("🏆 <b>НАШИ ЛУЧШИЕ</b>", "🌐 <b>ДРУГИЕ ВУЗЫ</b>", "📅 <b>НЕДЕЛЯ</b>", "🔮 <b>ПРОГНОЗ</b>")
+
+
 def test_digest_others_exclude_us():
     ours, others = digest_args()
     messages = render_digest(ours, others, CURRENT, PREVIOUS, fixture("forecast.json"), OUR_ID)
     text = text_of(messages)
-    head, _, rest = text.partition("Лучшие у других вузов")
-    assert rest, "блок «у других» должен быть"
-    block = rest.split("Неделя к неделе")[0]
+    head, _, rest = text.partition(BANDS[1])
+    assert rest, "блок «Другие вузы» должен быть"
+    block = rest.split(BANDS[2])[0]
     assert "Дельта" not in block
-    assert len([line for line in block.splitlines() if line[:1].isdigit()]) == 10
-    assert "Дельта" in head  # свои посты в блоке «наши»
-    assert "Неделя к неделе" in text and "≈12-е ± 7" in text
+    lines = post_lines(block)
+    assert len(lines) == 10
+    assert all("просм." not in line for line in lines)  # в «Других вузах» без просмотров
+    assert lines[0] == (f'{icon("rank_1")} <b>Альфа</b> · {icon("telegram")} '
+                        '<a href="https://t.me/example/1">фото</a> · ×8,4')
+    assert any(line.endswith(f"· {icon('promo')} продвижение") for line in lines)
+    assert "https://t.me/example/15" in head and "просм." in head  # свои посты в блоке «наши»
+    assert "Дельта" not in head  # наш вуз в строках не повторяется
+    assert "≈12-е ± 7" in text
     assert all(len(m.text) <= 4096 for m in messages)
+
+
+def test_digest_bands_in_order():
+    ours, others = digest_args()
+    text = text_of(render_digest(ours, others, CURRENT, PREVIOUS, fixture("forecast.json"), OUR_ID))
+    assert text.startswith("<b>Дайджест · 10–16 окт</b>")
+    positions = [text.index(band) for band in BANDS]
+    assert positions == sorted(positions)
+    week = text[positions[2]:positions[3]]
+    assert "Telegram: постов 20 (+100 %)" in week and "Всего:" in week
+    assert "Неделя к неделе" not in text  # заголовок заменён лентой
+    assert text[positions[3]:].strip().endswith("≈12-е ± 7")
+    # Прогноза нет — нет и ленты «ПРОГНОЗ».
+    bare = text_of(render_digest(ours, others, CURRENT, None, None, OUR_ID))
+    assert BANDS[3] not in bare and all(band in bare for band in BANDS[:3])
+    assert "сравнение появится через неделю" in bare
 
 
 def test_digest_does_not_mutate_inputs_and_is_stable():
