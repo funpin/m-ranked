@@ -10,15 +10,14 @@ import {
   Analysis, ChartUnavailable, Closing, Hero, LANDING_SECTIONS, LandingFooter, Pipeline, Platforms, Rhythm, Stats, Verify, type LandingPlatform,
 } from "@/components/landing/sections";
 import { ScrollChrome } from "@/components/landing/scroll-chrome";
-import { Unbounded } from "next/font/google";
+import { landingFontVariables } from "./fonts/landing-fonts";
 import { api } from "@/lib/api";
 import { publicOrigin } from "@/lib/deployment";
 import { KNOWN_PLATFORMS, corridorModel, landingDashboard, phoneSummary, platformsFromSummary, type SiteSummary } from "@/lib/landing";
 
 export const dynamic = "force-dynamic";
 
-// Широкий дисплейный шрифт заголовков главной — только на этой странице.
-const display = Unbounded({ subsets: ["cyrillic", "latin"], weight: ["500", "600"], display: "swap", variable: "--font-display" });
+// Широкий дисплейный шрифт заголовков главной (Unbounded) — только на этой странице.
 
 const DESCRIPTION = "m-ranked замеряет каждую публикацию официальных соцсетей российских вузов с первых минут и сравнивает их на одной шкале — с открытым кодом и методологией.";
 export const metadata: Metadata = {
@@ -73,7 +72,7 @@ export default async function HomePage() {
     ? platformsFromSummary(site)
     : Object.keys(KNOWN_PLATFORMS).map((platform) => ({ platform, accounts: null }));
   return (
-    <div className={`landing ${display.variable}`} data-testid="landing">
+    <div className="landing" style={landingFontVariables} data-testid="landing">
       <ScrollChrome sections={LANDING_SECTIONS} />
       <Hero platforms={platforms} />
       {site && <Stats summary={site} />}

@@ -1,0 +1,33 @@
+/* Сгенерировано scripts/generate-fonts.mjs: запасные шрифты с метриками, как у next/font/google. */
+@font-face {
+  font-family: "Unbounded Fallback";
+  src: local(Arial);
+  ascent-override: 73.93%;
+  descent-override: 18.2%;
+  line-gap-override: 0.0%;
+  size-adjust: 134.59%;
+}
+@font-face {
+  font-family: "Geologica Fallback";
+  src: local(Arial);
+  ascent-override: 90.18%;
+  descent-override: 25.43%;
+  line-gap-override: 0.0%;
+  size-adjust: 108.12%;
+}
+@font-face {
+  font-family: "Onest Fallback";
+  src: local(Arial);
+  ascent-override: 92.2%;
+  descent-override: 28.99%;
+  line-gap-override: 0.0%;
+  size-adjust: 105.2%;
+}
+@font-face {
+  font-family: "JetBrains Mono Fallback";
+  src: local(Arial);
+  ascent-override: 75.79%;
+  descent-override: 22.29%;
+  line-gap-override: 0.0%;
+  size-adjust: 134.59%;
+}
