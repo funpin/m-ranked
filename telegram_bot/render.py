@@ -471,11 +471,14 @@ def render_week(current: dict, previous: dict | None, forecast: dict | None,
 
 def render_digest(ours: dict, others: dict, current: dict, previous: dict | None,
                   forecast: dict | None, our_id: int, *,
-                  cover: CoverData | None = None) -> list[Message]:
+                  cover: CoverData | None = None, name: str | None = None) -> list[Message]:
+    """`name` — короткое имя нашего вуза: без обложки оно в заголовке текста
+    («Дайджест · вуз · неделя»); с обложкой его несёт подпись (cover.title)."""
     label = week_label(ours)
     foreign = [item for item in others.get("items") or []
                if item.get("institutionLegacyId") != our_id]
-    lines = [f"<b>Дайджест · {esc(label or 'за неделю')}</b>",
+    head = " · ".join(esc(part) for part in (name, label) if part) or "за неделю"
+    lines = [f"<b>Дайджест · {head}</b>",
              "", band("band_ours", "НАШИ ЛУЧШИЕ"),
              *_own_list(list(ours.get("items") or []), "all", DEFAULT_COUNT),
              "", band("band_others", "ДРУГИЕ ВУЗЫ"),

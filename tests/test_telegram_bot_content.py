@@ -606,10 +606,10 @@ def test_digest_without_any_platform_has_no_cover(monkeypatch):
     source.dashboard = no_stats
     messages = run(content.build_digest(bot))
     assert all(m.photo is None for m in messages) and draws == []
-    assert messages[0].text.startswith("<b>Дайджест · 10–16 окт</b>")
+    assert messages[0].text.startswith("<b>Дайджест · Дельта · 10–16 окт</b>")
     run(content.send_digest(bot))
     assert telegram.of("photo") == [] and draws == []
-    assert group_texts(telegram)[0].startswith("<b>Дайджест · 10–16 окт</b>")
+    assert group_texts(telegram)[0].startswith("<b>Дайджест · Дельта · 10–16 окт</b>")
 
 
 def test_cover_import_and_draw_run_off_the_event_loop(monkeypatch):

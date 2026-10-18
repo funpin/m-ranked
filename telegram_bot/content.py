@@ -260,14 +260,19 @@ async def record_week(bot: Bot) -> None:
 # cover (и с ним Pillow) импортируется при первой обложке и только в потоке
 # (asyncio.to_thread): первый импорт Pillow не держит цикл событий.
 
+def institution_name(dashboard: dict[str, Any], our: int) -> str:
+    """Короткое имя нашего вуза из каталога сводки (иначе полное)."""
+    entry = next((e for e in dashboard.get("institutions") or [] if e.get("legacyId") == our), {})
+    return entry.get("shortName") or entry.get("name") or f"вуз №{our}"
+
+
 def cover_for(dashboard: dict[str, Any], our: int, current: dict[str, dict[str, int]],
               previous: dict[str, dict[str, int]] | None, label: str | None) -> CoverData:
     """Обложка дайджеста и /week: короткое имя нашего вуза из каталога сводки
     (иначе полное), неделя и просмотры по площадкам к прошлой неделе."""
     from . import cover
 
-    entry = next((e for e in dashboard.get("institutions") or [] if e.get("legacyId") == our), {})
-    title = entry.get("shortName") or entry.get("name") or f"вуз №{our}"
+    title = institution_name(dashboard, our)
     subtitle = f"{label} · просмотры за неделю" if label else "просмотры за неделю"
     return cover.CoverData(title, subtitle, cover.cover_rows(current, previous))
 
@@ -330,7 +335,8 @@ async def build_digest(bot: Bot) -> list[Message]:
     previous = await bot.store.week_snapshot(_today(bot) - timedelta(days=7))
     current = our_week_stats(dashboard, our)
     data = await prepare_cover(dashboard, our, current, previous, week_label(ours))
-    messages = render_digest(ours, others, current, previous, forecast, our, cover=data)
+    messages = render_digest(ours, others, current, previous, forecast, our, cover=data,
+                             name=institution_name(dashboard, our))
     return await with_cover(messages, data)
 
 

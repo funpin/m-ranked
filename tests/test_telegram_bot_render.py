@@ -459,7 +459,7 @@ def test_digest_others_exclude_us():
 def test_digest_bands_in_order():
     ours, others = digest_args()
     text = text_of(render_digest(ours, others, CURRENT, PREVIOUS, fixture("forecast.json"), OUR_ID))
-    assert text.startswith("<b>Дайджест · 10–16 окт</b>")
+    assert text.startswith("<b>Дайджест · 10–16 окт</b>")  # имя не передано — без него
     positions = [text.index(band) for band in BANDS]
     assert positions == sorted(positions)
     week = text[positions[2]:positions[3]]
@@ -500,6 +500,22 @@ def test_digest_with_cover_starts_with_caption_header():
     assert all(band in rest for band in BANDS)
     plain = text_of(render_digest(ours, others, CURRENT, PREVIOUS, fixture("forecast.json"), OUR_ID))
     assert plain.split("\n", 2)[2] == rest              # тело то же, что без обложки
+
+
+def test_digest_text_only_header_names_the_institution():
+    ours, others = digest_args()
+    named = render_digest(ours, others, CURRENT, PREVIOUS, None, OUR_ID, name="Дельта <&>")
+    assert named[0].text.startswith("<b>Дайджест · Дельта &lt;&amp;&gt; · 10–16 окт</b>\n")
+    assert text_of(named).count("Дельта") == 1
+    # С обложкой имя уже в подписи; тело не повторяет шапку и имя.
+    covered = render_digest(ours, others, CURRENT, PREVIOUS, None, OUR_ID,
+                            cover=cover_data(), name="Дельта")
+    assert covered[0] == Message("<b>Дайджест · Дельта · 10–16 окт</b>")
+    assert "Дайджест" not in text_of(covered[1:])
+    assert text_of(covered[1:]) == text_of(named).split("\n", 2)[2]
+    # Нет ни имени, ни недели — прежний заголовок.
+    assert render_digest(ours, others, CURRENT, None, None, OUR_ID, name=None)[0].text \
+        .startswith("<b>Дайджест · 10–16 окт</b>")
 
 
 def test_week_with_cover_starts_with_caption_header():
