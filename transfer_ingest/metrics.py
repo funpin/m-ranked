@@ -27,17 +27,23 @@ class IngestMetrics:
         self._rejects: dict[tuple[str, str], int] = defaultdict(int)
         self._last_accepted: dict[str, float] = {}
         self._apply_seconds: dict[str, float] = {}
+        self._last_created: dict[str, float] = {}
 
     @staticmethod
     def _safe(value: str) -> str:
         cleaned = str(value).strip()
         return cleaned if SAFE_LABEL.match(cleaned) else "unknown"
 
-    def accepted(self, producer: str, *, duration: float, duplicate: bool) -> None:
+    def accepted(self, producer: str, *, duration: float, duplicate: bool,
+                 created_at: float | None = None) -> None:
+        """created_at — когда производитель запечатал пачку: отставание очереди
+        видно как разница с last_accepted."""
         if duration < 0:
             raise ValueError("duration must not be negative")
         key = self._safe(producer)
         with self._lock:
+            if created_at is not None:
+                self._last_created[key] = max(created_at, self._last_created.get(key, created_at))
             if duplicate:
                 self._duplicates[key] += 1
             else:
@@ -81,6 +87,12 @@ class IngestMetrics:
         for producer, value in sorted(self._last_accepted.items()):
             lines.append(
                 f'mranked_transfer_ingest_last_accepted_unixtime'
+                f'{{producer="{producer}"}} {value:.6f}'
+            )
+        lines.append("# TYPE mranked_transfer_ingest_last_batch_created_unixtime gauge")
+        for producer, value in sorted(self._last_created.items()):
+            lines.append(
+                f'mranked_transfer_ingest_last_batch_created_unixtime'
                 f'{{producer="{producer}"}} {value:.6f}'
             )
         return "\n".join(lines) + "\n"

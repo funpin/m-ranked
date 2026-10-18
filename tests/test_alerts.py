@@ -14,7 +14,7 @@ alerts = importlib.util.module_from_spec(SPEC)
 sys.modules["alerts"] = alerts  # dataclass ищет модуль по имени
 SPEC.loader.exec_module(alerts)
 
-LIMITS = {"backup_hours": 36, "disk_free_bytes": 6 * 10**9, "load15": 6.0, "ingest_minutes": 20,
+LIMITS = {"backup_hours": 36, "disk_free_bytes": 6 * 10**9, "load15": 6.0, "ingest_minutes": 20, "ingest_lag_minutes": 10,
           "analysis_lag_seconds": 3 * 3600, "docker_bytes": 5 * 10**9, "human_5xx": 20,
           "bot_503_share": 0.5, "misses_per_second": 20, "hit_ratio": 0.3,
           "cpu_percent": 90, "cpu_minutes": 45, "page_p95_seconds": 3.0, "memory_percent": 90,
@@ -639,3 +639,37 @@ def test_main_reads_the_inputs_file(tmp_path, monkeypatch, capsys):
     alerts.main()
     out = capsys.readouterr().out
     assert "переавторизац" in out and "Прошло: Файл замеров" in out
+
+
+def test_ingest_lag_fires_and_explains_stale_collection():
+    # 18.10.2026: пачки приходят, но через 24 мин после печати на Сервере 1.
+    inputs = with_collection(NOW, "telegram", lastOk=NOW - 60 * 60)
+    inputs["collection"]["max"].update(lastOk=None, lastResult=None)
+    values, arguments = healthy(NOW, inputs=inputs)
+    values['mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}'] = NOW - 5
+    values['mranked_transfer_ingest_last_batch_created_unixtime{producer="server-1/default"}'] = NOW - 5 - 24 * 60
+    rules = alerts.evaluate(NOW, alerts.empty_bucket(), values, **arguments)
+    firing = {rule.key for rule in rules if rule.firing}
+    assert "ingest_lag" in firing and "ingest" not in firing
+    assert not {key for key in firing if key.startswith("collection_")} and "max_auth" not in firing
+    text = next(rule.text for rule in rules if rule.key == "ingest_lag")
+    assert "24 мин" in text and "сбор при этом идёт" in text
+
+
+def test_small_ingest_lag_is_quiet_and_lag_does_not_mute_silent_nodes():
+    values, arguments = healthy(NOW, inputs=node_inputs(observedAt=NOW - 3600))
+    values['mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}'] = NOW - 5
+    values['mranked_transfer_ingest_last_batch_created_unixtime{producer="server-1/default"}'] = NOW - 5 - 3 * 60
+    firing = {rule.key for rule in alerts.evaluate(NOW, alerts.empty_bucket(), values, **arguments) if rule.firing}
+    assert "ingest_lag" not in firing and "node_server-1_silent" in firing
+    values['mranked_transfer_ingest_last_batch_created_unixtime{producer="server-1/default"}'] = NOW - 5 - 30 * 60
+    firing = {rule.key for rule in alerts.evaluate(NOW, alerts.empty_bucket(), values, **arguments) if rule.firing}
+    assert "ingest_lag" in firing and "node_server-1_silent" in firing
+
+
+def test_stopped_ingest_is_reported_as_ingest_not_lag():
+    values, arguments = healthy(NOW)
+    values['mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}'] = NOW - 3600
+    values['mranked_transfer_ingest_last_batch_created_unixtime{producer="server-1/default"}'] = NOW - 7200
+    firing = {rule.key for rule in alerts.evaluate(NOW, alerts.empty_bucket(), values, **arguments) if rule.firing}
+    assert "ingest" in firing and "ingest_lag" not in firing

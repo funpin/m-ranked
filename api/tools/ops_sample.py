@@ -223,6 +223,9 @@ def pipeline(values: dict[str, float]) -> dict[str, float | None]:
 
     return {
         "ingestAcceptedAt": latest("mranked_transfer_ingest_last_accepted_unixtime"),
+        # Когда Сервер 1 запечатал последнюю принятую пачку: разница с приёмом —
+        # отставание очереди.
+        "ingestBatchCreatedAt": latest("mranked_transfer_ingest_last_batch_created_unixtime"),
         "ingestAccepted": total("mranked_transfer_ingest_accepted_total"),
         "analysisLag": latest("mranked_anomaly_queue_lag_seconds"),
         "analysisBacklog": latest("mranked_anomaly_due_backlog"),
@@ -315,18 +318,33 @@ def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: 
     return sample
 
 
-# Итоги сбора по аккаунтам, завершённым с прошлого снимка. last_result — время
-# последнего результата любого исхода: когда MAX отзывает вход, сборщик не
-# пишет результатов вовсе, и по нему «вход отозван» отличается от «сбор падает».
-# Сначала — циклы
-# последних двух часов по индексу (platform, started_at): цикл Rutube длинный.
-# Их десятки, и результаты аккаунтов подтягиваются по уникальному индексу
-# (collection_run_id, platform_account_id), а не просмотром всей таблицы.
+# Итоги сбора по аккаунтам, пришедшим с прошлого снимка. Окно каждой площадки
+# начинается с самого позднего завершения, которое прошлые снимки уже видели
+# (отметка в state), а не с часов: результаты приходят с Сервера 1 очередью, и
+# 18.10.2026 при отставании приёма на 20+ минут строки доезжали с уже
+# прошедшим completed_at — окно «с прошлого снимка по часам» их не видело, и
+# админка с тревогами решили, что сбор стоит 1,7 ч. Очередь доставляет
+# результаты по порядку, поэтому новые строки всегда позже отметки.
+# last_result — время последнего результата любого исхода: когда MAX отзывает
+# вход, сборщик не пишет результатов вовсе, и по нему «вход отозван» отличается
+# от «сбор падает». Сначала — циклы последних часов по индексу (platform,
+# started_at): цикл Rutube длинный. Их десятки, и результаты аккаунтов
+# подтягиваются по уникальному индексу (collection_run_id,
+# platform_account_id), а не просмотром всей таблицы.
+COLLECTION_PLATFORMS = ("telegram", "vk", "max", "rutube")
+# Отметка не уходит назад дальше окна тревог: иначе после долгого простоя
+# площадки запрос тянул бы циклы за сутки.
+MARK_MAX_LAG_SECONDS = 3 * 3600
 COLLECTION = """
-WITH runs AS MATERIALIZED (
-  SELECT id, platform FROM ingest.collection_run
-  WHERE platform IN ('telegram','vk','max','rutube')
-    AND started_at >= to_timestamp(%(since)s) - interval '2 hours'
+WITH since(platform, ts) AS (
+  VALUES ('telegram', %(telegram)s::float8), ('vk', %(vk)s::float8),
+         ('max', %(max)s::float8), ('rutube', %(rutube)s::float8)
+), runs AS MATERIALIZED (
+  SELECT run.id, run.platform, since.ts
+  FROM ingest.collection_run run
+  JOIN since ON since.platform = run.platform::text
+  WHERE run.platform IN ('telegram','vk','max','rutube')
+    AND run.started_at >= to_timestamp(%(oldest)s) - interval '2 hours'
 )
 SELECT runs.platform::text AS platform,
   count(*) FILTER (WHERE result.status='succeeded') AS ok,
@@ -338,17 +356,40 @@ FROM runs
 CROSS JOIN LATERAL (
   SELECT status, completed_at FROM ingest.collection_account_result
   WHERE collection_run_id=runs.id
-    AND completed_at > to_timestamp(%(since)s) AND completed_at <= to_timestamp(%(until)s)
+    AND completed_at > to_timestamp(runs.ts) AND completed_at <= to_timestamp(%(until)s)
 ) result
 GROUP BY runs.platform
 """
 
 
-def collection(connection: Any, since: float, until: float) -> dict[str, dict[str, Any]]:
-    rows = connection.execute(COLLECTION, {"since": since, "until": until}).fetchall()
+def collection(connection: Any, since: dict[str, float], until: float) -> dict[str, dict[str, Any]]:
+    """Итоги по площадкам за окна (since[площадка], until]."""
+    params: dict[str, float] = {name: float(since[name]) for name in COLLECTION_PLATFORMS}
+    params["oldest"] = min(params.values())
+    params["until"] = until
+    rows = connection.execute(COLLECTION, params).fetchall()
     return {row[0]: {"ok": row[1], "failed": row[2], "other": row[3],
                      "lastOk": float(row[4]) if row[4] is not None else None,
                      "lastResult": float(row[5]) if row[5] is not None else None} for row in rows}
+
+
+def collection_marks(state: dict[str, Any], now: float) -> dict[str, float]:
+    """Начало окна каждой площадки: последнее виденное завершение, но не
+    старше MARK_MAX_LAG_SECONDS. Старый state без отметок — от прошлого снимка."""
+    marks = state.get("collectionMarks") or {}
+    fallback = state.get("collectionAt") or now - 300
+    floor = now - MARK_MAX_LAG_SECONDS
+    return {name: max(float(marks.get(name, fallback)), floor) for name in COLLECTION_PLATFORMS}
+
+
+def advance_marks(since: dict[str, float], found: dict[str, dict[str, Any]]) -> dict[str, float]:
+    """Новые отметки: самое позднее завершение в окне; нет строк — отметка стоит."""
+    marks = dict(since)
+    for name, entry in found.items():
+        newest = entry.get("lastResult")
+        if name in marks and newest is not None:
+            marks[name] = max(marks[name], float(newest))
+    return marks
 
 
 # Входные данные для тревог (operations/scripts/alerts.py, у него нет доступа к
@@ -506,7 +547,7 @@ def store(dsn: str, sample: dict[str, Any], state: dict[str, Any], now: float,
 
     with psycopg.connect(dsn, connect_timeout=10) as connection:
         connection.execute("SET statement_timeout = '10s'")
-        since = state.get("collectionAt") or now - 300
+        since = collection_marks(state, now)
         sample["collection"] = collection(connection, since, now)
         connection.execute("INSERT INTO ops_and_admin.host_sample(sample) VALUES (%s::jsonb)",
                            (json.dumps(sample),))
@@ -518,6 +559,7 @@ def store(dsn: str, sample: dict[str, Any], state: dict[str, Any], now: float,
             connection.commit()
             refresh_alert_inputs(connection, now, inputs_path)
     state["collectionAt"] = now
+    state["collectionMarks"] = advance_marks(since, sample["collection"])
 
 
 def main() -> int:
