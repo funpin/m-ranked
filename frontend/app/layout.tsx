@@ -9,21 +9,20 @@ import logoMarkLight from "../assets/logo-mark-light.svg";
 import { SiteHeader } from "@/components/site-header";
 import { publicOrigin } from "@/lib/deployment";
 import "./globals.css";
-import { Geologica, JetBrains_Mono, Onest } from "next/font/google";
+import { fontVariables } from "./fonts/fonts";
+import "./fonts/fallbacks.css";
 import { RouteBoundary } from "@/components/navigation-boundary";
 import { SiteHeaderFallback } from "@/components/site-header-fallback";
 import { readContributors } from "@/lib/contributors.server";
 import { VisitBeacon } from "@/components/visit-beacon";
 import { MotionProvider } from "@/components/motion-provider";
 import { IconSprite } from "@/components/icon-sprite";
-import { cn } from "@/lib/utils";
 
-// Self-hosted by next/font: no request to fonts.gstatic.com, and the fallback
-// metrics it emits keep the layout from shifting while a face loads.
-const heading = Geologica({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-heading" });
-const sans = Onest({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-sans" });
-// Цифры главной и примеры запросов: моноширинные, с кириллицей.
-const mono = JetBrains_Mono({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-mono", preload: false });
+// Шрифты лежат в репозитории (app/fonts, см. scripts/generate-fonts.mjs): сборка не
+// ходит в Google Fonts, а браузер — в fonts.gstatic.com. Файлы и диапазоны символов —
+// те же, что нарезал next/font/google; запасные шрифты с метриками не дают вёрстке
+// прыгать, пока грузится начертание. JetBrains Mono (цифры главной, примеры
+// запросов) не подгружается заранее, Geologica и Onest — кириллица и латиница.
 
 export const metadata: Metadata = {
   metadataBase: publicOrigin(),
@@ -134,7 +133,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       data-favicon-light={logoMarkLight.src}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
-      className={cn(sans.variable, heading.variable, mono.variable)}
+      style={fontVariables}
     >
       <head>
         <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" sizes="180x180" />
