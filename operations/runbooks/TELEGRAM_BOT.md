@@ -157,33 +157,65 @@ id пустые, везде выводится запасное эмодзи, б
 ### Выкатка версии с обложкой (Pillow)
 
 В общем venv сервера должен появиться Pillow: он добавлен в
-`requirements/api.lock` одним колесом `manylinux` с хешем. Порядок:
+`requirements/api.lock` одним колесом `manylinux` с хешем. Весь `api.lock`
+в живой общий venv **не ставим**: корневые lock-файлы между собой расходятся
+(`api.lock` и `collector.lock` по pydantic, pydantic-core, websockets, idna,
+psycopg-pool), и полная установка может подменить пакеты под работающими API,
+приёмом и воркером аномалий. Это осознанное узкое исключение из `DEPLOY.md`
+§4 (среда предыдущего релиза нужна для отката и не обновляется) и §5 (корневые
+lock-файлы ставятся целиком в новую `.venv`): Pillow — новый пакет без
+зависимостей и без прежней версии, ничего не заменяется, откату он не мешает.
+Ставим только его пин, с хешем:
 
-1. Выпустить релиз-оверлей как обычно (`DEPLOY.md`), затем в общий venv
-   поставить обновлённый lock с проверкой хешей:
+1. Выпустить релиз-оверлей как обычно (`DEPLOY.md`), затем из корня релиза
+   поставить только пин Pillow:
 
    ```bash
-   <venv>/bin/pip install --require-hashes --no-deps -r requirements/api.lock
+   tmp=$(mktemp -d)
+   grep -A1 '^pillow==' requirements/api.lock > "$tmp/pillow.lock"
+   <venv>/bin/pip install --require-hashes --no-deps -r "$tmp/pillow.lock"
+   rm -r "$tmp"
+   <venv>/bin/pip check
+   <venv>/bin/python -B -c "import api.app, telegram_bot.__main__, PIL"
    ```
 
-2. Проверить: `<venv>/bin/python -c "import PIL; print(PIL.__version__)"`
+   `grep` берёт две строки: пин и его хеш. `pip check` должен быть чистым, а
+   импорт без ошибок: он же подтверждает, что API и бот по-прежнему
+   импортируются из этого venv.
+2. Проверить версию: `<venv>/bin/python -c "import PIL; print(PIL.__version__)"`
    (ожидается `13.0.0`). Без Pillow бот стартует и работает, но дайджест и
    `/week` уходят без картинки, а в журнале строка `cover: ModuleNotFoundError`
-   (это не сбой выкатки, а непоставленный lock).
-3. Перезапустить только бота: `systemctl restart m-ranked-target-telegram-bot.service`.
+   (это не сбой выкатки, а непоставленный Pillow).
+3. **До перезапуска** записать память юнита как точку отсчёта:
+   `systemctl show m-ranked-target-telegram-bot -p MemoryCurrent`.
+4. Перезапустить только бота: `systemctl restart m-ranked-target-telegram-bot.service`.
    Другие юниты не трогаются: API и коллекторы Pillow не используют.
-4. Замерить отрисовку на сервере тем же python, что у бота:
-   `PYTHONDONTWRITEBYTECODE=1 <venv>/bin/python operations/scripts/measure-bot-cover.py`
-   из корня релиза (без записи `.pyc` в каталог релиза).
+5. Замерить отрисовку на сервере. Скрипт, запущенный просто из оболочки, идёт
+   вне cgroup юнита, поэтому гоняем его под теми же пользователем и потолками
+   (из корня релиза, без записи `.pyc` в каталог релиза):
+
+   ```bash
+   systemd-run --wait --pipe -p User=m-ranked-telegram-bot -p MemoryMax=128M \
+     -p CPUQuota=20% -p WorkingDirectory=/opt/m-ranked/current \
+     -E PYTHONDONTWRITEBYTECODE=1 \
+     /opt/m-ranked/current/.venv/bin/python operations/scripts/measure-bot-cover.py
+   ```
+
    Норма: p95 кадра < 0,5 с, рост RSS после прогрева < 10 МБ, пик < 120 МБ
    (потолок юнита `MemoryMax=128M`). Скрипт сам печатает «норма: да/НЕТ» и
    возвращает код 1 при нарушении. Измеренные числа эталона — в
    `telegram_bot/assets/README.md`.
-5. После перезапуска сверить память юнита с потолком:
-   `systemctl show m-ranked-target-telegram-bot -p MemoryCurrent` против
-   `MemoryMax=128M`; `MemoryCurrent` заметно ниже потолка.
 6. Попросить владельца проверить `/week`, `/digest` и `/status` в Telegram
-   (под `/status` должна быть кнопка «Обновить»).
+   (под `/status` должна быть кнопка «Обновить»). Pillow подгружается лениво,
+   поэтому память юнита меняется только после первой обложки.
+7. **После** `/week` и `/digest` владельца снять память юнита: `MemoryCurrent`
+   (`systemctl show m-ranked-target-telegram-bot -p MemoryCurrent`) и пик
+   cgroup `memory.peak` (`MemoryPeak` в `systemctl show`, где systemd новее 254;
+   иначе `cat /sys/fs/cgroup$(systemctl show m-ranked-target-telegram-bot -p ControlGroup --value)/memory.peak`).
+   Сравнить с точкой отсчёта из шага 3 и с `MemoryMax=128M`.
+   Ожидаемый рост после первой обложки: около 25 МБ на macOS, на glibc
+   меньше; `MemoryCurrent` остаётся заметно ниже потолка, пик не подходит к
+   нему вплотную. Разницу и пик сообщить владельцу.
 
 Откат: вернуть прежний релиз и перезапустить бота; Pillow в venv можно
 оставить, он ничему не мешает.
