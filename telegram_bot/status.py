@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from api.system_overview import PROFILE_B_FRESHNESS, status_summary
 
-from .emoji import icon
+from .emoji import banner, icon
 from .render import Message, esc
 
 # Окно снимков для /status: три часа проверок сбора плюс запас на опорный снимок.
@@ -76,11 +76,11 @@ def render_status(rows: list[dict], now: float, tz: str = "Europe/Moscow") -> Me
 
     problems = [check for state in ("fail", "warn") for check in checks if check["state"] == state]
     if problems:
-        lines += ["", f"{icon('alert_urgent')} <b>ПРОБЛЕМЫ</b>"]
+        lines += ["", banner("ПРОБЛЕМЫ") or f"{icon('alert_urgent')} <b>ПРОБЛЕМЫ</b>"]
         lines += [f"{_light(check['state'])} <b>{esc(check['label'])}</b>: {esc(check['detail'])}"
                   for check in problems]
 
-    lines += ["", "<b>СБОР</b>"]
+    lines += ["", banner("СБОР") or "<b>СБОР</b>"]
     for platform in PLATFORM_SLOTS:
         check = by_key.get(f"collection.{platform}")
         if check is not None:
@@ -91,7 +91,7 @@ def render_status(rows: list[dict], now: float, tz: str = "Europe/Moscow") -> Me
 
     server = [by_key[key] for key in SERVER_KEYS if key in by_key]
     if server:
-        lines += ["", "<b>СЕРВЕР 2</b>"]
+        lines += ["", banner("СЕРВЕР 2") or "<b>СЕРВЕР 2</b>"]
         lines += [f"{_light(check['state'])} {esc(check['label'])} · {esc(check['detail'])}"
                   for check in server]
     return Message("\n".join(lines), REFRESH_KEYBOARD)

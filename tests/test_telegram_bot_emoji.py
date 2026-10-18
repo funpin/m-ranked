@@ -56,3 +56,37 @@ def test_band_is_icon_and_bold_label(monkeypatch):
     assert emoji.band("band_week", "A<b>") == "📅 <b>A&lt;b&gt;</b>"
     monkeypatch.setitem(emoji.SLOTS, "band_week", ("📅", FAKE_ID))
     assert emoji.band("band_week", "НЕДЕЛЯ") == f'<tg-emoji emoji-id="{FAKE_ID}">📅</tg-emoji> <b>НЕДЕЛЯ</b>'
+
+
+# --- набор m-ranked: id из telegram_bot/emoji-ids.json, плашки из пяти эмодзи ------
+
+def test_load_ids_keeps_only_digit_ids(tmp_path):
+    from telegram_bot.emoji import load_ids
+    path = tmp_path / "ids.json"
+    path.write_text('{"ids": {"vk": "1234567890123456789", "max": "x1", "logo": 5}}', encoding="utf-8")
+    assert load_ids(path) == {"vk": "1234567890123456789"}
+    assert load_ids(tmp_path / "missing.json") == {}
+
+
+def test_band_uses_five_tile_banner_when_all_tiles_loaded(monkeypatch):
+    from telegram_bot import emoji
+    tiles = {f"band_week_{i}": f"90000000000000000{i:02d}" for i in range(1, 6)}
+    monkeypatch.setattr(emoji, "IDS", {**emoji.IDS, **tiles})
+    line = emoji.band("band_week", "НЕДЕЛЯ")
+    assert line.count("<tg-emoji") == 5 and "НЕДЕЛЯ" not in line  # надпись — внутри плашки
+    assert line.startswith('<tg-emoji emoji-id="9000000000000000001">📅</tg-emoji>')
+    assert line.count(">➖</tg-emoji>") == 4  # без рендера: «📅➖➖➖➖»
+
+
+def test_band_falls_back_to_text_when_banner_incomplete(monkeypatch):
+    from telegram_bot import emoji
+    monkeypatch.setattr(emoji, "IDS", {"band_week_1": "1"})
+    assert emoji.band("band_week", "НЕДЕЛЯ") == "📅 <b>НЕДЕЛЯ</b>"
+    assert emoji.banner("НЕИЗВЕСТНО") is None
+
+
+def test_icon_reads_loaded_ids(monkeypatch):
+    from telegram_bot import emoji
+    monkeypatch.setattr(emoji, "IDS", {"vk": "1234567890123456789"})
+    assert emoji.icon("vk") == '<tg-emoji emoji-id="1234567890123456789">🔵</tg-emoji>'
+    assert emoji.icon("max") == "🟣"

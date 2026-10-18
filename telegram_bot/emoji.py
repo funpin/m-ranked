@@ -11,7 +11,9 @@ id кастомных эмодзи публичны, это не секрет. �
 from __future__ import annotations
 
 import html
+import json
 import re
+from pathlib import Path
 
 # Слот → (запасное обычное эмодзи, id кастомного или None).
 SLOTS: dict[str, tuple[str, str | None]] = {
@@ -37,21 +39,75 @@ SLOTS: dict[str, tuple[str, str | None]] = {
 
 _ID = re.compile(r"[0-9]+", re.ASCII)
 
+# Плашки-разделители: надпись нарисована внутри пяти эмодзи подряд (набор
+# design/telegram-emoji). Надпись → (слот плашки, запасной значок первого
+# квадрата). Без рендера (уведомления, пересылка) плашка читается «📅➖➖➖➖».
+BANNERS: dict[str, tuple[str, str]] = {
+    "НАШИ ЛУЧШИЕ": ("band_ours", "🏆"),
+    "ДРУГИЕ ВУЗЫ": ("band_others", "🌐"),
+    "НЕДЕЛЯ": ("band_week", "📅"),
+    "ПРОГНОЗ": ("band_forecast", "🔮"),
+    "ПОСТЫ": ("band_posts", "📝"),
+    "СЕРВЕР": ("band_server", "🖥️"),
+    "ПРОБЛЕМЫ": ("band_problems", "⚠️"),
+    "СБОР": ("band_collection", "📡"),
+    "СЕРВЕР 2": ("band_server2", "🖥️"),
+}
+BANNER_TILES = 5
+BANNER_FILL = "➖"
+IDS_FILE = Path(__file__).resolve().parent / "emoji-ids.json"
+
+
+def load_ids(path: Path) -> dict[str, str]:
+    """id набора по слотам из файла, который печатает
+    operations/scripts/create-bot-emoji-set.py; нет файла — пусто (обычные эмодзи)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    ids = data.get("ids") if isinstance(data, dict) else None
+    if not isinstance(ids, dict):
+        return {}
+    return {slot: value for slot, value in ids.items()
+            if isinstance(slot, str) and isinstance(value, str) and _ID.fullmatch(value)}
+
+
+IDS: dict[str, str] = load_ids(IDS_FILE)
+
+
+def _tag(custom_id: str, fallback: str) -> str:
+    return f'<tg-emoji emoji-id="{custom_id}">{html.escape(fallback, quote=True)}</tg-emoji>'
+
 
 def icon(slot: str) -> str:
     """Значок слота для текста в режиме HTML; неизвестный слот — KeyError."""
     fallback, custom_id = SLOTS[slot]
+    custom_id = IDS.get(slot, custom_id)
     if custom_id is None:
         return fallback
     if not _ID.fullmatch(custom_id):
         raise ValueError(f"id кастомного эмодзи слота {slot!r} — не число")
-    return f'<tg-emoji emoji-id="{custom_id}">{html.escape(fallback, quote=True)}</tg-emoji>'
+    return _tag(custom_id, fallback)
+
+
+def banner(label: str) -> str | None:
+    """Плашка с надписью из пяти кастомных эмодзи подряд или None, если её
+    квадратов в наборе нет (или загружены не все)."""
+    entry = BANNERS.get(label)
+    if entry is None:
+        return None
+    slot, first = entry
+    ids = [IDS.get(f"{slot}_{index}") for index in range(1, BANNER_TILES + 1)]
+    if not all(ids):
+        return None
+    return "".join(_tag(custom_id, first if index == 0 else BANNER_FILL)  # type: ignore[arg-type]
+                   for index, custom_id in enumerate(ids))
 
 
 def band(slot: str, label: str) -> str:
-    """Лента-разделитель блока. До набора — значок слота и жирная надпись;
-    с набором её заменят до пяти слотов подряд, складывающихся в одну полосу."""
-    return f"{icon(slot)} <b>{html.escape(label, quote=True)}</b>"
+    """Лента-разделитель блока: плашка из набора, а без неё — значок слота и
+    жирная надпись."""
+    return banner(label) or f"{icon(slot)} <b>{html.escape(label, quote=True)}</b>"
 
 
 def describe_custom_emoji(message: dict) -> str:
