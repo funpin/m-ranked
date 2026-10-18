@@ -320,6 +320,17 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], host: Host, in
     ingest_age = (now - accepted) / 60 if accepted else None
     rules.append(Rule("ingest", ingest_age is not None and ingest_age > limits["ingest_minutes"],
                       f"Пакеты с Сервера 1 не приходят {ingest_age:.0f} мин" if ingest_age else "Приём пакетов в порядке"))
+    # Пачки приходят, но поздно: Сервер 1 копит очередь, Сервер 2 не успевает
+    # применять (18.10.2026 под нагрузкой — до 24 мин). Отставание последней
+    # принятой пачки — между её печатью на Сервере 1 и приёмом.
+    created = values.get('mranked_transfer_ingest_last_batch_created_unixtime{producer="server-1/default"}')
+    queue_lag = (accepted - created) / 60 if accepted and created and accepted >= created else None
+    lagging = queue_lag is not None and queue_lag > limits["ingest_lag_minutes"] and not (
+        ingest_age is not None and ingest_age > limits["ingest_minutes"])
+    rules.append(Rule("ingest_lag", lagging,
+                      f"Приём данных отстаёт на {queue_lag:.0f} мин: Сервер 1 копит очередь пачек, "
+                      "Сервер 2 не успевает их применять — сбор при этом идёт"
+                      if lagging else "Приём пачек без отставания"))
     lag = values.get("mranked_anomaly_queue_lag_seconds")
     rules.append(Rule("analysis", lag is not None and lag > limits["analysis_lag_seconds"],
                       f"Очередь анализа отстаёт на {lag / 60:.0f} мин" if lag else "Анализ в порядке"))
@@ -444,8 +455,9 @@ def node_rules(now: float, nodes: dict, limits: dict) -> list[Rule]:
 
 def suppress(rules: list[Rule]) -> list[Rule]:
     """Одна причина — одно сообщение. Приём пакетов с Сервера 1 стоит — молчат
-    сбор площадок, вход MAX и молчание узлов (Сервер 1 недоступен целиком); вход
-    MAX отозван — молчит сбор MAX; узел молчит —
+    сбор площадок, вход MAX и молчание узлов (Сервер 1 недоступен целиком); приём
+    отстаёт — молчат сбор площадок и вход MAX (данные в очереди, не потеряны;
+    снимки узла идут мимо очереди); вход MAX отозван — молчит сбор MAX; узел молчит —
     молчат его устаревшие ресурсы. Подавленное правило остаётся в списке с
     firing=False, чтобы уже открытая тревога закрылась."""
     firing = {rule.key for rule in rules if rule.firing}
@@ -453,6 +465,8 @@ def suppress(rules: list[Rule]) -> list[Rule]:
     if "ingest" in firing:
         muted.update(rule.key for rule in rules if rule.key.startswith("collection_") or rule.key == "max_auth"
                      or (rule.key.startswith("node_") and rule.key.endswith("_silent")))
+    if "ingest_lag" in firing:
+        muted.update(rule.key for rule in rules if rule.key.startswith("collection_") or rule.key == "max_auth")
     if "max_auth" in firing:
         muted.add("collection_max")
     for key in firing:
@@ -536,6 +550,7 @@ def main() -> int:
         "bots_per_minute": env_int("ALERTS_BOTS_PER_MINUTE", 150),
         "bot_minutes": max(1, env_int("ALERTS_BOT_MINUTES", 5)),
         "ingest_minutes": max(1, env_int("ALERTS_INGEST_MINUTES", 20)),
+        "ingest_lag_minutes": max(1, env_int("ALERTS_INGEST_LAG_MINUTES", 10)),
         "analysis_lag_seconds": max(1, env_int("ALERTS_ANALYSIS_LAG_MINUTES", 180)) * 60,
         "docker_bytes": env_int("ALERTS_DOCKER_GB", 5) * 10**9,
         "human_5xx": env_int("ALERTS_HUMAN_5XX", 20),

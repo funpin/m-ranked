@@ -534,3 +534,16 @@ def test_metrics_failure_never_fails_the_request() -> None:
     assert handler.handle(
         _headers(envelope), envelope.payload, peer_producer_ids=("other",),
     ).status == 403
+
+
+def test_ingest_metrics_publish_when_the_last_batch_was_sealed() -> None:
+    # Отставание очереди = приём − печать на Сервере 1 (тревога ingest_lag).
+    from transfer_ingest.metrics import IngestMetrics
+
+    metrics = IngestMetrics()
+    metrics.accepted("server-1/default", duration=0.4, duplicate=False, created_at=1000.5)
+    metrics.accepted("server-1/default", duration=0.4, duplicate=False, created_at=900.0)  # старая повторная
+    text = metrics.render()
+    assert 'mranked_transfer_ingest_last_batch_created_unixtime{producer="server-1/default"} 1000.500000' in text
+    metrics.accepted("other", duration=0.1, duplicate=False)
+    assert 'last_batch_created_unixtime{producer="other"}' not in metrics.render()

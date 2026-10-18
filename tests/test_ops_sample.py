@@ -116,7 +116,7 @@ def test_build_measures_sizes_on_schedule(tmp_path: Path) -> None:
     json.dumps(first)
 
 
-def test_collection_window_starts_where_the_previous_sample_ended() -> None:
+def test_collection_window_starts_at_each_platform_mark() -> None:
     calls = []
 
     class Connection:
@@ -129,10 +129,34 @@ def test_collection_window_starts_where_the_previous_sample_ended() -> None:
                     return [("vk", 80, 2, 0, 1000.5, 1000.9), ("rutube", 0, 1, 0, None, 990.0)]
             return Cursor()
 
-    result = ops_sample.collection(Connection(), 700.0, 1000.0)
-    assert calls == [{"since": 700.0, "until": 1000.0}]
+    since = {"telegram": 700.0, "vk": 650.0, "max": 700.0, "rutube": 900.0}
+    result = ops_sample.collection(Connection(), since, 1000.0)
+    assert calls == [{**since, "oldest": 650.0, "until": 1000.0}]
     assert result == {"vk": {"ok": 80, "failed": 2, "other": 0, "lastOk": 1000.5, "lastResult": 1000.9},
                       "rutube": {"ok": 0, "failed": 1, "other": 0, "lastOk": None, "lastResult": 990.0}}
+
+
+def test_marks_follow_the_newest_seen_result_not_the_clock() -> None:
+    # 18.10.2026: очередь отставала на 20+ мин — строки приходили с прошедшим
+    # completed_at. Отметка — последнее виденное завершение, поэтому поздние
+    # строки попадают в следующее окно, а не теряются.
+    now = 100_000.0
+    since = ops_sample.collection_marks({}, now)
+    assert since == {name: now - 300 for name in ops_sample.COLLECTION_PLATFORMS}
+    found = {"telegram": {"lastResult": now - 1500.0}, "vk": {"lastResult": None}}
+    marks = ops_sample.advance_marks({**since, "telegram": now - 1800}, found)
+    assert marks["telegram"] == now - 1500 and marks["vk"] == since["vk"]
+    # Без строк отметка стоит — опоздавшие результаты придут в следующее окно.
+    later = ops_sample.collection_marks({"collectionMarks": marks, "collectionAt": now}, now + 60)
+    assert later["telegram"] == now - 1500 and later["vk"] == since["vk"]
+    # Но не старше окна тревог: после долгого простоя запрос не тянет сутки циклов.
+    old = ops_sample.collection_marks({"collectionMarks": {"max": 0.0}}, now)
+    assert old["max"] == now - ops_sample.MARK_MAX_LAG_SECONDS
+
+
+def test_collection_query_uses_marks_per_platform() -> None:
+    assert "completed_at > to_timestamp(runs.ts)" in ops_sample.COLLECTION
+    assert "to_timestamp(%(oldest)s) - interval '2 hours'" in ops_sample.COLLECTION
 
 
 def test_collection_query_reports_last_result() -> None:

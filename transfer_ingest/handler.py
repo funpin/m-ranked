@@ -162,6 +162,7 @@ class IngestHandler:
                     envelope.producer_id,
                     duration=time.monotonic() - began,
                     duplicate=False,
+                    created_at=envelope.created_at.timestamp(),
                 )
             except Exception as error:  # noqa: BLE001
                 logger.warning(
