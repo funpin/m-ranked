@@ -98,11 +98,13 @@ def cover_rows(current: dict[str, dict[str, int]], previous: dict[str, dict[str,
 
     Есть в текущей (даже с нулём) — значение; только в прошлом — «нет данных».
     Порядок — по убыванию значения, «нет данных» в конце, равные — в порядке
-    площадок.
+    площадок. Итоговая строка «all» и неизвестные площадки пропускаются.
     """
     previous = previous or {}
     rows = []
-    for platform in set(current) | set(previous):
+    # Только площадки, для которых есть значок и цвет: сводка содержит итоговую
+    # строку «all» (сумма всех площадок), её на обложке не рисуем.
+    for platform in (set(current) | set(previous)) & set(PLATFORM_ORDER):
         value = current[platform].get(key) if platform in current else None
         before = previous[platform].get(key) if platform in previous else None
         rows.append(Row(platform, value, before))

@@ -525,7 +525,7 @@ def test_week_uses_snapshot_and_forecast():
                                          {"telegram": {"posts": 1, "views": 10, "reactions": 1}}))
     handle(bot, private_message(PERSON, "/week"))
     text = sent_texts(telegram)[-1]
-    assert "Telegram: постов 20 (+1900 %)" in text and "Первая неделя" not in text
+    assert "20 постов (>+999 %)" in text and "Первая неделя" not in text
     assert source.calls == ["dashboard", "forecast"]
 
 
@@ -538,7 +538,7 @@ def test_week_sends_cover_then_text():
     assert chat_id == PERSON and photo.startswith(b"\x89PNG")
     assert caption == "<b>Неделя к неделе · Дельта · 10–16 окт</b>"
     text = sent_texts(telegram, PERSON)[0]
-    assert text.startswith("Telegram: постов") and "Прогноз места" in text
+    assert text.startswith("📅 <b>НЕДЕЛЯ</b>\n✈️") and "Прогноз места" in text
     assert "Неделя к неделе" not in text                 # шапка — только в подписи
 
 
@@ -555,7 +555,7 @@ def test_week_cover_draw_failure_sends_text_only(monkeypatch, caplog):
     assert telegram.of("photo") == []
     texts = sent_texts(telegram, PERSON)
     assert len(texts) == 1
-    assert texts[0].startswith("<b>Неделя к неделе · Дельта · 10–16 окт</b>\n\nTelegram: постов")
+    assert texts[0].startswith("<b>Неделя к неделе · Дельта · 10–16 окт</b>\n\n📅 <b>НЕДЕЛЯ</b>\n✈️")
     assert "OSError" in caplog.text and "/secret/path" not in caplog.text
 
 
@@ -762,7 +762,7 @@ def test_week_without_any_platform_has_no_cover(monkeypatch):
     handle(bot, private_message(PERSON, "/week"))
     assert telegram.of("photo") == [] and draws == []
     texts = sent_texts(telegram, PERSON)
-    assert len(texts) == 1 and texts[0].startswith("<b>Неделя к неделе</b>\nДанных за неделю пока нет.")
+    assert len(texts) == 1 and texts[0].startswith("<b>Неделя к неделе</b>\n\n📅 <b>НЕДЕЛЯ</b>\nДанных за неделю пока нет.")
 
 
 def test_send_all_with_cover_to_one_chat():
@@ -966,3 +966,48 @@ def test_setup_commands_scopes():
     assert ("commands", base + ["settings"], {"type": "chat", "chat_id": ADMIN}) in commands
     assert not any(scope == {"type": "chat", "chat_id": 22} for _, _, scope in commands)
     assert not any(scope.get("chat_id") == GROUP for _, _, scope in commands)
+
+
+# --- /emoji: id кастомных эмодзи для таблицы слотов ------------------------------
+
+def test_emoji_command_lists_custom_emoji_ids_for_admin():
+    bot, telegram, _, _ = make_bot()
+    # Смещения сущностей Telegram — в единицах UTF-16: «🔵» занимает две.
+    text = "/emoji 🔵 x ✈️"
+    entities = [{"type": "bot_command", "offset": 0, "length": 6},
+                {"type": "custom_emoji", "offset": 7, "length": 2, "custom_emoji_id": "1111111111111111111"},
+                {"type": "custom_emoji", "offset": 12, "length": 2, "custom_emoji_id": "2222222222222222222"}]
+    handle(bot, private_message(ADMIN, text, entities=entities))
+    reply = sent_texts(telegram, ADMIN)[-1]
+    assert '<tg-emoji emoji-id="1111111111111111111">🔵</tg-emoji> — <code>1111111111111111111</code>' in reply
+    assert "<code>2222222222222222222</code>" in reply
+
+
+def test_emoji_command_without_custom_emoji_explains():
+    bot, telegram, _, _ = make_bot()
+    handle(bot, private_message(ADMIN, "/emoji 🔵"))
+    assert "кастомных эмодзи нет" in sent_texts(telegram, ADMIN)[-1]
+
+
+def test_emoji_sticker_shows_its_id_and_plain_sticker_is_explained():
+    bot, telegram, _, _ = make_bot()
+    sticker = {"type": "custom_emoji", "emoji": "🟣", "custom_emoji_id": "3333333333333333333"}
+    handle(bot, private_message(ADMIN, "", sticker=sticker))
+    assert "<code>3333333333333333333</code>" in sent_texts(telegram, ADMIN)[-1]
+    handle(bot, private_message(ADMIN, "", sticker={"type": "regular", "emoji": "🙂"}))
+    assert "обычный стикер" in sent_texts(telegram, ADMIN)[-1]
+
+
+def test_emoji_command_is_admin_only_and_private_only():
+    bot, telegram, _, _ = make_bot()
+    entities = [{"type": "custom_emoji", "offset": 7, "length": 2, "custom_emoji_id": "1111111111111111111"}]
+    handle(bot, private_message(PERSON, "/emoji 🔵", entities=entities))
+    assert "1111111111111111111" not in sent_texts(telegram, PERSON)[-1]
+    handle(bot, group_message(ADMIN, "/emoji 🔵"))
+    assert not any("1111111111111111111" in text for text in sent_texts(telegram, GROUP))
+
+
+def test_help_mentions_emoji_only_for_admin():
+    from telegram_bot.render import render_help
+    assert "/emoji" in render_help(alerts=True, admin=True)
+    assert "/emoji" not in render_help(alerts=True, admin=False)

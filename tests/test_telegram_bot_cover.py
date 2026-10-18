@@ -564,3 +564,15 @@ def test_draw_is_thread_safe_and_deterministic() -> None:
 @pytest.mark.parametrize("name", sorted(EXTREMES))
 def test_draw_survives_extremes(name: str) -> None:
     assert _png(EXTREMES[name]).size == (WIDTH, HEIGHT)
+
+
+def test_rows_skip_aggregate_and_unknown_platforms():
+    # На проде сводка содержит итоговую строку «all» (сумма площадок): для неё нет
+    # значка, и обложка падала с FileNotFoundError на icons/all.png.
+    current = {"all": {"views": 128650}, "telegram": {"views": 77939}, "vk": {"views": 39363},
+               "ok": {"views": 5}}
+    previous = {"all": {"views": 100000}, "max": {"views": 900}}
+    rows = cover_rows(current, previous)
+    assert [row.platform for row in rows] == ["telegram", "vk", "max"]
+    data = CoverData("МФТИ - Физтех", "12–18 окт · просмотры за неделю", rows)
+    assert cover.draw(data)[:8] == b"\x89PNG\r\n\x1a\n"

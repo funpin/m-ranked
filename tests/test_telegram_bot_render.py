@@ -316,7 +316,7 @@ def test_keyboard_marks_current_choice():
     keyboard = top_keyboard(query)
     assert labels(keyboard) == [
         ["⬜ Наши", "✅ Все вузы"],
-        ["⬜ Все", "⬜ Telegram", "✅ ВК", "⬜ MAX", "⬜ Rutube"],
+        ["⬜ ТГ", "✅ ВК", "⬜ MAX", "⬜ Рутуб"],
         ["⬜ Сутки", "⬜ Неделя", "✅ Месяц"],
         ["✅ Подозрительные"],
     ]
@@ -335,7 +335,7 @@ def test_keyboard_defaults_and_institution_mode():
     keyboard = top_keyboard(TopQuery())
     assert labels(keyboard) == [
         ["✅ Наши", "⬜ Все вузы"],
-        ["✅ Все", "⬜ Telegram", "⬜ ВК", "⬜ MAX", "⬜ Rutube"],
+        ["✅ ТГ", "✅ ВК", "✅ MAX", "✅ Рутуб"],
         ["⬜ Сутки", "✅ Неделя", "⬜ Месяц"],
         ["⬜ Подозрительные"],
     ]
@@ -345,6 +345,26 @@ def test_keyboard_defaults_and_institution_mode():
     assert labels(inst)[0] == ["⬜ Наши", "⬜ Все вузы"]
     to_all = decode_callback(inst[0][1]["callback_data"])
     assert to_all == (TopQuery(who="all"), None)
+
+
+def test_platform_row_toggles_between_all_and_one():
+    # Пять кнопок не влезали в ширину телефона («…m», «…be»): четыре площадки,
+    # «все» — когда отмечены все четыре; нажатие на выбранную возвращает все.
+    def target(query, text):
+        button = next(b for b in top_keyboard(query)[1] if b["text"] == text)
+        return decode_callback(button["callback_data"])[0].platform
+
+    everything = TopQuery(platform="all")
+    assert target(everything, "✅ ТГ") == "telegram"
+    assert target(everything, "✅ Рутуб") == "rutube"
+    only_vk = TopQuery(platform="vk")
+    assert target(only_vk, "✅ ВК") == "all"
+    assert target(only_vk, "⬜ MAX") == "max"
+    for query in (everything, only_vk):
+        row = top_keyboard(query)[1]
+        assert len(row) == 4
+        # Ряд из четырёх кнопок вмещает около пяти знаков на кнопку.
+        assert all(len(button["text"]) <= 7 for button in row)
 
 
 def test_keyboard_carries_author():
@@ -399,7 +419,7 @@ def test_week_without_previous():
     assert text.startswith("<b>Неделя к неделе</b>")
     assert "сравнение появится через неделю" in text
     assert "%" not in text
-    assert "Telegram" in text and "112,0 тыс." in text
+    assert "✈️ <b>112,0 тыс.</b> просм." in text and band("band_week", "НЕДЕЛЯ") in text
     assert "Прогноз" not in text
 
 
@@ -463,7 +483,7 @@ def test_digest_bands_in_order():
     positions = [text.index(band) for band in BANDS]
     assert positions == sorted(positions)
     week = text[positions[2]:positions[3]]
-    assert "Telegram: постов 20 (+100 %)" in week and "Всего:" in week
+    assert "20 постов (+100 %)" in week and "<b>Всего:</b>" in week
     assert "Неделя к неделе" not in text  # заголовок заменён лентой
     assert text[positions[3]:].strip().endswith("≈12-е ± 7")
     # Прогноза нет — нет и ленты «ПРОГНОЗ».
@@ -524,7 +544,8 @@ def test_week_with_cover_starts_with_caption_header():
     assert messages[0] == Message("<b>Неделя к неделе · Дельта · 10–16 окт</b>")
     rest = text_of(messages[1:])
     assert "Неделя к неделе" not in rest
-    assert rest.startswith("Telegram: постов 20 (+100 %)") and "≈12-е ± 7" in rest
+    assert rest.startswith(band("band_week", "НЕДЕЛЯ")) and "20 постов (+100 %)" in rest
+    assert band("band_forecast", "ПРОГНОЗ") in rest and "≈12-е ± 7" in rest
     no_label = render_week(CURRENT, PREVIOUS, None, OUR_ID, cover=cover_data())
     assert no_label[0].text == "<b>Неделя к неделе · Дельта</b>"
 
@@ -617,3 +638,16 @@ def test_help_html_is_balanced(alerts, admin):
     assert not stack
     bare = re.sub(r"<[^<>]*>", "", text)
     assert "<" not in bare and ">" not in bare and "&" not in bare
+
+
+def test_week_change_is_capped_like_the_cover():
+    text = render_week({"telegram": {"posts": 20, "views": 112_000, "reactions": 3400}},
+                       {"telegram": {"posts": 1, "views": 10, "reactions": 1}}, None, OUR_ID)[0].text
+    assert "(>+999 %)" in text and "1119900" not in text
+
+
+def test_week_lines_have_platform_icons_and_plurals():
+    text = render_week({"telegram": {"posts": 21, "views": 900, "reactions": 1},
+                        "vk": {"posts": 13, "views": 5, "reactions": 3}}, None, None, OUR_ID)[0].text
+    assert "✈️ <b>900</b> просм. · 21 пост · 1 реакция" in text
+    assert "🔵 <b>5</b> просм. · 13 постов · 3 реакции" in text

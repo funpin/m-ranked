@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from . import content, settings
 from .access import Access, access_for, allowed
 from .config import BotConfig
+from .emoji import describe_custom_emoji
 from .render import (
     TELEGRAM_LIMIT,
     Message,
@@ -328,6 +329,13 @@ class Bot:
             return
         if access.user_id is not None:
             self.pending.pop(access.user_id, None)  # любая команда отменяет ожидание ввода
+        if "sticker" in message and access.private and access.admin:
+            # Админ прислал стикер — показать его id для таблицы слотов значков.
+            await self.reply(chat["id"], describe_custom_emoji(message))
+            return
+        if command == "emoji" and allowed("emoji", access):
+            await self.reply(chat["id"], describe_custom_emoji(message))
+            return
         if command is None:
             if access.private:
                 await self.reply(chat["id"], NOT_UNDERSTOOD if access.known_person else NO_ACCESS)

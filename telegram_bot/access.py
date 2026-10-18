@@ -62,4 +62,6 @@ def allowed(command: str, access: Access) -> bool:
         return access.alerts and access.private
     if command == "settings":
         return access.admin and access.private
+    if command == "emoji":  # id кастомных эмодзи для таблицы слотов
+        return access.admin and access.private
     return False

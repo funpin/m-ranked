@@ -369,7 +369,7 @@ def test_digest_contents():
     assert texts[0].startswith("🏆 <b>НАШИ ЛУЧШИЕ</b>")   # шапка — в подписи к обложке
     assert "<b>НАШИ ЛУЧШИЕ</b>" in text and "<b>ДРУГИЕ ВУЗЫ</b>" in text
     assert "<b>НЕДЕЛЯ</b>" in text and "<b>ПРОГНОЗ</b>" in text
-    assert "постов 20 (+100 %)" in text            # неделя к неделе по сохранённому снимку
+    assert "20 постов (+100 %)" in text            # неделя к неделе по сохранённому снимку
     assert "Прогноз места в М-Рейтинге" in text and "±" in text
     others = text.split("<b>ДРУГИЕ ВУЗЫ</b>")[1].split("<b>НЕДЕЛЯ</b>")[0]
     assert "(мы)" not in others and "Дельта" not in others   # наш вуз среди «других» не показываем

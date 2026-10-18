@@ -52,3 +52,32 @@ def band(slot: str, label: str) -> str:
     """Лента-разделитель блока. До набора — значок слота и жирная надпись;
     с набором её заменят до пяти слотов подряд, складывающихся в одну полосу."""
     return f"{icon(slot)} <b>{html.escape(label, quote=True)}</b>"
+
+
+def describe_custom_emoji(message: dict) -> str:
+    """Ответ на /emoji (или на присланный эмодзи-стикер): id каждого кастомного
+    эмодзи — их вписывают в SLOTS. Смещения сущностей Telegram — в единицах UTF-16."""
+    sticker = message.get("sticker")
+    if isinstance(sticker, dict):
+        if sticker.get("type") == "custom_emoji" and _ID.fullmatch(str(sticker.get("custom_emoji_id", ""))):
+            found = [(str(sticker.get("emoji") or "?"), str(sticker["custom_emoji_id"]))]
+        else:
+            return ("Это обычный стикер, а не кастомный эмодзи: в тексте его не поставить. "
+                    "Пришлите эмодзи из набора эмодзи вместе с командой /emoji.")
+    else:
+        units = (message.get("text") or "").encode("utf-16-le")
+        found = []
+        for entity in message.get("entities") or []:
+            emoji_id = str(entity.get("custom_emoji_id", ""))
+            if entity.get("type") != "custom_emoji" or not _ID.fullmatch(emoji_id):
+                continue
+            start, length = int(entity.get("offset", 0)), int(entity.get("length", 0))
+            glyph = units[start * 2:(start + length) * 2].decode("utf-16-le", errors="replace")
+            found.append((glyph or "?", emoji_id))
+    if not found:
+        return ("В сообщении кастомных эмодзи нет. Пришлите /emoji и сразу за ним "
+                "нужные эмодзи из набора (нужен Telegram Premium).")
+    lines = ["<b>Кастомные эмодзи в сообщении</b>"]
+    lines += [f'<tg-emoji emoji-id="{emoji_id}">{html.escape(glyph, quote=True)}</tg-emoji> — <code>{emoji_id}</code>'
+              for glyph, emoji_id in found]
+    return "\n".join(lines)

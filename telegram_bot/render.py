@@ -35,8 +35,9 @@ ELLIPSIS = "…"
 
 PLATFORM_ORDER = ("telegram", "vk", "max", "rutube")
 PLATFORM_NAMES = {"telegram": "Telegram", "vk": "ВКонтакте", "max": "MAX", "rutube": "Rutube"}
-PLATFORM_BUTTONS = (("all", "Все"), ("telegram", "Telegram"), ("vk", "ВК"),
-                    ("max", "MAX"), ("rutube", "Rutube"))
+# Пять кнопок в ряд не влезали в ширину телефона («…m», «…be»): четыре площадки
+# с короткими подписями, «все площадки» — когда отмечены все четыре.
+PLATFORM_BUTTONS = (("telegram", "ТГ"), ("vk", "ВК"), ("max", "MAX"), ("rutube", "Рутуб"))
 PUBLICATION_TYPES = {"text": "текст", "photo": "фото", "album": "альбом", "video": "видео"}
 PERIOD_BUTTONS = (("1d", "Сутки"), ("7d", "Неделя"), ("30d", "Месяц"))
 MONTHS = ("янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек")
@@ -360,7 +361,10 @@ def top_keyboard(query: TopQuery, author: int | None = None) -> list[list[dict]]
     return [
         [button("Наши", query.who == "ours", replace(base, who="ours", institution=None)),
          button("Все вузы", query.who == "all", replace(base, who="all", institution=None))],
-        [button(label, query.platform == code, replace(base, platform=code))
+        # Все площадки — отмечены все четыре; нажатие оставляет одну, повторное
+        # нажатие на выбранную возвращает все.
+        [button(label, query.platform in ("all", code),
+                replace(base, platform="all" if query.platform == code else code))
          for code, label in PLATFORM_BUTTONS],
         [button(label, query.period == code, replace(base, period=code))
          for code, label in PERIOD_BUTTONS],
@@ -390,19 +394,31 @@ def _change(current: int, previous: int | None) -> str:
         return "" if current == 0 else " (раньше 0)"
     percent = (current - previous) * 100 / previous
     rounded = int(abs(percent) + 0.5)
+    if rounded > 999:  # как на обложке: шестизначный процент — шум
+        return " (>+999 %)"
     sign = "" if rounded == 0 else ("+" if percent > 0 else MINUS)
     return f" ({sign}{rounded} %)"
 
 
+def plural(count: int, one: str, few: str, many: str) -> str:
+    """«1 пост», «24 поста», «13 постов»."""
+    tail = count % 100
+    if 11 <= tail <= 14:
+        return many
+    return {1: one, 2: few, 3: few, 4: few}.get(count % 10, many)
+
+
 def _stats_line(title: str, current: dict[str, int], previous: dict[str, int] | None,
                 have_previous: bool) -> str:
-    def part(label: str, key: str, formatter) -> str:
-        change = _change(current[key], (previous or {}).get(key, 0) if have_previous else None)
-        return f"{label} {formatter(current[key])}{change}"
+    """Строка недели: «<значок> <b>77,9 тыс.</b> просм. (+12 %) · 24 поста · 868 реакций»."""
+    def change(key: str) -> str:
+        return _change(current[key], (previous or {}).get(key, 0) if have_previous else None)
 
-    return (f"{esc(title)}: {part('постов', 'posts', str)}, "
-            f"{part('просмотров', 'views', format_count)}, "
-            f"{part('реакций', 'reactions', format_count)}")
+    posts, reactions = current["posts"], current["reactions"]
+    return (f"{title} <b>{format_count(current['views'])}</b> просм.{change('views')} · "
+            f"{posts} {plural(posts, 'пост', 'поста', 'постов')}{change('posts')} · "
+            f"{format_count(reactions)} {plural(reactions, 'реакция', 'реакции', 'реакций')}"
+            f"{change('reactions')}")
 
 
 def _forecast_line(forecast: dict[str, Any] | None, our_id: int) -> str | None:
@@ -431,12 +447,12 @@ def _week_stats(current: dict, previous: dict | None) -> list[str]:
     totals = [dict(empty), dict(empty)]
     for code in codes:
         now, before = {**empty, **current.get(code, {})}, {**empty, **(previous or {}).get(code, {})}
-        lines.append(_stats_line(PLATFORM_NAMES[code], now, before, previous is not None))
+        lines.append(_stats_line(icon(code), now, before, previous is not None))
         for key in empty:
             totals[0][key] += now[key]
             totals[1][key] += before[key]
     if len(codes) > 1:
-        lines.append(_stats_line("Всего", totals[0], totals[1], previous is not None))
+        lines.append(_stats_line("<b>Всего:</b>", totals[0], totals[1], previous is not None))
     if previous is None:
         lines.append("<i>Первая неделя наблюдений: сравнение появится через неделю.</i>")
     return lines
@@ -461,10 +477,12 @@ def _with_cover(caption: str | None, body: list[str]) -> list[Message]:
 def render_week(current: dict, previous: dict | None, forecast: dict | None,
                 our_id: int, *, cover: CoverData | None = None,
                 label: str | None = None) -> list[Message]:
-    lines = ["<b>Неделя к неделе</b>", *_week_stats(current, previous)]
+    # Первая строка — шапка; с обложкой её несёт подпись, в тексте она не повторяется.
+    lines = ["<b>Неделя к неделе</b>", "", band("band_week", "НЕДЕЛЯ"),
+             *_week_stats(current, previous)]
     forecast_line = _forecast_line(forecast, our_id)
     if forecast_line:
-        lines += ["", esc(forecast_line)]
+        lines += ["", band("band_forecast", "ПРОГНОЗ"), esc(forecast_line)]
     caption = None if cover is None else cover_caption("Неделя к неделе", cover.title, label)
     return _with_cover(caption, lines)
 
@@ -520,5 +538,6 @@ def render_help(*, alerts: bool, admin: bool) -> str:
             lines.append("<b>/status</b> — главные проверки сервера и сбора")
         if admin:
             lines.append("<b>/settings</b> — наш вуз, чат, люди и подписки (только в личке)")
+            lines.append("<b>/emoji</b> — id кастомных эмодзи: пришлите их вместе с командой")
     lines += ["", "<b>/id</b> — ваш Telegram ID (нужен админу, чтобы добавить вас)"]
     return "\n".join(lines)
