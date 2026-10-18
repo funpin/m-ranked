@@ -1,0 +1,9 @@
+# «Свои» сети для лимита по странам (traffic.conf). Ставится в
+# /etc/m-ranked/nginx/geo-home.conf. Настоящий файл собирает
+#   operations/scripts/build-geo-home.py dbip-country-lite-ГГГГ-ММ.csv.gz /etc/m-ranked/nginx/geo-home.conf
+# из DB-IP «IP to Country Lite» (download.db-ip.com, CC BY 4.0): Россия, СНГ и
+# служебные адреса — 1, остальные — 0. Этот образец считает «своими» всех:
+# лимит для других стран не действует.
+geo $http_x_mranked_client $m_ranked_home_country {
+    default 1;
+}

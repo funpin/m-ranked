@@ -34,7 +34,7 @@ logger = logging.getLogger("ops-sample")
 VERSION = 1
 RETENTION_DAYS = 30
 SIZE_INTERVAL_SECONDS = 6 * 3600
-BOT_CLASSES = frozenset({"ai_user", "ai_search", "ai_training", "crawler"})
+BOT_CLASSES = frozenset({"ai_user", "ai_search", "ai_training", "seo", "crawler"})
 CACHE_HITS = frozenset({"HIT", "STALE", "UPDATING", "REVALIDATED"})
 # Не страницы: служебные файлы и картинки реакций (тот же список, что у
 # шлюза в operations/nginx/traffic.conf). Отказ картинки Telegram ждёт 10 с —

@@ -68,7 +68,7 @@ from pathlib import Path
 
 path, hours = Path(sys.argv[1]), float(sys.argv[2])
 line_re = re.compile(r'^\S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d{3}) (\d+) ([\d.]+) (\w+) (\S+) "')
-bots = {"ai_user", "ai_search", "ai_training", "crawler"}
+bots = {"ai_user", "ai_search", "ai_training", "seo", "crawler"}
 cutoff = time.time() - hours * 3600
 groups = defaultdict(list)
 cache = defaultdict(lambda: [0, 0])

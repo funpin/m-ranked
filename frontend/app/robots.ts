@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { AI_CRAWLERS } from "@/lib/crawlers";
+import { AI_CRAWLERS, SEO_CRAWLERS } from "@/lib/crawlers";
 import { publicOrigin } from "@/lib/deployment";
 
 
@@ -7,6 +7,7 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       { userAgent: [...AI_CRAWLERS], disallow: "/" },
+      { userAgent: [...SEO_CRAWLERS], disallow: "/" },
       {
         userAgent: "*",
         allow: "/",

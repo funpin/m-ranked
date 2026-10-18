@@ -29,7 +29,7 @@ import sys
 import time
 from typing import Literal
 
-BOT_CLASSES = ("ai_user", "ai_search", "ai_training", "crawler")
+BOT_CLASSES = ("ai_user", "ai_search", "ai_training", "seo", "crawler")
 WINDOW_MINUTES = 5
 HISTORY_MINUTES = 15  # сколько минутных корзин хранить: для роботов нужно 5 законченных минут
 LOAD_MINUTES = 15
