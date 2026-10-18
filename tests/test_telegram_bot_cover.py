@@ -517,6 +517,16 @@ from tests.test_telegram_bot_cover import EXTREMES
 from telegram_bot import cover
 
 def rss_mb():
+    # На Linux ru_maxrss переживает exec: подпроцесс от vfork (Python 3.13)
+    # наследует пик родителя — процесса pytest с тысячами тестов (в CI 370 МБ).
+    # VmHWM считается для нового адресного пространства и при exec сбрасывается.
+    try:
+        with open("/proc/self/status") as status:
+            for line in status:
+                if line.startswith("VmHWM:"):
+                    return int(line.split()[1]) / 1024
+    except OSError:
+        pass
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak / (1024 * 1024 if sys.platform == "darwin" else 1024)
 

@@ -24,7 +24,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
 
 ROOT = Path(__file__).resolve().parents[2]
 BRANDS = ROOT / "frontend" / "public" / "brands"
@@ -44,9 +44,31 @@ def rasterize(source: Path, target: Path, *size: str) -> None:
                    check=True)
 
 
+class _Paths(HTMLParser):
+    """Атрибуты <path> из SVG. html.parser, а не xml: он не раскрывает
+    внешние сущности (XXE) — правило Semgrep use-defused-xml-parse."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.paths: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "path":
+            self.paths.append(dict(attrs))
+
+    handle_startendtag = handle_starttag
+
+
+def logo_paths(svg: str) -> list[dict[str, str | None]]:
+    parser = _Paths()
+    parser.feed(svg)
+    parser.close()
+    return parser.paths
+
+
 def logo_svg() -> str:
     """SVG только из трёх путей знака, без фона и без трансформации."""
-    paths = ET.parse(APP_ICON).getroot().findall(f".//{{{SVG_NS}}}path")
+    paths = logo_paths(APP_ICON.read_text(encoding="utf-8"))
     if len(paths) != 3:
         raise SystemExit(f"в {APP_ICON} ожидалось три пути знака, найдено {len(paths)}")
     body = "".join(f'<path fill="{path.get("fill")}" d="{path.get("d")}"/>' for path in paths)
