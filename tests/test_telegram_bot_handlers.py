@@ -40,6 +40,8 @@ class FakeTelegram:
         self.blocked: set[int] = set()
         self.failing: set[int] = set()
         self.not_started: set[int] = set()
+        self.photo_failing: set[int] = set()  # только sendPhoto отвечает TelegramError
+        self.file_id_failing: set[int] = set()  # sendPhoto по file_id отвечает TelegramError
         self.edit_error: Exception | None = None
         self.username = "m_ranked_bot"
         self._next_id = 100
@@ -57,6 +59,23 @@ class FakeTelegram:
         self._next_id += 1
         self.calls.append(("send", chat_id, text, keyboard, self._next_id))
         return {"message_id": self._next_id, "chat": {"id": chat_id}}
+
+    async def send_photo(self, chat_id, photo, caption):
+        if chat_id in self.blocked:
+            raise BotBlocked(chat_id)
+        if chat_id in self.failing or chat_id in self.photo_failing or (
+                isinstance(photo, str) and chat_id in self.file_id_failing):
+            raise TelegramError("sendPhoto: Telegram ответил 400")
+        if chat_id in self.not_started:
+            raise CannotInitiate(chat_id)
+        self._next_id += 1
+        self.calls.append(("photo", chat_id, photo, caption, self._next_id))
+        # Как в Bot API: несколько размеров; самый большой — не обязательно последний.
+        return {"message_id": self._next_id, "chat": {"id": chat_id}, "photo": [
+            {"file_id": f"small-{self._next_id}", "width": 90, "height": 45, "file_size": 900},
+            {"file_id": f"big-{self._next_id}", "width": 1280, "height": 640, "file_size": 90000},
+            {"file_id": f"mid-{self._next_id}", "width": 320, "height": 160, "file_size": 9000},
+        ]}
 
     async def edit_message(self, chat_id, message_id, text, keyboard=None):
         if self.edit_error is not None:
@@ -264,34 +283,47 @@ def test_status_refused_in_group():
     handle(bot, private_message(ADMIN, "/status"))
     rows = asyncio.run(store.status_rows(3 * 3600 + 900))
     assert rows
-    assert sent_texts(telegram, ADMIN)[-1] == render_status(rows, NOW)
+    expected = render_status(rows, NOW)
+    sent = telegram.of("send")[-1]
+    assert sent[1] == ADMIN and sent[2] == expected.text and sent[3] == expected.keyboard
+    assert button_by_text(sent[3], "Обновить")["callback_data"] == "st|r"
 
 
-def test_render_status_lines():
-    now = NOW
-    observed = datetime.fromtimestamp(now - 60, timezone.utc)
-    sample = {
-        "collection": {"telegram": {"ok": 5, "failed": 1, "lastOk": now - 120},
-                       "vk": {"ok": 3, "failed": 0, "lastOk": now - 4000}},
-        "pipeline": {"ingestAcceptedAt": now - 60, "analysisLag": 120, "analysisBacklog": 5},
-        "units": {"failed": ["m-ranked-target-web.service"]},
-        "disk": {"total": 100 * 10**9, "free": 40 * 10**9},
-        "memory": {"total": 100, "available": 50},
-    }
-    rows = [{"observed_at": datetime.fromtimestamp(now - 120, timezone.utc), "sample": {}},
-            {"observed_at": observed, "sample": sample}]
-    lines = render_status(rows, now).split("\n")
-    assert 5 <= len(lines) <= 6
-    assert lines[0].startswith("🔴") and "Сбор" in lines[0]  # MAX и Rutube без успешных циклов
-    assert "Telegram 🟢" in lines[0] and "ВКонтакте 🟡" in lines[0]
-    assert any(line.startswith("🟢") and "Приём с Сервера 1" in line for line in lines)
-    assert any("Очередь анализа" in line and "отставание 2 мин" in line for line in lines)
-    assert any(line.startswith("🔴") and "m-ranked-target-web.service" in line for line in lines)
-    assert any(line.startswith("🟢") and "Диск" in line for line in lines)
-    assert any(line.startswith("🟢") and "Память" in line and "50%" in line for line in lines)
-    # Без снимков: строка сбора и строка о снимке, без исключения.
-    empty = render_status([], now).split("\n")
-    assert len(empty) == 2 and "Снимок сервера" in empty[1]
+def status_store(store) -> None:
+    store.host_samples.append({"observed_at": datetime.now(timezone.utc) - timedelta(seconds=60),
+                               "sample": {"disk": {"total": 100 * 10**9, "free": 40 * 10**9}}})
+
+
+def test_status_refresh_edits_same_message():
+    bot, telegram, _, store = make_bot()
+    status_store(store)
+    handle(bot, private_message(ADMIN, "/status"))
+    sent = telegram.of("send")[-1]
+    handle(bot, callback(ADMIN, ADMIN, sent[4], "st|r"))
+    edits = telegram.of("edit")
+    assert len(edits) == 1 and edits[0][1] == ADMIN and edits[0][2] == sent[4]
+    assert "Состояние m-ranked" in edits[0][3]
+    assert button_by_text(edits[0][4], "Обновить")["callback_data"] == "st|r"
+    assert telegram.of("answer") == [("answer", "cb1", "обновлено")]
+    assert len(telegram.of("send")) == 1
+
+
+def test_status_refresh_answers_even_if_edit_fails():
+    bot, telegram, _, store = make_bot()
+    status_store(store)
+    telegram.edit_error = TelegramError("editMessageText: Telegram ответил 500")
+    handle(bot, callback(ADMIN, ADMIN, 55, "st|r"))
+    assert telegram.of("answer") == [("answer", "cb1", "обновлено")]
+
+
+def test_status_refresh_refused_in_group_and_for_non_alerts():
+    bot, telegram, _, store = make_bot()
+    status_store(store)
+    handle(bot, callback(ADMIN, GROUP, 55, "st|r", chat_type="supergroup"))  # в группе
+    handle(bot, callback(PERSON, PERSON, 56, "st|r"))  # не в списке тревог
+    handle(bot, callback(STRANGER, STRANGER, 57, "st|r"))  # чужой
+    assert telegram.of("edit") == []
+    assert telegram.of("answer") == [("answer", "cb1", "недоступно")] * 3
 
 
 def test_callback_edits_same_message():
@@ -304,7 +336,8 @@ def test_callback_edits_same_message():
     edits = telegram.of("edit")
     assert len(edits) == 1 and edits[0][1] == PERSON and edits[0][2] == message_id
     assert "Лучшие посты всех вузов" in edits[0][3]
-    assert button_by_text(edits[0][4], "Все вузы")["text"].startswith("✓")
+    assert button_by_text(edits[0][4], "Все вузы")["text"] == "✅ Все вузы"
+    assert button_by_text(edits[0][4], "Наши")["text"] == "⬜ Наши"
     assert telegram.of("answer") == [("answer", "cb1", None)]
     assert len(telegram.of("send")) == 1
 
@@ -383,8 +416,84 @@ def test_ambiguous_institution_asks_which():
     sent = telegram.of("send")[-1]
     assert "Какой" in sent[2] and "top_body" not in source.calls
     choices = [decode_callback(b["callback_data"]) for b in buttons(sent[3])]
-    assert {query.institution for query in choices} == {4, 11, 12, 13}
-    assert all(query.who == "institution" for query in choices)
+    assert {query.institution for query, _ in choices} == {4, 11, 12, 13}
+    assert all(query.who == "institution" for query, _ in choices)
+    assert all(author is None for _, author in choices)  # в личке замок не нужен
+
+
+# --- замок на автора меню ---------------------------------------------------
+
+FOREIGN_MENU = "Это меню вызвал другой участник — напишите свой /top"
+
+
+def group_callback(user: int, data: str, message_id: int = 55) -> dict:
+    return callback(user, GROUP, message_id, data, chat_type="supergroup")
+
+
+def authors(keyboard) -> set:
+    return {decode_callback(b["callback_data"])[1] for b in buttons(keyboard)}
+
+
+def test_group_menu_obeys_only_its_author():
+    bot, telegram, source, _ = make_bot()
+    handle(bot, group_message(STRANGER, "/top"))
+    sent = telegram.of("send")[-1]
+    assert authors(sent[3]) == {STRANGER}
+    pressed = button_by_text(sent[3], "Все вузы")["callback_data"]
+    calls_before = list(source.calls)
+    handle(bot, group_callback(PERSON, pressed, sent[4]))
+    assert telegram.of("edit") == []
+    assert telegram.of("answer") == [("answer", "cb1", FOREIGN_MENU)]
+    assert source.calls == calls_before  # чужое нажатие не читает API
+    handle(bot, group_callback(STRANGER, pressed, sent[4]))
+    edits = telegram.of("edit")
+    assert len(edits) == 1 and "Лучшие посты всех вузов" in edits[0][3]
+    assert authors(edits[0][4]) == {STRANGER}  # новое меню тоже под замком
+    assert telegram.of("answer")[-1] == ("answer", "cb1", None)
+
+
+def test_old_button_without_author_works_for_anyone():
+    bot, telegram, _, _ = make_bot()
+    handle(bot, group_callback(PERSON, "t|a|a|w||0"))
+    edits = telegram.of("edit")
+    assert len(edits) == 1 and "Лучшие посты всех вузов" in edits[0][3]
+    assert telegram.of("answer") == [("answer", "cb1", None)]
+    assert authors(edits[0][4]) == {None}
+
+
+def test_no_lock_in_private():
+    bot, telegram, _, _ = make_bot()
+    handle(bot, private_message(PERSON, "/top"))
+    assert authors(telegram.of("send")[-1][3]) == {None}
+    handle(bot, callback(PERSON, PERSON, 55, encode_callback(TopQuery(who="all"), STRANGER)))
+    assert len(telegram.of("edit")) == 1
+    assert telegram.of("answer") == [("answer", "cb1", None)]
+
+
+def test_which_one_keyboard_is_locked_too():
+    bot, telegram, source, _ = make_bot()
+    handle(bot, group_message(STRANGER, "/top университет"))
+    sent = telegram.of("send")[-1]
+    assert "Какой" in sent[2] and authors(sent[3]) == {STRANGER}
+    choice = buttons(sent[3])[0]["callback_data"]
+    handle(bot, group_callback(PERSON, choice, sent[4]))
+    assert telegram.of("edit") == [] and telegram.of("answer")[-1][2] == FOREIGN_MENU
+    assert "top_body" not in source.calls
+    handle(bot, group_callback(STRANGER, choice, sent[4]))
+    assert len(telegram.of("edit")) == 1 and authors(telegram.of("edit")[0][4]) == {STRANGER}
+
+
+def test_anonymous_admin_menu_author_is_sender_chat():
+    bot, telegram, _, _ = make_bot()
+    update = group_message(ADMIN, "/top")
+    update["message"]["sender_chat"] = {"id": GROUP, "type": "supergroup"}
+    handle(bot, update)
+    sent = telegram.of("send")[-1]
+    assert authors(sent[3]) == {GROUP}
+    # Кто нажал от имени чата, Telegram не говорит: такое меню слушается всех.
+    handle(bot, group_callback(PERSON, button_by_text(sent[3], "Все вузы")["callback_data"], sent[4]))
+    assert len(telegram.of("edit")) == 1
+    assert authors(telegram.of("edit")[0][4]) == {GROUP}
 
 
 def test_no_institution_yet():
@@ -416,8 +525,47 @@ def test_week_uses_snapshot_and_forecast():
                                          {"telegram": {"posts": 1, "views": 10, "reactions": 1}}))
     handle(bot, private_message(PERSON, "/week"))
     text = sent_texts(telegram)[-1]
-    assert "Неделя к неделе" in text and "Первая неделя" not in text
+    assert "20 постов (>+999 %)" in text and "Первая неделя" not in text
     assert source.calls == ["dashboard", "forecast"]
+
+
+def test_week_sends_cover_then_text():
+    bot, telegram, _, _ = make_bot()
+    handle(bot, private_message(PERSON, "/week"))
+    kinds = [call[0] for call in telegram.calls if call[0] in ("photo", "send")]
+    assert kinds == ["photo", "send"]
+    _, chat_id, photo, caption, _ = telegram.of("photo")[0]
+    assert chat_id == PERSON and photo.startswith(b"\x89PNG")
+    assert caption == "<b>Неделя к неделе · Дельта · 10–16 окт</b>"
+    text = sent_texts(telegram, PERSON)[0]
+    assert text.startswith("📅 <b>НЕДЕЛЯ</b>\n✈️") and "Прогноз места" in text
+    assert "Неделя к неделе" not in text                 # шапка — только в подписи
+
+
+def test_week_cover_draw_failure_sends_text_only(monkeypatch, caplog):
+    from telegram_bot import cover
+
+    def broken(data):
+        raise OSError("cannot open resource /secret/path")
+
+    monkeypatch.setattr(cover, "draw", broken)
+    caplog.set_level(logging.WARNING)
+    bot, telegram, _, _ = make_bot()
+    handle(bot, private_message(PERSON, "/week"))
+    assert telegram.of("photo") == []
+    texts = sent_texts(telegram, PERSON)
+    assert len(texts) == 1
+    assert texts[0].startswith("<b>Неделя к неделе · Дельта · 10–16 окт</b>\n\n📅 <b>НЕДЕЛЯ</b>\n✈️")
+    assert "OSError" in caplog.text and "/secret/path" not in caplog.text
+
+
+def test_week_photo_rejected_sends_text_only():
+    bot, telegram, _, _ = make_bot()
+    telegram.photo_failing = {PERSON}
+    handle(bot, private_message(PERSON, "/week"))
+    assert telegram.of("photo") == []
+    texts = sent_texts(telegram, PERSON)
+    assert len(texts) == 1 and texts[0].startswith("<b>Неделя к неделе · Дельта")
 
 
 def test_help_and_digest_command():
@@ -429,7 +577,8 @@ def test_help_and_digest_command():
     handle(bot, private_message(PERSON, "/help"))
     assert "/status" not in sent_texts(telegram, PERSON)[-1]
     handle(bot, group_message(STRANGER, "/digest"))
-    assert "Дайджест" in sent_texts(telegram, GROUP)[-1]
+    assert [call[1] for call in telegram.of("photo")] == [GROUP]
+    assert telegram.of("photo")[0][3].startswith("<b>Дайджест · Дельта")
     assert len(sent_texts(telegram, PERSON)) == 1  # дайджест ушёл только в тот чат
     source.down = True
     handle(bot, group_message(STRANGER, "/digest"))
@@ -544,6 +693,87 @@ def test_blocked_recipient_removed():
     assert len(telegram.of("send")) == 4
     remaining = {r.chat_id for r in asyncio.run(store.recipients())}
     assert remaining == {10, 12, 13, -14}
+
+
+COVER = [Message("<b>шапка</b>", photo=b"\x89PNG-cover"), Message("тело 1"), Message("тело 2")]
+
+
+def test_broadcast_uploads_cover_once_then_reuses_largest_file_id():
+    bot, telegram, _, _ = make_bot(recipients=[Recipient(10, "person", "a", digest=True),
+                                               Recipient(11, "person", "b", digest=True),
+                                               Recipient(12, "person", "c", digest=True),
+                                               Recipient(13, "person", "d", digest=True)])
+    telegram.photo_failing = {12}
+    result = asyncio.run(bot.broadcast_report(COVER, "digest"))
+    assert (result.delivered, result.transient) == (4, 0)
+    photos = telegram.of("photo")
+    assert [(call[1], call[2], call[3]) for call in photos] == [
+        (10, b"\x89PNG-cover", "<b>шапка</b>"),
+        (11, f"big-{photos[0][4]}", "<b>шапка</b>"),   # по file_id самого большого размера
+        (13, b"\x89PNG-cover", "<b>шапка</b>"),       # file_id отказал у 12 — забыт
+    ]
+    for chat_id in (10, 11, 13):
+        assert sent_texts(telegram, chat_id) == ["тело 1", "тело 2"]
+    assert sent_texts(telegram, 12) == ["<b>шапка</b>\n\nтело 1", "тело 2"]  # без картинки, без повторов
+    assert len(telegram.of("send")) == 8
+
+
+def test_broadcast_cover_first_upload_failed_next_uploads_bytes():
+    bot, telegram, _, store = make_bot(recipients=[Recipient(10, "person", "a", digest=True),
+                                                   Recipient(11, "person", "b", digest=True),
+                                                   Recipient(12, "person", "c", digest=True),
+                                                   Recipient(13, "person", "d", digest=True)])
+    telegram.photo_failing = {10}
+    telegram.blocked = {11}
+    result = asyncio.run(bot.broadcast_report(COVER, "digest"))
+    assert (result.delivered, result.transient) == (3, 0)
+    photos = telegram.of("photo")
+    assert [(call[1], call[2]) for call in photos] == [
+        (12, b"\x89PNG-cover"), (13, f"big-{photos[0][4]}")]
+    assert sent_texts(telegram, 11) == []
+    assert 11 not in {r.chat_id for r in asyncio.run(store.recipients())}
+
+
+def test_broadcast_failed_file_id_is_dropped_next_uploads_bytes():
+    bot, telegram, _, _ = make_bot(recipients=[Recipient(10, "person", "a", digest=True),
+                                               Recipient(11, "person", "b", digest=True),
+                                               Recipient(12, "person", "c", digest=True)])
+    telegram.file_id_failing = {11}
+    result = asyncio.run(bot.broadcast_report(COVER, "digest"))
+    assert (result.delivered, result.transient) == (3, 0)
+    assert [(call[1], call[2]) for call in telegram.of("photo")] == [
+        (10, b"\x89PNG-cover"), (12, b"\x89PNG-cover")]   # file_id отказал — грузим заново
+    assert sent_texts(telegram, 11) == ["<b>шапка</b>\n\nтело 1", "тело 2"]
+
+
+def test_week_without_any_platform_has_no_cover(monkeypatch):
+    from telegram_bot import cover
+
+    draws = []
+    monkeypatch.setattr(cover, "draw", lambda data: draws.append(data) or b"png")
+    bot, telegram, source, _ = make_bot()
+
+    async def no_stats() -> dict:
+        body = fixture("dashboard.json")
+        body["stats"] = []
+        return body
+
+    source.dashboard = no_stats
+    handle(bot, private_message(PERSON, "/week"))
+    assert telegram.of("photo") == [] and draws == []
+    texts = sent_texts(telegram, PERSON)
+    assert len(texts) == 1 and texts[0].startswith("<b>Неделя к неделе</b>\n\n📅 <b>НЕДЕЛЯ</b>\nДанных за неделю пока нет.")
+
+
+def test_send_all_with_cover_to_one_chat():
+    bot, telegram, _, _ = make_bot()
+    asyncio.run(bot.send_all(GROUP, COVER))
+    assert [(call[1], call[2]) for call in telegram.of("photo")] == [(GROUP, b"\x89PNG-cover")]
+    assert sent_texts(telegram, GROUP) == ["тело 1", "тело 2"]
+    telegram.calls.clear()
+    telegram.photo_failing = {GROUP}
+    asyncio.run(bot.send_all(GROUP, COVER))
+    assert sent_texts(telegram, GROUP) == ["<b>шапка</b>\n\nтело 1", "тело 2"]
 
 
 def test_not_started_person_kept_and_not_counted():
@@ -736,3 +966,86 @@ def test_setup_commands_scopes():
     assert ("commands", base + ["settings"], {"type": "chat", "chat_id": ADMIN}) in commands
     assert not any(scope == {"type": "chat", "chat_id": 22} for _, _, scope in commands)
     assert not any(scope.get("chat_id") == GROUP for _, _, scope in commands)
+
+
+# --- /emoji: id кастомных эмодзи для таблицы слотов ------------------------------
+
+def test_emoji_command_lists_custom_emoji_ids_for_admin():
+    bot, telegram, _, _ = make_bot()
+    # Смещения сущностей Telegram — в единицах UTF-16: «🔵» занимает две.
+    text = "/emoji 🔵 x ✈️"
+    entities = [{"type": "bot_command", "offset": 0, "length": 6},
+                {"type": "custom_emoji", "offset": 7, "length": 2, "custom_emoji_id": "1111111111111111111"},
+                {"type": "custom_emoji", "offset": 12, "length": 2, "custom_emoji_id": "2222222222222222222"}]
+    handle(bot, private_message(ADMIN, text, entities=entities))
+    reply = sent_texts(telegram, ADMIN)[-1]
+    assert '<tg-emoji emoji-id="1111111111111111111">🔵</tg-emoji> — <code>1111111111111111111</code>' in reply
+    assert "<code>2222222222222222222</code>" in reply
+
+
+def test_emoji_command_without_custom_emoji_explains():
+    bot, telegram, _, _ = make_bot()
+    handle(bot, private_message(ADMIN, "/emoji 🔵"))
+    assert "кастомных эмодзи нет" in sent_texts(telegram, ADMIN)[-1]
+
+
+def test_emoji_sticker_shows_its_id_and_plain_sticker_is_explained():
+    bot, telegram, _, _ = make_bot()
+    sticker = {"type": "custom_emoji", "emoji": "🟣", "custom_emoji_id": "3333333333333333333"}
+    handle(bot, private_message(ADMIN, "", sticker=sticker))
+    assert "<code>3333333333333333333</code>" in sent_texts(telegram, ADMIN)[-1]
+    handle(bot, private_message(ADMIN, "", sticker={"type": "regular", "emoji": "🙂"}))
+    assert "обычный стикер" in sent_texts(telegram, ADMIN)[-1]
+
+
+def test_emoji_command_is_admin_only_and_private_only():
+    bot, telegram, _, _ = make_bot()
+    entities = [{"type": "custom_emoji", "offset": 7, "length": 2, "custom_emoji_id": "1111111111111111111"}]
+    handle(bot, private_message(PERSON, "/emoji 🔵", entities=entities))
+    assert "1111111111111111111" not in sent_texts(telegram, PERSON)[-1]
+    handle(bot, group_message(ADMIN, "/emoji 🔵"))
+    assert not any("1111111111111111111" in text for text in sent_texts(telegram, GROUP))
+
+
+def test_help_mentions_emoji_only_for_admin():
+    from telegram_bot.render import render_help
+    assert "/emoji" in render_help(alerts=True, admin=True)
+    assert "/emoji" not in render_help(alerts=True, admin=False)
+
+
+# --- «печатает…», пока данные холодные ----------------------------------------
+
+def test_cold_data_shows_typing_until_the_reply(monkeypatch):
+    from telegram_bot import source as source_module
+    bot, telegram, source, _ = make_bot()
+    typing: list[int] = []
+
+    async def send_typing(chat_id):
+        typing.append(chat_id)
+
+    telegram.send_typing = send_typing
+    plain_dashboard = source.dashboard
+
+    async def cold_dashboard():
+        request = source_module._PERSON.get()
+        assert request is not None and request.on_cold is not None  # команда человека
+        await request.on_cold()
+        await asyncio.sleep(0)
+        return await plain_dashboard()
+
+    source.dashboard = cold_dashboard
+    handle(bot, private_message(ADMIN, "/week"))
+    assert typing == [ADMIN]
+    assert sent_texts(telegram, ADMIN) or telegram.of("photo")
+
+
+def test_warm_data_sends_no_typing():
+    bot, telegram, _, _ = make_bot()
+    typing: list[int] = []
+
+    async def send_typing(chat_id):
+        typing.append(chat_id)
+
+    telegram.send_typing = send_typing
+    handle(bot, private_message(ADMIN, "/week"))
+    assert typing == []

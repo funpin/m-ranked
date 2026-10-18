@@ -1,0 +1,449 @@
+{
+ "title": "m-ranked",
+ "items": [
+  {
+   "slot": "logo",
+   "file": "logo.webm",
+   "format": "video",
+   "emoji": "📊"
+  },
+  {
+   "slot": "telegram",
+   "file": "telegram.webm",
+   "format": "video",
+   "emoji": "✈️"
+  },
+  {
+   "slot": "vk",
+   "file": "vk.webm",
+   "format": "video",
+   "emoji": "🔵"
+  },
+  {
+   "slot": "max",
+   "file": "max.webm",
+   "format": "video",
+   "emoji": "🟣"
+  },
+  {
+   "slot": "rutube",
+   "file": "rutube.webm",
+   "format": "video",
+   "emoji": "▶️"
+  },
+  {
+   "slot": "rank_1",
+   "file": "rank-1.webm",
+   "format": "video",
+   "emoji": "🥇"
+  },
+  {
+   "slot": "rank_2",
+   "file": "rank-2.webm",
+   "format": "video",
+   "emoji": "🥈"
+  },
+  {
+   "slot": "rank_3",
+   "file": "rank-3.webm",
+   "format": "video",
+   "emoji": "🥉"
+  },
+  {
+   "slot": "up",
+   "file": "up.webm",
+   "format": "video",
+   "emoji": "📈"
+  },
+  {
+   "slot": "down",
+   "file": "down.webm",
+   "format": "video",
+   "emoji": "📉"
+  },
+  {
+   "slot": "promo",
+   "file": "promo.webm",
+   "format": "video",
+   "emoji": "📣"
+  },
+  {
+   "slot": "anomaly",
+   "file": "anomaly.webm",
+   "format": "video",
+   "emoji": "⚠️"
+  },
+  {
+   "slot": "spike",
+   "file": "spike.webm",
+   "format": "video",
+   "emoji": "🚀"
+  },
+  {
+   "slot": "alert_urgent",
+   "file": "alert-urgent.webm",
+   "format": "video",
+   "emoji": "🚨"
+  },
+  {
+   "slot": "band_ours_1",
+   "band": "band_ours",
+   "label": "НАШИ ЛУЧШИЕ",
+   "file": "band-ours-1.webm",
+   "format": "video",
+   "emoji": "🏆"
+  },
+  {
+   "slot": "band_ours_2",
+   "band": "band_ours",
+   "label": "НАШИ ЛУЧШИЕ",
+   "file": "band-ours-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_ours_3",
+   "band": "band_ours",
+   "label": "НАШИ ЛУЧШИЕ",
+   "file": "band-ours-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_ours_4",
+   "band": "band_ours",
+   "label": "НАШИ ЛУЧШИЕ",
+   "file": "band-ours-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_ours_5",
+   "band": "band_ours",
+   "label": "НАШИ ЛУЧШИЕ",
+   "file": "band-ours-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_others_1",
+   "band": "band_others",
+   "label": "ДРУГИЕ ВУЗЫ",
+   "file": "band-others-1.webm",
+   "format": "video",
+   "emoji": "🌐"
+  },
+  {
+   "slot": "band_others_2",
+   "band": "band_others",
+   "label": "ДРУГИЕ ВУЗЫ",
+   "file": "band-others-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_others_3",
+   "band": "band_others",
+   "label": "ДРУГИЕ ВУЗЫ",
+   "file": "band-others-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_others_4",
+   "band": "band_others",
+   "label": "ДРУГИЕ ВУЗЫ",
+   "file": "band-others-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_others_5",
+   "band": "band_others",
+   "label": "ДРУГИЕ ВУЗЫ",
+   "file": "band-others-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_week_1",
+   "band": "band_week",
+   "label": "НЕДЕЛЯ",
+   "file": "band-week-1.webm",
+   "format": "video",
+   "emoji": "📅"
+  },
+  {
+   "slot": "band_week_2",
+   "band": "band_week",
+   "label": "НЕДЕЛЯ",
+   "file": "band-week-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_week_3",
+   "band": "band_week",
+   "label": "НЕДЕЛЯ",
+   "file": "band-week-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_week_4",
+   "band": "band_week",
+   "label": "НЕДЕЛЯ",
+   "file": "band-week-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_week_5",
+   "band": "band_week",
+   "label": "НЕДЕЛЯ",
+   "file": "band-week-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_forecast_1",
+   "band": "band_forecast",
+   "label": "ПРОГНОЗ",
+   "file": "band-forecast-1.webm",
+   "format": "video",
+   "emoji": "🔮"
+  },
+  {
+   "slot": "band_forecast_2",
+   "band": "band_forecast",
+   "label": "ПРОГНОЗ",
+   "file": "band-forecast-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_forecast_3",
+   "band": "band_forecast",
+   "label": "ПРОГНОЗ",
+   "file": "band-forecast-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_forecast_4",
+   "band": "band_forecast",
+   "label": "ПРОГНОЗ",
+   "file": "band-forecast-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_forecast_5",
+   "band": "band_forecast",
+   "label": "ПРОГНОЗ",
+   "file": "band-forecast-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_posts_1",
+   "band": "band_posts",
+   "label": "ПОСТЫ",
+   "file": "band-posts-1.webm",
+   "format": "video",
+   "emoji": "📝"
+  },
+  {
+   "slot": "band_posts_2",
+   "band": "band_posts",
+   "label": "ПОСТЫ",
+   "file": "band-posts-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_posts_3",
+   "band": "band_posts",
+   "label": "ПОСТЫ",
+   "file": "band-posts-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_posts_4",
+   "band": "band_posts",
+   "label": "ПОСТЫ",
+   "file": "band-posts-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_posts_5",
+   "band": "band_posts",
+   "label": "ПОСТЫ",
+   "file": "band-posts-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_server_1",
+   "band": "band_server",
+   "label": "СЕРВЕР",
+   "file": "band-server-1.webm",
+   "format": "video",
+   "emoji": "🖥️"
+  },
+  {
+   "slot": "band_server_2",
+   "band": "band_server",
+   "label": "СЕРВЕР",
+   "file": "band-server-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_server_3",
+   "band": "band_server",
+   "label": "СЕРВЕР",
+   "file": "band-server-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_server_4",
+   "band": "band_server",
+   "label": "СЕРВЕР",
+   "file": "band-server-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_server_5",
+   "band": "band_server",
+   "label": "СЕРВЕР",
+   "file": "band-server-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_problems_1",
+   "band": "band_problems",
+   "label": "ПРОБЛЕМЫ",
+   "file": "band-problems-1.webm",
+   "format": "video",
+   "emoji": "⚠️"
+  },
+  {
+   "slot": "band_problems_2",
+   "band": "band_problems",
+   "label": "ПРОБЛЕМЫ",
+   "file": "band-problems-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_problems_3",
+   "band": "band_problems",
+   "label": "ПРОБЛЕМЫ",
+   "file": "band-problems-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_problems_4",
+   "band": "band_problems",
+   "label": "ПРОБЛЕМЫ",
+   "file": "band-problems-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_problems_5",
+   "band": "band_problems",
+   "label": "ПРОБЛЕМЫ",
+   "file": "band-problems-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_collection_1",
+   "band": "band_collection",
+   "label": "СБОР",
+   "file": "band-collection-1.webm",
+   "format": "video",
+   "emoji": "📡"
+  },
+  {
+   "slot": "band_collection_2",
+   "band": "band_collection",
+   "label": "СБОР",
+   "file": "band-collection-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_collection_3",
+   "band": "band_collection",
+   "label": "СБОР",
+   "file": "band-collection-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_collection_4",
+   "band": "band_collection",
+   "label": "СБОР",
+   "file": "band-collection-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_collection_5",
+   "band": "band_collection",
+   "label": "СБОР",
+   "file": "band-collection-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_server2_1",
+   "band": "band_server2",
+   "label": "СЕРВЕР 2",
+   "file": "band-server2-1.webm",
+   "format": "video",
+   "emoji": "🖥️"
+  },
+  {
+   "slot": "band_server2_2",
+   "band": "band_server2",
+   "label": "СЕРВЕР 2",
+   "file": "band-server2-2.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_server2_3",
+   "band": "band_server2",
+   "label": "СЕРВЕР 2",
+   "file": "band-server2-3.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_server2_4",
+   "band": "band_server2",
+   "label": "СЕРВЕР 2",
+   "file": "band-server2-4.webm",
+   "format": "video",
+   "emoji": "➖"
+  },
+  {
+   "slot": "band_server2_5",
+   "band": "band_server2",
+   "label": "СЕРВЕР 2",
+   "file": "band-server2-5.webm",
+   "format": "video",
+   "emoji": "➖"
+  }
+ ]
+}

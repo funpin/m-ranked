@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import Callable
@@ -16,6 +18,7 @@ from zoneinfo import ZoneInfo
 from . import content, settings
 from .access import Access, access_for, allowed
 from .config import BotConfig
+from .emoji import describe_custom_emoji, icon
 from .render import (
     TELEGRAM_LIMIT,
     Message,
@@ -28,8 +31,10 @@ from .render import (
     render_top,
     render_week,
     split_message,
+    text_only,
+    week_label,
 )
-from .source import ApiSource, SourceUnavailable
+from .source import ApiSource, SourceUnavailable, person_request
 from .status import STATUS_WINDOW_SECONDS, render_status
 from .store import OUR_INSTITUTION, Recipient, Store
 from .telegram import BotBlocked, CannotInitiate, TelegramClient, TelegramError
@@ -50,6 +55,7 @@ NOT_UNDERSTOOD = "Не понял. Команды — в /help."
 ANSWER_BELOW = "ответ ниже"
 MUTE_REFUSED = "заглушать тревоги можно только в личке, из списка тревог"
 STALE_BUTTON = "кнопка устарела"
+FOREIGN_MENU = "Это меню вызвал другой участник — напишите свой /top"
 MAX_CHOICES = 8
 
 BASE_COMMANDS = [
@@ -85,9 +91,81 @@ def person_commands(r: Recipient) -> list[tuple[str, str]]:
     return commands
 
 
+def menu_author(message: dict) -> int | None:
+    """Кто вызвал меню: id человека, а от имени чата (анонимный админ группы,
+    пост канала) — id этого чата: «from» тогда — служебный бот Telegram."""
+    sender = message.get("sender_chat")
+    value = (sender or {}).get("id") if sender else (message.get("from") or {}).get("id")
+    return value if isinstance(value, int) and not isinstance(value, bool) and value != 0 else None
+
+
+def foreign_press(author: int | None, access: Access) -> bool:
+    """Нажал не тот, кто вызвал меню. Замок — только в группах; кнопки без автора
+    (отправленные до замка) слушаются всех. Автор-чат (отрицательный id): кто
+    нажимает от имени чата, Telegram в callback не сообщает — в «from» всегда
+    живой человек, и сверить его с чатом нельзя, поэтому такое меню слушается всех."""
+    if access.private or author is None or author < 0:
+        return False
+    return access.user_id != author
+
+
+def largest_file_id(result: dict | None) -> str | None:
+    """file_id самого большого размера из ответа sendPhoto (порядок размеров
+    Telegram не обещает)."""
+    def number(value: object) -> int:
+        return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+    sizes = [size for size in (result or {}).get("photo") or []
+             if isinstance(size, dict) and isinstance(size.get("file_id"), str)]
+    if not sizes:
+        return None
+    best = max(sizes, key=lambda size: (number(size.get("width")) * number(size.get("height")),
+                                        number(size.get("file_size"))))
+    return best["file_id"]
+
+
 def _is_member(member: dict) -> bool:
     status = member.get("status")
     return status in _MEMBER_STATUSES or (status == "restricted" and bool(member.get("is_member")))
+
+
+TYPING_REPEAT_SECONDS = 4.0  # Telegram гасит «печатает…» примерно через 5 с
+
+
+class _Typing:
+    """«печатает…» в чате, пока бот ждёт данные, которых нет в копии: шлётся
+    сразу и повторяется, пока разбор обновления не закончится. Сбой — не повод
+    отказать в ответе, поэтому ошибки только в журнал."""
+
+    def __init__(self, telegram: TelegramClient, chat_id: int) -> None:
+        self._telegram = telegram
+        self._chat_id = chat_id
+        self._task: asyncio.Task | None = None
+
+    async def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.get_running_loop().create_task(self._loop())
+
+    async def _loop(self) -> None:
+        while True:
+            try:
+                await self._telegram.send_typing(self._chat_id)
+            except Exception as error:  # noqa: BLE001 - индикатор необязателен
+                log.debug("typing: %s", type(error).__name__)
+                return
+            await asyncio.sleep(TYPING_REPEAT_SECONDS)
+
+    async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+
+
+def _update_chat(update: dict) -> int | None:
+    message = update.get("message") or (update.get("callback_query") or {}).get("message") or {}
+    chat_id = (message.get("chat") or {}).get("id")
+    return chat_id if isinstance(chat_id, int) else None
 
 
 class Bot:
@@ -180,12 +258,12 @@ class Bot:
         else:
             messages = list(text_or_messages)
         delivered = transient = 0
+        uploaded: dict[bytes, str] = {}  # картинка грузится один раз, дальше — file_id
         for r in await self.store.recipients():
             if not getattr(r, flag) or (flag == "alerts" and r.kind != "person"):
                 continue
             try:
-                for message in messages:
-                    await self.telegram.send_message(r.chat_id, message.text, message.keyboard)
+                await self._send_parts(r.chat_id, messages, uploaded)
             except BotBlocked:
                 log.info("broadcast %s: recipient %s unreachable, removed", flag, r.kind)
                 await self.store.remove_recipient(r.chat_id)
@@ -207,8 +285,37 @@ class Bot:
         return await self.telegram.send_message(chat_id, text, keyboard)
 
     async def send_all(self, chat_id: int, messages: list[Message]) -> None:
-        for message in messages:
-            await self.telegram.send_message(chat_id, message.text, message.keyboard)
+        await self._send_parts(chat_id, messages, {})
+
+    async def _send_parts(self, chat_id: int, messages: list[Message],
+                          uploaded: dict[bytes, str]) -> None:
+        """Все части одному чату. Картинка: если её уже загружали (`uploaded`:
+        байты → file_id), уходит по file_id. Telegram её не принял (TelegramError,
+        не BotBlocked/CannotInitiate) — этому чату только текст, подпись встаёт
+        в начало следующей части; картинку не повторяем. Отказ по file_id
+        забывает его: следующий получатель загрузит байты заново."""
+        parts = list(messages)
+        index = 0
+        while index < len(parts):
+            message = parts[index]
+            if message.photo is None:
+                await self.telegram.send_message(chat_id, message.text, message.keyboard)
+                index += 1
+                continue
+            try:
+                result = await self.telegram.send_photo(
+                    chat_id, uploaded.get(message.photo, message.photo), message.text)
+            except (BotBlocked, CannotInitiate):
+                raise
+            except TelegramError as error:
+                log.warning("send_photo: %s", type(error).__name__)
+                uploaded.pop(message.photo, None)
+                parts[index:] = text_only(parts[index:])
+                continue
+            file_id = largest_file_id(result)
+            if file_id is not None:
+                uploaded.setdefault(message.photo, file_id)
+            index += 1
 
     async def edit_and_answer(self, callback_id: str, chat_id: int, message_id: int, text: str,
                               keyboard: list[list[dict]] | None, note: str | None = None) -> None:
@@ -224,15 +331,22 @@ class Bot:
     async def handle(self, update: dict) -> None:
         kind = next((key for key in update if key != "update_id"), "empty")
         log.debug("update %s", kind)
+        chat_id = _update_chat(update)
+        typing = _Typing(self.telegram, chat_id) if chat_id is not None else None
         try:
-            if "message" in update:
-                await self._on_message(update["message"])
-            elif "callback_query" in update:
-                await self._on_callback(update["callback_query"])
-            elif "my_chat_member" in update:
-                await self._on_membership(update["my_chat_member"])
+            # Человеку — из копии до часа; холодные данные — с «печатает…».
+            with person_request(typing.start if typing is not None else None):
+                if "message" in update:
+                    await self._on_message(update["message"])
+                elif "callback_query" in update:
+                    await self._on_callback(update["callback_query"])
+                elif "my_chat_member" in update:
+                    await self._on_membership(update["my_chat_member"])
         except TelegramError as error:
             log.warning("update %s: %s", kind, type(error).__name__)
+        finally:
+            if typing is not None:
+                await typing.stop()
 
     async def _on_message(self, message: dict) -> None:
         chat = message.get("chat") or {}
@@ -263,13 +377,22 @@ class Bot:
             return
         if access.user_id is not None:
             self.pending.pop(access.user_id, None)  # любая команда отменяет ожидание ввода
+        if "sticker" in message and access.private and access.admin:
+            # Админ прислал стикер — показать его id для таблицы слотов значков.
+            await self.reply(chat["id"], describe_custom_emoji(message))
+            return
+        if command == "emoji" and allowed("emoji", access):
+            await self.reply(chat["id"], describe_custom_emoji(message))
+            return
         if command is None:
             if access.private:
                 await self.reply(chat["id"], NOT_UNDERSTOOD if access.known_person else NO_ACCESS)
             return
-        await self._on_command(command, args, access)
+        # Автор меню нужен только в группах: в личке нажимать больше некому.
+        await self._on_command(command, args, access, None if private else menu_author(message))
 
-    async def _on_command(self, command: str, args: str, access: Access) -> None:
+    async def _on_command(self, command: str, args: str, access: Access,
+                          author: int | None = None) -> None:
         chat_id = access.chat_id
         if not allowed(command, access):
             if not access.known:
@@ -288,21 +411,36 @@ class Bot:
             if access.known:
                 await self.reply(chat_id, self._help(access))
             else:
-                await self.reply(chat_id, f"Это бот m-ranked. {self._id_text(access)} "
+                await self.reply(chat_id, f"{icon('logo')} <b>m-ranked</b> · бот мониторинга вузов\n\n"
+                                          f"{self._id_text(access)}\n"
                                           "Пришлите его админу бота, чтобы получить доступ.")
         elif command == "help":
             await self.reply(chat_id, self._help(access))
         elif command == "top":
-            await self._top_command(chat_id, args)
+            await self._top_command(chat_id, args, author)
         elif command == "week":
             await self._week(chat_id)
         elif command == "digest":
             await self.send_digest_here(chat_id)
         elif command == "status":
-            rows = await self.store.status_rows(STATUS_WINDOW_SECONDS)
-            await self.reply(chat_id, render_status(rows, self.clock()))
+            message = await self._status_message()
+            await self.reply(chat_id, message.text, message.keyboard)
         elif command == "settings":
             await settings.open_menu(self, access)
+
+    async def _status_message(self) -> Message:
+        rows = await self.store.status_rows(STATUS_WINDOW_SECONDS)
+        return render_status(rows, self.clock(), self.config.timezone)
+
+    async def _status_callback(self, callback: dict, access: Access, message: dict) -> None:
+        """«Обновить» под /status: те же условия, что у самой команды."""
+        if not (access.alerts and access.private):
+            await self.telegram.answer_callback(callback["id"], "недоступно")
+            return
+        fresh = await self._status_message()
+        # Текст не изменился — Telegram ответит «not modified», клиент это глотает.
+        await self.edit_and_answer(callback["id"], access.chat_id, message["message_id"],
+                                   fresh.text, fresh.keyboard, "обновлено")
 
     def _addressed_elsewhere(self, text: str) -> bool:
         head = text.strip().split(None, 1)[0]
@@ -330,7 +468,7 @@ class Bot:
 
     # --- /top -----------------------------------------------------------
 
-    async def _top_messages(self, query: TopQuery) -> list[Message]:
+    async def _top_messages(self, query: TopQuery, author: int | None = None) -> list[Message]:
         """Ответ на запрос; SourceUnavailable и _NoOurs — вызывающему."""
         our = await self.store.get_setting(OUR_INSTITUTION)
         if query.who == "ours" and our is None:
@@ -340,9 +478,9 @@ class Bot:
             as_of = datetime.fromisoformat(body["asOf"])
         except (KeyError, TypeError, ValueError):
             as_of = datetime.fromtimestamp(self.clock(), ZoneInfo(self.config.timezone))
-        return render_top(query, body, our, period_label(query.period, as_of))
+        return render_top(query, body, our, period_label(query.period, as_of), author)
 
-    async def _top_command(self, chat_id: int, args: str) -> None:
+    async def _top_command(self, chat_id: int, args: str, author: int | None = None) -> None:
         try:
             institutions = await self.source.institutions()
             query = parse_top(args, institutions)
@@ -352,11 +490,12 @@ class Bot:
                 names = {inst.legacy_id: inst.short_name or inst.name for inst in institutions}
                 base = replace(query, who="institution", unknown=(), candidates=(), suggestions=())
                 keyboard = [[{"text": names.get(legacy_id, f"вуз №{legacy_id}"),
-                              "callback_data": encode_callback(replace(base, institution=legacy_id))}]
+                              "callback_data": encode_callback(replace(base, institution=legacy_id),
+                                                               author)}]
                             for legacy_id in options[:MAX_CHOICES]]
                 await self.reply(chat_id, "Какой из них?", keyboard)
                 return
-            messages = await self._top_messages(query)
+            messages = await self._top_messages(query, author)
         except SourceUnavailable as error:
             log.warning("top: %s", type(error).__name__)
             await self.reply(chat_id, SOURCE_DOWN)
@@ -376,15 +515,20 @@ class Bot:
 
     async def _top_callback(self, callback: dict, access: Access, message: dict) -> None:
         callback_id = callback["id"]
-        query = decode_callback(callback.get("data") or "")
-        if query is None:
+        decoded = decode_callback(callback.get("data") or "")
+        if decoded is None:
             await self.telegram.answer_callback(callback_id, STALE_BUTTON)
             return
+        query, author = decoded
         if not allowed("top", access):
             await self.telegram.answer_callback(callback_id, NO_ACCESS)
             return
+        if foreign_press(author, access):
+            # Сообщение не трогаем и API не читаем: только подсказка нажавшему.
+            await self.telegram.answer_callback(callback_id, FOREIGN_MENU)
+            return
         try:
-            messages = await self._top_messages(query)
+            messages = await self._top_messages(query, author)
         except SourceUnavailable as error:
             log.warning("top callback: %s", type(error).__name__)
             await self.telegram.answer_callback(callback_id, SOURCE_DOWN)
@@ -416,8 +560,10 @@ class Bot:
             return
         today = datetime.fromtimestamp(self.clock(), ZoneInfo(self.config.timezone)).date()
         previous = await self.store.week_snapshot(today - timedelta(days=7))
-        message = render_week(our_week_stats(dashboard, our), previous, forecast, our)
-        await self.reply(chat_id, message.text, message.keyboard)
+        current, label = our_week_stats(dashboard, our), week_label(dashboard)
+        data = await content.prepare_cover(dashboard, our, current, previous, label)
+        messages = render_week(current, previous, forecast, our, cover=data, label=label)
+        await self.send_all(chat_id, await content.with_cover(messages, data))
 
     # --- кнопки ---------------------------------------------------------
 
@@ -433,6 +579,8 @@ class Bot:
             await self._top_callback(callback, access, message)
         elif data.startswith("s|"):
             await settings.on_callback(self, callback, access, message)
+        elif data.startswith("st|"):
+            await self._status_callback(callback, access, message)
         elif data.startswith("m|"):
             if access.alerts and access.private:
                 await self.on_mute_callback(callback, access)

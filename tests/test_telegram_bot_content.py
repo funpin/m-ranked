@@ -16,7 +16,8 @@ from test_telegram_bot_handlers import (
     sent_texts,
 )
 
-from telegram_bot import content
+from telegram_bot import content, emoji
+from telegram_bot.emoji import icon
 from telegram_bot.source import SourceUnavailable
 from telegram_bot.store import OUR_INSTITUTION, Recipient
 
@@ -192,13 +193,28 @@ def test_spike_text():
                           url="https://example.org/p?a=1&b=2")]
     run(content.check_spikes(bot))
     text = group_texts(telegram)[0]
-    assert text.startswith("🚀 Наш пост выстрелил: ")
+    assert text.startswith(icon("spike") + " Наш пост выстрелил: ")
     assert '<a href="https://example.org/p?a=1&amp;b=2">ссылка</a>' in text
     assert "Telegram" in text and "×8,4" in text and "20 ч" in text and "9,2 тыс. просм." in text
-    assert text.endswith("📣 продвижение")
+    assert text.endswith(icon("promo") + " продвижение")
     source.spikes = [post("b")]
     run(content.check_spikes(bot))
     assert "продвижение" not in group_texts(telegram)[-1]
+
+
+def test_notification_icons_come_from_slots(monkeypatch):
+    item = post("a", promotion=True)
+    assert content.spike_message(item).text.startswith("🚀 ")
+    assert content.anomaly_message(flagged("x", 3), 3).text.startswith("⚠️ ")
+    # Когда у слотов появятся id набора, значки станут кастомными без правок текстов.
+    fake = "1234567890123456789"
+    for slot in ("spike", "anomaly", "promo"):
+        monkeypatch.setitem(emoji.SLOTS, slot, (emoji.SLOTS[slot][0], fake))
+    spike = content.spike_message(item).text
+    assert spike.startswith(f'<tg-emoji emoji-id="{fake}">🚀</tg-emoji> Наш пост выстрелил: ')
+    assert spike.endswith(f'<tg-emoji emoji-id="{fake}">📣</tg-emoji> продвижение')
+    assert content.anomaly_message(flagged("x", 3), 3).text.startswith(
+        f'<tg-emoji emoji-id="{fake}">⚠️</tg-emoji> Накрутка на нашем посте: ')
 
 
 def test_spike_missing_numbers_are_skipped():
@@ -251,13 +267,13 @@ def test_anomaly_levels():
     assert run(content.check_anomalies(bot)) == 1
     assert source.calls.count("anomalous") == 1
     first = group_texts(telegram)[0]
-    assert first.startswith("⚠️ Вероятно, накрутка на нашем посте: ")
+    assert first.startswith(icon("anomaly") + " Вероятно, накрутка на нашем посте: ")
     assert "ВКонтакте" in first and "3,4 тыс. просм." in first
     assert '<a href="https://example.org/a/1">ссылка</a>' in first
     source.anomalies = [flagged("a", 3), flagged("b", 1)]
     assert run(content.check_anomalies(bot)) == 1
     second = group_texts(telegram)[1]
-    assert second.startswith("⚠️ Накрутка на нашем посте: ")
+    assert second.startswith(icon("anomaly") + " Накрутка на нашем посте: ")
     assert run(content.check_anomalies(bot)) == 0   # дальше без повторов
     assert len(group_texts(telegram)) == 2
     source.anomalies = [flagged("a", 2)]            # спад уровня не объявляется заново
@@ -350,12 +366,12 @@ def test_digest_contents():
     run(content.send_digest(bot))
     texts = group_texts(telegram)
     text = "\n".join(texts)
-    assert texts[0].startswith("<b>Дайджест")
-    assert "Наши лучшие посты" in text and "Лучшие у других вузов" in text
-    assert "Неделя к неделе" in text
-    assert "постов 20 (+100 %)" in text            # неделя к неделе по сохранённому снимку
+    assert texts[0].startswith("🏆 <b>НАШИ ЛУЧШИЕ</b>")   # шапка — в подписи к обложке
+    assert "<b>НАШИ ЛУЧШИЕ</b>" in text and "<b>ДРУГИЕ ВУЗЫ</b>" in text
+    assert "<b>НЕДЕЛЯ</b>" in text and "<b>ПРОГНОЗ</b>" in text
+    assert "20 постов (+100 %)" in text            # неделя к неделе по сохранённому снимку
     assert "Прогноз места в М-Рейтинге" in text and "±" in text
-    others = text.split("Лучшие у других вузов")[1].split("Неделя к неделе")[0]
+    others = text.split("<b>ДРУГИЕ ВУЗЫ</b>")[1].split("<b>НЕДЕЛЯ</b>")[0]
     assert "(мы)" not in others and "Дельта" not in others   # наш вуз среди «других» не показываем
     assert sent_texts(telegram, PERSON) == texts            # получатели с digest
     assert len(texts) >= 1
@@ -389,6 +405,10 @@ def test_send_digest_here_matches_scheduled_digest():
     telegram.calls.clear()
     run(bot.send_digest_here(GROUP))
     assert group_texts(telegram) == scheduled and sent_texts(telegram, PERSON) == []
+    photos = telegram.of("photo")
+    assert [call[1] for call in photos] == [GROUP]
+    assert photos[0][2].startswith(b"\x89PNG")       # один чат — своя загрузка
+    assert photos[0][3] == "<b>Дайджест · Дельта · 10–16 окт</b>"
 
 
 def test_send_digest_here_without_our_institution():
@@ -472,8 +492,8 @@ def test_digest_ours_uses_top_body_with_platform_top_up():
     bot, telegram, _, _ = make()
     bot.source = ApiSource(make_client("http://api.test", transport=httpx.MockTransport(handler)))
     messages = run(content.build_digest(bot))
-    ours = "\n".join(m.text for m in messages).split("Лучшие у других вузов")[0]
-    assert "ВКонтакте" in ours
+    ours = "\n".join(m.text for m in messages).split("<b>ДРУГИЕ ВУЗЫ</b>")[0]
+    assert f'{icon("vk")} {icon("rank_1")} <a href="https://example.org/vk/19">' in ours
     ours_requests = [r for r in seen if r.get("mode") == "institution"]
     assert [r["platform"] for r in ours_requests][0] == "all"
     assert "vk" in [r["platform"] for r in ours_requests]
@@ -511,3 +531,108 @@ def test_digest_marked_when_nobody_can_receive_it_anyway():
     telegram.not_started = {PERSON}
     run(content.send_digest(bot))
     assert run(store.job_last_run("digest")) == bot.clock()
+
+
+# --- дайджест: обложка ---------------------------------------------------------
+
+def test_build_digest_starts_with_cover():
+    bot, _, _, _ = make()
+    messages = run(content.build_digest(bot))
+    first = messages[0]
+    assert first.photo is not None and first.photo.startswith(b"\x89PNG")
+    assert first.text == "<b>Дайджест · Дельта · 10–16 окт</b>"
+    assert all(m.photo is None for m in messages[1:])
+    assert messages[1].text.startswith("🏆 <b>НАШИ ЛУЧШИЕ</b>")
+
+
+def test_send_digest_delivers_cover_and_text_to_everyone():
+    bot, telegram, _, store = make()
+    run(content.send_digest(bot))
+    photos = telegram.of("photo")
+    assert {call[1] for call in photos} == {PERSON, GROUP} and len(photos) == 2
+    assert isinstance(photos[0][2], bytes)                  # первому — загрузка
+    assert photos[1][2] == f"big-{photos[0][4]}"            # второму — file_id
+    assert group_texts(telegram) == sent_texts(telegram, PERSON)
+    assert group_texts(telegram)[0].startswith("🏆 <b>НАШИ ЛУЧШИЕ</b>")
+    assert run(store.job_last_run("digest")) == bot.clock()
+
+
+def test_digest_cover_draw_failure_sends_text_only(monkeypatch, caplog):
+    from telegram_bot import cover
+
+    def broken(data):
+        raise MemoryError
+
+    monkeypatch.setattr(cover, "draw", broken)
+    bot, telegram, _, store = make()
+    run(content.send_digest(bot))
+    assert telegram.of("photo") == []
+    texts = group_texts(telegram)
+    assert texts[0].startswith("<b>Дайджест · Дельта · 10–16 окт</b>\n\n🏆 <b>НАШИ ЛУЧШИЕ</b>")
+    assert "MemoryError" in caplog.text
+    assert run(store.job_last_run("digest")) == bot.clock()
+
+
+def test_cover_for_title_subtitle_rows():
+    dashboard = fixture("dashboard.json")
+    current = {"telegram": {"posts": 20, "views": 112000, "reactions": 1},
+               "vk": {"posts": 8, "views": 15000, "reactions": 1}}
+    previous = {"telegram": {"posts": 10, "views": 100000, "reactions": 1}}
+    data = content.cover_for(dashboard, OUR_ID, current, previous, "10–16 окт")
+    assert data.title == "Дельта"
+    assert data.subtitle == "10–16 окт · просмотры за неделю"
+    assert [(row.platform, row.value, row.previous) for row in data.rows] == [
+        ("telegram", 112000, 100000), ("vk", 15000, None)]
+    for entry in dashboard["institutions"]:
+        if entry["legacyId"] == OUR_ID:
+            entry["shortName"] = None
+    assert content.cover_for(dashboard, OUR_ID, current, None, None).title == "Университет Дельта"
+    assert content.cover_for(dashboard, OUR_ID, {}, None, None).subtitle == "просмотры за неделю"
+    assert content.cover_for({}, OUR_ID, {}, None, None).title == f"вуз №{OUR_ID}"
+
+
+def test_digest_without_any_platform_has_no_cover(monkeypatch):
+    from telegram_bot import cover
+
+    draws = []
+    monkeypatch.setattr(cover, "draw", lambda data: draws.append(data) or b"png")
+    bot, telegram, source, _ = make()
+
+    async def no_stats() -> dict:
+        body = fixture("dashboard.json")
+        body["stats"] = []
+        return body
+
+    source.dashboard = no_stats
+    messages = run(content.build_digest(bot))
+    assert all(m.photo is None for m in messages) and draws == []
+    assert messages[0].text.startswith("<b>Дайджест · Дельта · 10–16 окт</b>")
+    run(content.send_digest(bot))
+    assert telegram.of("photo") == [] and draws == []
+    assert group_texts(telegram)[0].startswith("<b>Дайджест · Дельта · 10–16 окт</b>")
+
+
+def test_cover_import_and_draw_run_off_the_event_loop(monkeypatch):
+    import threading
+
+    from telegram_bot import cover
+
+    main = threading.get_ident()
+    threads = []
+    real_cover_for = content.cover_for
+
+    def spy_cover_for(*args):
+        threads.append(("cover_for", threading.get_ident()))
+        return real_cover_for(*args)
+
+    def spy_draw(data):
+        threads.append(("draw", threading.get_ident()))
+        return b"png"
+
+    monkeypatch.setattr(content, "cover_for", spy_cover_for)
+    monkeypatch.setattr(cover, "draw", spy_draw)
+    bot, _, _, _ = make()
+    messages = run(content.build_digest(bot))
+    assert messages[0].photo == b"png"
+    assert [name for name, _ in threads] == ["cover_for", "draw"]
+    assert all(ident != main for _, ident in threads)   # импорт Pillow и рисование — в потоке

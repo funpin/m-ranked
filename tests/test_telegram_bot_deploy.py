@@ -129,3 +129,28 @@ def test_migration_refuses_to_run_without_the_role() -> None:
     assert "pg_roles WHERE rolname = 'telegram_bot'" in guard
     assert "RAISE EXCEPTION" in guard and "operations/runbooks/DEPLOY.md" in guard
     assert not re.search(r"^\s*(GRANT|CREATE)\b", guard, re.M)   # только проверка, ничего не создаёт
+
+
+def test_pillow_rollout_installs_only_the_pin() -> None:
+    # Корневые lock-файлы расходятся: полный api.lock в живой общий venv может
+    # подменить пакеты под работающими API, приёмом и воркером аномалий.
+    text = RUNBOOK.read_text(encoding="utf-8")
+    assert not re.search(r"-r\s+(\./)?requirements/api\.lock", text)
+    assert "grep -A1 '^pillow==' requirements/api.lock" in text
+    assert "pip install --require-hashes --no-deps -r \"$tmp/pillow.lock\"" in text
+    assert text.index("pip install --require-hashes") < text.index("/bin/pip check")
+    assert "-c \"import api.app, telegram_bot.__main__, PIL\"" in text
+    assert "DEPLOY.md" in text and "осознанное узкое исключение" in text
+
+
+def test_pillow_rollout_measures_memory_around_the_first_cover() -> None:
+    text = RUNBOOK.read_text(encoding="utf-8")
+    before = text.index("**До перезапуска** записать память")
+    restart = text.index("systemctl restart m-ranked-target-telegram-bot.service", before)
+    measure = text.index("systemd-run --wait --pipe", restart)
+    after = text.index("**После** `/week` и `/digest`", measure)
+    assert before < restart < measure < after
+    # Замер идёт под лимитами юнита, а после обложки читаются текущая память и пик.
+    assert "-p User=m-ranked-telegram-bot -p MemoryMax=128M" in text
+    assert "-p CPUQuota=20%" in text and "-p WorkingDirectory=/opt/m-ranked/current" in text
+    assert "memory.peak" in text[after:] and "MemoryCurrent" in text[after:]
