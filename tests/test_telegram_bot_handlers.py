@@ -41,6 +41,7 @@ class FakeTelegram:
         self.failing: set[int] = set()
         self.not_started: set[int] = set()
         self.photo_failing: set[int] = set()  # только sendPhoto отвечает TelegramError
+        self.file_id_failing: set[int] = set()  # sendPhoto по file_id отвечает TelegramError
         self.edit_error: Exception | None = None
         self.username = "m_ranked_bot"
         self._next_id = 100
@@ -62,7 +63,8 @@ class FakeTelegram:
     async def send_photo(self, chat_id, photo, caption):
         if chat_id in self.blocked:
             raise BotBlocked(chat_id)
-        if chat_id in self.failing or chat_id in self.photo_failing:
+        if chat_id in self.failing or chat_id in self.photo_failing or (
+                isinstance(photo, str) and chat_id in self.file_id_failing):
             raise TelegramError("sendPhoto: Telegram ответил 400")
         if chat_id in self.not_started:
             raise CannotInitiate(chat_id)
@@ -686,19 +688,21 @@ COVER = [Message("<b>шапка</b>", photo=b"\x89PNG-cover"), Message("тело
 def test_broadcast_uploads_cover_once_then_reuses_largest_file_id():
     bot, telegram, _, _ = make_bot(recipients=[Recipient(10, "person", "a", digest=True),
                                                Recipient(11, "person", "b", digest=True),
-                                               Recipient(12, "person", "c", digest=True)])
-    telegram.photo_failing = {11}
+                                               Recipient(12, "person", "c", digest=True),
+                                               Recipient(13, "person", "d", digest=True)])
+    telegram.photo_failing = {12}
     result = asyncio.run(bot.broadcast_report(COVER, "digest"))
-    assert (result.delivered, result.transient) == (3, 0)
+    assert (result.delivered, result.transient) == (4, 0)
     photos = telegram.of("photo")
     assert [(call[1], call[2], call[3]) for call in photos] == [
         (10, b"\x89PNG-cover", "<b>шапка</b>"),
-        (12, f"big-{photos[0][4]}", "<b>шапка</b>"),   # по file_id самого большого размера
+        (11, f"big-{photos[0][4]}", "<b>шапка</b>"),   # по file_id самого большого размера
+        (13, b"\x89PNG-cover", "<b>шапка</b>"),       # file_id отказал у 12 — забыт
     ]
-    assert sent_texts(telegram, 10) == ["тело 1", "тело 2"]
-    assert sent_texts(telegram, 11) == ["<b>шапка</b>\n\nтело 1", "тело 2"]  # без картинки, без повторов
-    assert sent_texts(telegram, 12) == ["тело 1", "тело 2"]
-    assert len(telegram.of("send")) == 6
+    for chat_id in (10, 11, 13):
+        assert sent_texts(telegram, chat_id) == ["тело 1", "тело 2"]
+    assert sent_texts(telegram, 12) == ["<b>шапка</b>\n\nтело 1", "тело 2"]  # без картинки, без повторов
+    assert len(telegram.of("send")) == 8
 
 
 def test_broadcast_cover_first_upload_failed_next_uploads_bytes():
@@ -715,6 +719,37 @@ def test_broadcast_cover_first_upload_failed_next_uploads_bytes():
         (12, b"\x89PNG-cover"), (13, f"big-{photos[0][4]}")]
     assert sent_texts(telegram, 11) == []
     assert 11 not in {r.chat_id for r in asyncio.run(store.recipients())}
+
+
+def test_broadcast_failed_file_id_is_dropped_next_uploads_bytes():
+    bot, telegram, _, _ = make_bot(recipients=[Recipient(10, "person", "a", digest=True),
+                                               Recipient(11, "person", "b", digest=True),
+                                               Recipient(12, "person", "c", digest=True)])
+    telegram.file_id_failing = {11}
+    result = asyncio.run(bot.broadcast_report(COVER, "digest"))
+    assert (result.delivered, result.transient) == (3, 0)
+    assert [(call[1], call[2]) for call in telegram.of("photo")] == [
+        (10, b"\x89PNG-cover"), (12, b"\x89PNG-cover")]   # file_id отказал — грузим заново
+    assert sent_texts(telegram, 11) == ["<b>шапка</b>\n\nтело 1", "тело 2"]
+
+
+def test_week_without_any_platform_has_no_cover(monkeypatch):
+    from telegram_bot import cover
+
+    draws = []
+    monkeypatch.setattr(cover, "draw", lambda data: draws.append(data) or b"png")
+    bot, telegram, source, _ = make_bot()
+
+    async def no_stats() -> dict:
+        body = fixture("dashboard.json")
+        body["stats"] = []
+        return body
+
+    source.dashboard = no_stats
+    handle(bot, private_message(PERSON, "/week"))
+    assert telegram.of("photo") == [] and draws == []
+    texts = sent_texts(telegram, PERSON)
+    assert len(texts) == 1 and texts[0].startswith("<b>Неделя к неделе</b>\nДанных за неделю пока нет.")
 
 
 def test_send_all_with_cover_to_one_chat():

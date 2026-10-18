@@ -257,7 +257,8 @@ async def record_week(bot: Bot) -> None:
 
 
 # --- обложка -------------------------------------------------------------------
-# cover (и с ним Pillow) импортируется при первом рисовании, а не при запуске бота.
+# cover (и с ним Pillow) импортируется при первой обложке и только в потоке
+# (asyncio.to_thread): первый импорт Pillow не держит цикл событий.
 
 def cover_for(dashboard: dict[str, Any], our: int, current: dict[str, dict[str, int]],
               previous: dict[str, dict[str, int]] | None, label: str | None) -> CoverData:
@@ -271,13 +272,35 @@ def cover_for(dashboard: dict[str, Any], our: int, current: dict[str, dict[str, 
     return cover.CoverData(title, subtitle, cover.cover_rows(current, previous))
 
 
-async def with_cover(messages: list[Message], data: CoverData) -> list[Message]:
-    """Нарисовать обложку вне цикла событий и подставить в первое сообщение
-    (подпись-шапку). Не нарисовалась — только текст, в журнале класс ошибки."""
+def _draw(data: CoverData) -> bytes:
+    """Выполняется в потоке: импорт cover и рисование."""
     from . import cover
 
+    return cover.draw(data)
+
+
+async def prepare_cover(dashboard: dict[str, Any], our: int,
+                        current: dict[str, dict[str, int]],
+                        previous: dict[str, dict[str, int]] | None,
+                        label: str | None) -> CoverData | None:
+    """Данные обложки (в потоке) или None — без обложки: ни одной площадки ни в
+    этой, ни в прошлой неделе, или cover не загрузился (в журнале класс ошибки)."""
     try:
-        photo = await asyncio.to_thread(cover.draw, data)
+        data = await asyncio.to_thread(cover_for, dashboard, our, current, previous, label)
+    except Exception as error:  # Pillow не импортировался: дайджест важнее картинки
+        log.warning("cover: %s", type(error).__name__)
+        return None
+    return data if data.rows else None
+
+
+async def with_cover(messages: list[Message], data: CoverData | None) -> list[Message]:
+    """Нарисовать обложку вне цикла событий и подставить в первое сообщение
+    (подпись-шапку). Обложки нет (data=None) — сообщения как есть; не
+    нарисовалась — только текст, в журнале класс ошибки."""
+    if data is None:
+        return messages
+    try:
+        photo = await asyncio.to_thread(_draw, data)
     except Exception as error:  # шрифт, Pillow, память: дайджест важнее картинки
         log.warning("cover: %s", type(error).__name__)
         return text_only(messages)
@@ -306,7 +329,7 @@ async def build_digest(bot: Bot) -> list[Message]:
         forecast = None
     previous = await bot.store.week_snapshot(_today(bot) - timedelta(days=7))
     current = our_week_stats(dashboard, our)
-    data = cover_for(dashboard, our, current, previous, week_label(ours))
+    data = await prepare_cover(dashboard, our, current, previous, week_label(ours))
     messages = render_digest(ours, others, current, previous, forecast, our, cover=data)
     return await with_cover(messages, data)
 

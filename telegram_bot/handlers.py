@@ -250,7 +250,8 @@ class Bot:
         """Все части одному чату. Картинка: если её уже загружали (`uploaded`:
         байты → file_id), уходит по file_id. Telegram её не принял (TelegramError,
         не BotBlocked/CannotInitiate) — этому чату только текст, подпись встаёт
-        в начало следующей части; картинку не повторяем."""
+        в начало следующей части; картинку не повторяем. Отказ по file_id
+        забывает его: следующий получатель загрузит байты заново."""
         parts = list(messages)
         index = 0
         while index < len(parts):
@@ -266,6 +267,7 @@ class Bot:
                 raise
             except TelegramError as error:
                 log.warning("send_photo: %s", type(error).__name__)
+                uploaded.pop(message.photo, None)
                 parts[index:] = text_only(parts[index:])
                 continue
             file_id = largest_file_id(result)
@@ -488,7 +490,7 @@ class Bot:
         today = datetime.fromtimestamp(self.clock(), ZoneInfo(self.config.timezone)).date()
         previous = await self.store.week_snapshot(today - timedelta(days=7))
         current, label = our_week_stats(dashboard, our), week_label(dashboard)
-        data = content.cover_for(dashboard, our, current, previous, label)
+        data = await content.prepare_cover(dashboard, our, current, previous, label)
         messages = render_week(current, previous, forecast, our, cover=data, label=label)
         await self.send_all(chat_id, await content.with_cover(messages, data))
 

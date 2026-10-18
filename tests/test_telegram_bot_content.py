@@ -589,3 +589,50 @@ def test_cover_for_title_subtitle_rows():
     assert content.cover_for(dashboard, OUR_ID, current, None, None).title == "Университет Дельта"
     assert content.cover_for(dashboard, OUR_ID, {}, None, None).subtitle == "просмотры за неделю"
     assert content.cover_for({}, OUR_ID, {}, None, None).title == f"вуз №{OUR_ID}"
+
+
+def test_digest_without_any_platform_has_no_cover(monkeypatch):
+    from telegram_bot import cover
+
+    draws = []
+    monkeypatch.setattr(cover, "draw", lambda data: draws.append(data) or b"png")
+    bot, telegram, source, _ = make()
+
+    async def no_stats() -> dict:
+        body = fixture("dashboard.json")
+        body["stats"] = []
+        return body
+
+    source.dashboard = no_stats
+    messages = run(content.build_digest(bot))
+    assert all(m.photo is None for m in messages) and draws == []
+    assert messages[0].text.startswith("<b>Дайджест · 10–16 окт</b>")
+    run(content.send_digest(bot))
+    assert telegram.of("photo") == [] and draws == []
+    assert group_texts(telegram)[0].startswith("<b>Дайджест · 10–16 окт</b>")
+
+
+def test_cover_import_and_draw_run_off_the_event_loop(monkeypatch):
+    import threading
+
+    from telegram_bot import cover
+
+    main = threading.get_ident()
+    threads = []
+    real_cover_for = content.cover_for
+
+    def spy_cover_for(*args):
+        threads.append(("cover_for", threading.get_ident()))
+        return real_cover_for(*args)
+
+    def spy_draw(data):
+        threads.append(("draw", threading.get_ident()))
+        return b"png"
+
+    monkeypatch.setattr(content, "cover_for", spy_cover_for)
+    monkeypatch.setattr(cover, "draw", spy_draw)
+    bot, _, _, _ = make()
+    messages = run(content.build_digest(bot))
+    assert messages[0].photo == b"png"
+    assert [name for name, _ in threads] == ["cover_for", "draw"]
+    assert all(ident != main for _, ident in threads)   # импорт Pillow и рисование — в потоке
