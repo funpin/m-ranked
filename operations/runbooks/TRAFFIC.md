@@ -35,7 +35,8 @@
     160 холодных страниц постов в минуту, по запросу с адреса, и держал оба
     ядра; люди открывают такие страницы с нуля 5–20 раз в минуту.
 - Классы по User-Agent (`$m_ranked_agent_class`): `human`, `ai_user` (запрос ИИ
-  по просьбе человека), `ai_search`, `ai_training`, `crawler` (прочие роботы).
+  по просьбе человека), `ai_search`, `ai_training`, `seo` (SEO-сервисы: Semrush,
+  Ahrefs, Majestic, SE Ranking и др.), `crawler` (прочие роботы).
 - Закрытые классы — в `crawler-policy.conf`: 403 на всё, кроме robots.txt.
 - Ключ кэша включает сборку (`build.conf`, пишет выкатка), признак gzip и
   заголовки навигации Next. Срок задаёт приложение заголовком `X-Accel-Expires`.

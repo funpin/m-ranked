@@ -25,7 +25,7 @@ import time
 import urllib.parse
 import urllib.request
 
-BOT_CLASSES = ("ai_user", "ai_search", "ai_training", "crawler")
+BOT_CLASSES = ("ai_user", "ai_search", "ai_training", "seo", "crawler")
 WINDOW_MINUTES = 5
 REPEAT_SECONDS = 6 * 3600
 
