@@ -70,6 +70,11 @@ ALTER ROLE outbox_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLIC
 SELECT 'CREATE ROLE storage_observer NOLOGIN'
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'storage_observer') \gexec
 
+-- Telegram bot: tables and grants arrive with migration 0087. The role stays
+-- NOLOGIN here; enabling the bot gives it LOGIN and a password.
+SELECT 'CREATE ROLE telegram_bot NOLOGIN'
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'telegram_bot') \gexec
+
 GRANT api_read TO api_write_admin;
 GRANT pg_monitor TO backup;
 
@@ -84,7 +89,7 @@ ALTER ROLE analytics_worker SET jit = off;
 
 SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', current_database()) \gexec
 SELECT format(
-  'GRANT CONNECT ON DATABASE %I TO migration_owner, api_read, api_write_admin, collector_ingest, backup, maintenance, analytics_worker, outbox_worker',
+  'GRANT CONNECT ON DATABASE %I TO migration_owner, api_read, api_write_admin, collector_ingest, backup, maintenance, analytics_worker, outbox_worker, telegram_bot',
   current_database()
 ) \gexec
 SELECT format('GRANT CREATE, TEMPORARY ON DATABASE %I TO migration_owner', current_database()) \gexec

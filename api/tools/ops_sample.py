@@ -6,6 +6,10 @@
 node_exporter. Снимок — одна строка JSON в ops_and_admin.host_sample; панель
 читает готовые строки и ничего не считает на запрос.
 
+После записи снимка собирается alert-inputs.json для alerts.py (у него нет
+доступа к базе): сбор по площадкам, p95 страниц и ресурсы узлов. Ошибка этой
+части снимок не ломает.
+
 Размеры каталогов проекта меряются раз в шесть часов: обход страничного кэша
 стоит заметно дороже всего остального снимка. Хранится 30 суток — около
 43 000 строк по килобайту.
@@ -18,6 +22,7 @@ import math
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 import time
@@ -310,7 +315,10 @@ def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: 
     return sample
 
 
-# Итоги сбора по аккаунтам, завершённым с прошлого снимка. Сначала — циклы
+# Итоги сбора по аккаунтам, завершённым с прошлого снимка. last_result — время
+# последнего результата любого исхода: когда MAX отзывает вход, сборщик не
+# пишет результатов вовсе, и по нему «вход отозван» отличается от «сбор падает».
+# Сначала — циклы
 # последних двух часов по индексу (platform, started_at): цикл Rutube длинный.
 # Их десятки, и результаты аккаунтов подтягиваются по уникальному индексу
 # (collection_run_id, platform_account_id), а не просмотром всей таблицы.
@@ -324,7 +332,8 @@ SELECT runs.platform::text AS platform,
   count(*) FILTER (WHERE result.status='succeeded') AS ok,
   count(*) FILTER (WHERE result.status IN ('failed','partial')) AS failed,
   count(*) FILTER (WHERE result.status NOT IN ('succeeded','failed','partial')) AS other,
-  extract(epoch FROM max(result.completed_at) FILTER (WHERE result.status='succeeded')) AS last_ok
+  extract(epoch FROM max(result.completed_at) FILTER (WHERE result.status='succeeded')) AS last_ok,
+  extract(epoch FROM max(result.completed_at)) AS last_result
 FROM runs
 CROSS JOIN LATERAL (
   SELECT status, completed_at FROM ingest.collection_account_result
@@ -338,10 +347,161 @@ GROUP BY runs.platform
 def collection(connection: Any, since: float, until: float) -> dict[str, dict[str, Any]]:
     rows = connection.execute(COLLECTION, {"since": since, "until": until}).fetchall()
     return {row[0]: {"ok": row[1], "failed": row[2], "other": row[3],
-                     "lastOk": float(row[4]) if row[4] is not None else None} for row in rows}
+                     "lastOk": float(row[4]) if row[4] is not None else None,
+                     "lastResult": float(row[5]) if row[5] is not None else None} for row in rows}
 
 
-def store(dsn: str, sample: dict[str, Any], state: dict[str, Any], now: float) -> None:
+# Входные данные для тревог (operations/scripts/alerts.py, у него нет доступа к
+# базе). Все три запроса идут по первичному ключу: host_sample — по
+# observed_at, server_node_sample — по (node_id, observed_at).
+ALERT_INPUTS_FILE = "alert-inputs.json"
+HOURS_BACK = 3
+BASELINE_WEEKS = 4
+P95_ROWS = 15
+# Последние три часа: итоги часа, последние успех и результат, p95 страниц.
+RECENT_SAMPLES = """
+SELECT sample->'collection', sample->'traffic'->>'p95', extract(epoch FROM observed_at)
+FROM ops_and_admin.host_sample
+WHERE observed_at >= to_timestamp(%(now)s) - make_interval(hours => %(hours)s)
+ORDER BY observed_at DESC
+"""
+# Тот же час 1–4 недели назад: по одному диапазону ключа на неделю.
+WEEKLY_SAMPLES = """
+SELECT weeks.w, week_rows.collection
+FROM generate_series(1, %(weeks)s) AS weeks(w)
+CROSS JOIN LATERAL (
+  SELECT sample->'collection' AS collection
+  FROM ops_and_admin.host_sample
+  WHERE observed_at >= to_timestamp(%(now)s::float8 - weeks.w * 604800 - 3600)
+    AND observed_at < to_timestamp(%(now)s::float8 - weeks.w * 604800)
+) week_rows
+"""
+# Последний снимок каждого работающего узла, кроме Сервера 2 (он меряет себя сам),
+# и среднее load1 за 15 минут до него: один снимок даёт дребезг тревоги нагрузки.
+# Оба чтения — диапазон по ключу (node_id, observed_at). Выключенные и ещё не
+# принятые узлы снимков не шлют: без фильтра по state они вечно «молчали» бы.
+NODE_SAMPLES = """
+SELECT node.id, node.display_name, node.report->'metrics'->>'cpus',
+  extract(epoch FROM sample.observed_at), sample.disk_total_bytes, sample.disk_free_bytes,
+  sample.memory_total_bytes, sample.memory_available_bytes, load.mean
+FROM ops_and_admin.server_node node
+CROSS JOIN LATERAL (
+  SELECT observed_at, disk_total_bytes, disk_free_bytes, memory_total_bytes, memory_available_bytes
+  FROM ops_and_admin.server_node_sample
+  WHERE node_id = node.id
+  ORDER BY observed_at DESC
+  LIMIT 1
+) sample
+CROSS JOIN LATERAL (
+  SELECT avg(recent.load1) AS mean
+  FROM ops_and_admin.server_node_sample recent
+  WHERE recent.node_id = node.id
+    AND recent.observed_at > sample.observed_at - interval '15 minutes'
+    AND recent.observed_at <= sample.observed_at
+) load
+WHERE node.role <> 'main' AND node.state IN ('active', 'draining')
+"""
+
+
+def summarize_collection(hour_rows: list[dict | None], window_rows: list[dict | None],
+                         baseline_hours: list[list[dict | None]]) -> dict[str, dict[str, Any]]:
+    """Сбор по площадкам для тревог.
+
+    hour_rows — значения sample->'collection' за последние 60 минут, window_rows
+    — за 3 часа, baseline_hours — по списку на каждую из 1–4 недель назад (тот
+    же час). Неделя без строк не считается: тогда снимков не было вовсе.
+    """
+    platforms: set[str] = set()
+    for rows in (hour_rows, window_rows, *baseline_hours):
+        for item in rows:
+            platforms.update(item or {})
+    weeks = [rows for rows in baseline_hours if rows]
+    result: dict[str, dict[str, Any]] = {}
+    for platform in sorted(platforms):
+        hour = [item[platform] for item in hour_rows if item and platform in item]
+        window = [item[platform] for item in window_rows if item and platform in item]
+        ok = sum(entry.get("ok", 0) for entry in hour)
+        failed = sum(entry.get("failed", 0) for entry in hour)
+        other = sum(entry.get("other", 0) for entry in hour)
+        last_ok = [entry["lastOk"] for entry in window if entry.get("lastOk") is not None]
+        # Строки старого формата без lastResult: любой успех — тоже результат.
+        last_result = [entry.get("lastResult") if entry.get("lastResult") is not None else entry.get("lastOk")
+                       for entry in window]
+        last_result = [value for value in last_result if value is not None]
+        weekly = [sum(item[platform].get("ok", 0) for item in rows if item and platform in item) for rows in weeks]
+        result[platform] = {
+            "hourOk": ok, "hourFailed": failed, "hourResults": ok + failed + other,
+            "baselineOk": float(statistics.median(weekly)) if weekly else None,
+            "lastOk": max(last_ok) if last_ok else None,
+            "lastResult": max(last_result) if last_result else None,
+        }
+    return result
+
+
+def page_p95_median(values: list[float | None]) -> float | None:
+    """Медиана p95 страниц; снимки без трафика (null) пропускаются."""
+    found = [value for value in values if value is not None]
+    return float(statistics.median(found)) if found else None
+
+
+def node_inputs(rows: list[tuple]) -> dict[str, dict[str, Any]]:
+    """Последние ресурсы узлов: id -> имя, время снимка, диск, память, среднее
+    load1 за 15 минут, ядра."""
+    nodes: dict[str, dict[str, Any]] = {}
+    for node_id, name, cpus, observed, disk_total, disk_free, memory_total, memory_available, load_mean in rows:
+        if observed is None:
+            continue
+        nodes[node_id] = {
+            "name": name, "observedAt": float(observed), "diskTotal": disk_total, "diskFree": disk_free,
+            "memoryTotal": memory_total, "memoryAvailable": memory_available,
+            "load1Mean15m": float(load_mean) if load_mean is not None else None,
+            "cpus": int(cpus) if cpus is not None and cpus.isdecimal() else None}
+    return nodes
+
+
+def write_alert_inputs(path: Path, inputs: dict[str, Any]) -> None:
+    """Записать файл атомарно. Служба работает с UMask=0077, а читает его
+    alerts.py другим процессом, поэтому права выставляются явно."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            os.fchmod(stream.fileno(), 0o644)
+            json.dump(inputs, stream)
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def refresh_alert_inputs(connection: Any, now: float, path: Path) -> bool:
+    """Собрать входные данные тревог и записать файл. Ошибка только в журнал:
+    снимок уже сохранён, а тревоги заметят устаревший файл сами."""
+    try:
+        recent = connection.execute(RECENT_SAMPLES, {"now": now, "hours": HOURS_BACK}).fetchall()
+        weekly = connection.execute(WEEKLY_SAMPLES, {"now": now, "weeks": BASELINE_WEEKS}).fetchall()
+        nodes = connection.execute(NODE_SAMPLES).fetchall()
+        # Строки пришли от новых к старым: p95 берётся с первых 15.
+        window_rows = [row[0] for row in recent]
+        hour_rows = [row[0] for row in recent if row[2] >= now - 3600]
+        baseline: list[list[dict | None]] = [[] for _ in range(BASELINE_WEEKS)]
+        for week, collected in weekly:
+            baseline[week - 1].append(collected)
+        p95 = [float(row[1]) if row[1] is not None else None for row in recent[:P95_ROWS]]
+        write_alert_inputs(path, {
+            "at": now,
+            "collection": summarize_collection(hour_rows, window_rows, baseline),
+            "pageP95Median15m": page_p95_median(p95),
+            "nodes": node_inputs(nodes)})
+    except Exception as error:  # noqa: BLE001 — тревоги необязательны, причина в журнал
+        logger.warning("входные данные тревог не записаны: %s", type(error).__name__)
+        return False
+    return True
+
+
+def store(dsn: str, sample: dict[str, Any], state: dict[str, Any], now: float,
+          inputs_path: Path | None = None) -> None:
     import psycopg
 
     with psycopg.connect(dsn, connect_timeout=10) as connection:
@@ -353,6 +513,10 @@ def store(dsn: str, sample: dict[str, Any], state: dict[str, Any], now: float) -
         connection.execute(
             "DELETE FROM ops_and_admin.host_sample WHERE observed_at < now() - make_interval(days => %s)",
             (RETENTION_DAYS,))
+        if inputs_path is not None:
+            # Снимок фиксируем до новых запросов: их сбой не должен его откатить.
+            connection.commit()
+            refresh_alert_inputs(connection, now, inputs_path)
     state["collectionAt"] = now
 
 
@@ -382,7 +546,7 @@ def main() -> int:
         backup_dir=Path(os.environ.get("OPS_SAMPLE_BACKUP_DIR", "/var/backups/m-ranked")),
         backup_request=Path("/var/lib/m-ranked/backup-request/refresh"))
     try:
-        store(dsn, sample, state, now)
+        store(dsn, sample, state, now, state_dir / ALERT_INPUTS_FILE)
     except Exception as error:  # noqa: BLE001 — снимок необязателен, причина в журнал
         logger.error("снимок не записан: %s", type(error).__name__)
         return 1
