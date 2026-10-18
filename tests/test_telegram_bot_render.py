@@ -4,12 +4,13 @@ from __future__ import annotations
 import copy
 import itertools
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from telegram_bot.emoji import icon
+from telegram_bot.emoji import band, icon
 from telegram_bot.render import (
     Message,
     decode_callback,
@@ -479,3 +480,39 @@ def test_help_lists_all_word_kinds():
     full = render_help(alerts=True, admin=True)
     assert "/status" in full and "/settings" in full
     assert "/settings" in render_help(alerts=False, admin=True)
+
+
+def test_help_uses_bands_and_bold_commands():
+    text = render_help(alerts=False, admin=False)
+    assert band("band_ours", "ПОСТЫ") in text and band("band_week", "НЕДЕЛЯ") in text
+    for command in ("/top", "/week", "/digest", "/id"):
+        assert f"<b>{command}</b>" in text
+    assert "<code>/top все тг</code>" in text and "<code>/top мфти месяц</code>" in text
+    for slot in ("logo", "telegram", "vk", "max", "rutube"):
+        assert icon(slot) in text
+
+
+def test_help_server_block_gated():
+    plain = render_help(alerts=False, admin=False)
+    assert "СЕРВЕР" not in plain and "/status" not in plain and "/settings" not in plain
+    alerts_only = render_help(alerts=True, admin=False)
+    assert band("alert_urgent", "СЕРВЕР") in alerts_only
+    assert "<b>/status</b>" in alerts_only and "/settings" not in alerts_only
+    admin_only = render_help(alerts=False, admin=True)
+    assert band("alert_urgent", "СЕРВЕР") in admin_only
+    assert "<b>/settings</b>" in admin_only and "/status" not in admin_only
+
+
+@pytest.mark.parametrize("alerts,admin", [(False, False), (True, False), (False, True), (True, True)])
+def test_help_html_is_balanced(alerts, admin):
+    text = render_help(alerts=alerts, admin=admin)
+    stack = []
+    for match in re.finditer(r"<(/?)([a-z-]+)[^<>]*>", text):
+        closing, name = match.groups()
+        if closing:
+            assert stack and stack.pop() == name
+        else:
+            stack.append(name)
+    assert not stack
+    bare = re.sub(r"<[^<>]*>", "", text)
+    assert "<" not in bare and ">" not in bare and "&" not in bare
