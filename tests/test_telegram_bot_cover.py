@@ -501,9 +501,12 @@ def test_label_and_badge_inside_bar_are_white(monkeypatch: pytest.MonkeyPatch) -
 def test_draw_is_fast() -> None:
     import time
     cover.draw(EXTREMES["four-rows"])  # прогрев шрифтов и значков
-    started = time.perf_counter()
-    png = cover.draw(EXTREMES["mixed"])
-    assert time.perf_counter() - started < 0.5
+    times = []
+    for _ in range(5):  # медиана, а не один замер: разовая пауза планировщика не ошибка
+        started = time.perf_counter()
+        png = cover.draw(EXTREMES["mixed"])
+        times.append(time.perf_counter() - started)
+    assert sorted(times)[len(times) // 2] < 0.5, times
     assert len(png) < 400 * 1024
 
 
@@ -517,8 +520,11 @@ def rss_mb():
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak / (1024 * 1024 if sys.platform == "darwin" else 1024)
 
-for data in EXTREMES.values():
-    cover.draw(data)
+# Аллокатор выходит на плато не с первого прохода (на macOS и Linux это три
+# прохода по всем наборам), поэтому прогрев длиннее, чем кажется нужным.
+for _ in range(3):
+    for data in EXTREMES.values():
+        cover.draw(data)
 warm = rss_mb()
 for _ in range(5):
     for data in EXTREMES.values():
@@ -528,7 +534,13 @@ print(warm, rss_mb())
 
 
 def test_draw_memory_is_flat_and_small() -> None:
-    """tracemalloc не видит C-буферы Pillow, поэтому RSS чужого процесса."""
+    """tracemalloc не видит C-буферы Pillow, поэтому RSS чужого процесса.
+
+    Рост считается от установившегося уровня: после прогрева в три прохода
+    пять проходов не должны добавить и 10 МБ (утечка за 60 отрисовок дала бы
+    больше). Один проход прогрева не годится: пик ещё растёт на 10-14 МБ.
+    """
+    pytest.importorskip("resource")
     import subprocess
     import sys
     from pathlib import Path
