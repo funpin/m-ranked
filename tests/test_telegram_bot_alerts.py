@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import json
 import os
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,9 +26,6 @@ NOON = datetime(2026, 10, 16, 12, 0, tzinfo=MSK)
 NIGHT = datetime(2026, 10, 17, 3, 0, tzinfo=MSK)
 MORNING = datetime(2026, 10, 17, 8, 0, tzinfo=MSK)
 
-SCRIPT = Path(__file__).parents[1] / "operations" / "scripts" / "alerts.py"
-
-
 class FakeTelegram:
     def __init__(self) -> None:
         self.calls: list[tuple] = []
@@ -49,6 +44,9 @@ class FakeTelegram:
 
     async def edit_message(self, chat_id, message_id, text, keyboard=None):
         self.calls.append(("edit", chat_id, message_id, text, keyboard))
+
+    async def edit_keyboard(self, chat_id, message_id, keyboard):
+        self.calls.append(("keyboard", chat_id, message_id, keyboard))
 
     async def answer_callback(self, callback_id, text=None):
         self.calls.append(("answer", callback_id, text))
@@ -181,7 +179,7 @@ def test_alert_text_is_html_escaped_on_the_wire(tmp_path):
 
 # --- заглушка -----------------------------------------------------------------
 
-def test_mute_drops_open_and_repeat_not_resolve(tmp_path):
+def test_mute_drops_open_and_repeat(tmp_path):
     bot, telegram, store = make_bot(tmp_path)
     asyncio.run(store.set_mute("disk", time.time() + 3600, ADMIN))
     spool(tmp_path, "disk", "open", stamp=1)
@@ -189,13 +187,21 @@ def test_mute_drops_open_and_repeat_not_resolve(tmp_path):
     asyncio.run(deliver(bot, NOON))
     assert telegram.of("send") == []
     assert files(tmp_path) == []
-    spool(tmp_path, "disk", "resolve", text="диск освободился", stamp=3)
-    asyncio.run(deliver(bot, NOON))
-    assert len(telegram.of("send")) == 1
-    assert "Прошло" in telegram.of("send")[0][2]
     spool(tmp_path, "load", "open", text="нагрузка", stamp=4)
     asyncio.run(deliver(bot, NOON))
-    assert len(telegram.of("send")) == 2
+    assert len(telegram.of("send")) == 1
+
+
+def test_resolve_is_not_sent_day_or_night(tmp_path):
+    """Решение владельца: людям только сбои, «прошло» видно в /status."""
+    bot, telegram, store = make_bot(tmp_path)
+    spool(tmp_path, "disk", "resolve", text="диск освободился", stamp=1)
+    asyncio.run(deliver(bot, NOON))
+    assert telegram.of("send") == [] and files(tmp_path) == []
+    assert asyncio.run(store.take_held()) == []
+    spool(tmp_path, "disk", "resolve", text="диск освободился", stamp=2)
+    asyncio.run(deliver(bot, NIGHT))
+    assert telegram.of("send") == [] and files(tmp_path) == []
 
 
 def test_muted_nonurgent_open_at_night_is_not_held(tmp_path):
@@ -213,14 +219,13 @@ def callback(user: int, key: str, text: str, *, chat_type: str = "private", chat
                     "text": text}}}
 
 
-def test_mute_button_on_open_and_repeat_not_resolve(tmp_path):
+def test_mute_button_on_open_and_repeat(tmp_path):
     bot, telegram, _ = make_bot(tmp_path)
     spool(tmp_path, "disk", "open", stamp=1)
     spool(tmp_path, "disk", "repeat", stamp=2)
-    spool(tmp_path, "disk", "resolve", stamp=3)
     asyncio.run(deliver(bot, NOON))
     sent = telegram.of("send")
-    assert [call[3] is not None for call in sent] == [True, True, False]
+    assert [call[3] is not None for call in sent] == [True, True]
     assert sent[0][3] == [[{"text": "🔕 Заглушить на 2 часа", "callback_data": "m|disk"}]]
 
 
@@ -238,14 +243,22 @@ def test_long_key_gets_no_button(tmp_path):
     assert telegram.of("send")[0][3] is None
 
 
-def test_mute_button_press_sets_mute_and_edits_message(tmp_path):
+def test_mute_button_press_sets_mute_and_swaps_only_the_button(tmp_path):
     bot, telegram, store = make_bot(tmp_path)
-    asyncio.run(bot.handle(callback(ADMIN, "disk", "m-ranked · Сервер 2\n🔴 диск < 5%")))
+    asyncio.run(bot.handle(callback(ADMIN, "disk", "Сервер 2 · m-ranked\n🚨 диск < 5%")))
     assert store._mutes["disk"] == NOON.timestamp() + 7200
-    edit = telegram.of("edit")[0]
-    assert edit[1:3] == (ADMIN, 55)
-    assert edit[3] == "m-ranked · Сервер 2\n🔴 диск &lt; 5%\n🔕 заглушено до 14:00"
-    assert edit[4] is None
+    # Текст не правим: правка потеряла бы кастомные эмодзи.
+    assert telegram.of("edit") == []
+    assert telegram.of("keyboard") == [("keyboard", ADMIN, 55,
+                                        [[{"text": "🔕 Заглушено до 14:00", "callback_data": "m|"}]])]
+    assert telegram.of("answer") == [("answer", "cb1", "заглушено на 2 часа")]
+
+
+def test_pressing_muted_button_again_only_answers(tmp_path):
+    bot, telegram, store = make_bot(tmp_path)
+    asyncio.run(bot.handle(callback(ADMIN, "", "t")))
+    assert store._mutes == {}
+    assert telegram.of("keyboard") == []
     assert telegram.of("answer") == [("answer", "cb1", "заглушено на 2 часа")]
 
 
@@ -258,9 +271,12 @@ def test_mute_button_refused_for_non_alert_person_and_groups(tmp_path):
     assert len(telegram.of("answer")) == 2
 
 
-def test_mute_button_bad_key_is_answered(tmp_path):
+def test_mute_button_without_user_is_answered(tmp_path):
     bot, telegram, store = make_bot(tmp_path)
-    asyncio.run(bot.handle(callback(ADMIN, "", "t")))
+    update = callback(ADMIN, "disk", "t")
+    asyncio.run(alerts_inbox.on_mute(bot, update["callback_query"],
+                                     alerts_inbox.Access(user_id=None, chat_id=ADMIN, private=True, admin=True,
+                                                         alerts=True, known_person=True, known_chat=False)))
     assert store._mutes == {}
     assert len(telegram.of("answer")) == 1
 
@@ -283,22 +299,30 @@ def test_morning_collapses_night(tmp_path):
     text = sent[0][2]
     assert text.count("за ночь открылась и закрылась") == 1
     assert "за ночь открылась и закрылась: диск заполнен" in text
-    assert "🔴 Всё ещё: нагрузка высокая" in text
+    assert "Всё ещё: нагрузка высокая" in text
     assert text.count("нагрузка высокая") == 1
     assert text.count("диск заполнен") == 1
     assert asyncio.run(store.take_held()) == []
 
 
-def test_morning_resolve_without_open_and_other_servers(tmp_path):
+def test_morning_skips_resolve_without_open(tmp_path):
     bot, telegram, _ = make_bot(tmp_path)
     spool(tmp_path, "disk", "resolve", text="диск освободился", stamp=1)
     spool(tmp_path, "disk", "open", text="диск на втором", server="Сервер 1", stamp=2)
     asyncio.run(deliver(bot, NIGHT))
     asyncio.run(morning(bot, MORNING))
     text = telegram.of("send")[0][2]
-    assert "🟢 Прошло: диск освободился" in text
-    assert "Сервер 1" in text and "Сервер 2" in text
+    assert "Прошло" not in text and "освободился" not in text
+    assert "Сервер 1" in text
     assert "закрылась" not in text
+
+
+def test_morning_with_only_resolves_sends_nothing(tmp_path):
+    bot, telegram, _ = make_bot(tmp_path)
+    spool(tmp_path, "disk", "resolve", text="диск освободился", stamp=1)
+    asyncio.run(deliver(bot, NIGHT))
+    asyncio.run(morning(bot, MORNING))
+    assert telegram.of("send") == []
 
 
 def test_morning_sends_nothing_when_nothing_held(tmp_path):
@@ -474,30 +498,28 @@ def test_only_chat_with_alerts_flag_is_treated_as_no_recipients(tmp_path):
     assert not path.exists()
 
 
-# --- формат текста совпадает со скриптом тревог -------------------------------
+# --- оформление тревоги ---------------------------------------------------------
 
-def load_alerts_script():
-    spec = importlib.util.spec_from_file_location("alerts_for_bot_test", SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["alerts_for_bot_test"] = module  # dataclass ищет модуль по имени
-    spec.loader.exec_module(module)
-    return module
+@pytest.fixture
+def plain_emoji(monkeypatch):
+    from telegram_bot import emoji
+    monkeypatch.setattr(emoji, "IDS", {})
 
 
-@pytest.mark.parametrize("kind", ["open", "repeat", "resolve"])
-def test_alert_text_matches_alerts_script(kind, monkeypatch):
-    monkeypatch.setenv("TZ", "Europe/Moscow")
-    time.tzset()
-    try:
-        alerts = load_alerts_script()
-        since = datetime(2026, 10, 16, 21, 5, tzinfo=MSK).timestamp()
-        event = alerts.Event(key="disk", kind=kind, urgent=False, text="диск заполнен", since=since)
-        payload = {"version": 1, "server": "Сервер 2", "key": "disk", "kind": kind, "urgent": False,
-                   "text": "диск заполнен", "since": since, "at": since}
-        assert alert_text(payload) == "m-ranked · Сервер 2\n" + alerts.format_event(event)
-    finally:
-        monkeypatch.undo()
-        time.tzset()
-    if kind == "repeat":
-        assert alert_text(payload).endswith("(с 16.10 21:05)")
+def payload(kind: str, *, urgent: bool = False, text: str = "диск заполнен") -> dict:
+    since = datetime(2026, 10, 16, 21, 5, tzinfo=MSK).timestamp()
+    return {"version": 1, "server": "Сервер 2", "key": "disk", "kind": kind, "urgent": urgent,
+            "text": text, "since": since, "at": since}
+
+
+def test_alert_text_design(plain_emoji):
+    assert alert_text(payload("open")) == "<b>Сервер 2</b> · m-ranked\n⚠️ диск заполнен"
+    assert alert_text(payload("open", urgent=True, text="Сбор VK: нет опросов 46 мин")) == (
+        "<b>Сервер 2</b> · m-ranked\n🚨 <b>Сбор VK</b>: нет опросов 46 мин")
+    assert alert_text(payload("repeat")).endswith("⚠️ Всё ещё: диск заполнен <i>(с 16.10 21:05)</i>")
+
+
+def test_alert_uses_custom_emoji_when_set_is_loaded(monkeypatch):
+    from telegram_bot import emoji
+    monkeypatch.setattr(emoji, "IDS", {"alert_urgent": "5377528053658336374"})
+    assert '<tg-emoji emoji-id="5377528053658336374">🚨</tg-emoji>' in alert_text(payload("open", urgent=True))

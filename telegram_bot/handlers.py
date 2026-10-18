@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import Callable
@@ -16,7 +18,7 @@ from zoneinfo import ZoneInfo
 from . import content, settings
 from .access import Access, access_for, allowed
 from .config import BotConfig
-from .emoji import describe_custom_emoji
+from .emoji import describe_custom_emoji, icon
 from .render import (
     TELEGRAM_LIMIT,
     Message,
@@ -32,7 +34,7 @@ from .render import (
     text_only,
     week_label,
 )
-from .source import ApiSource, SourceUnavailable
+from .source import ApiSource, SourceUnavailable, person_request
 from .status import STATUS_WINDOW_SECONDS, render_status
 from .store import OUR_INSTITUTION, Recipient, Store
 from .telegram import BotBlocked, CannotInitiate, TelegramClient, TelegramError
@@ -125,6 +127,45 @@ def largest_file_id(result: dict | None) -> str | None:
 def _is_member(member: dict) -> bool:
     status = member.get("status")
     return status in _MEMBER_STATUSES or (status == "restricted" and bool(member.get("is_member")))
+
+
+TYPING_REPEAT_SECONDS = 4.0  # Telegram гасит «печатает…» примерно через 5 с
+
+
+class _Typing:
+    """«печатает…» в чате, пока бот ждёт данные, которых нет в копии: шлётся
+    сразу и повторяется, пока разбор обновления не закончится. Сбой — не повод
+    отказать в ответе, поэтому ошибки только в журнал."""
+
+    def __init__(self, telegram: TelegramClient, chat_id: int) -> None:
+        self._telegram = telegram
+        self._chat_id = chat_id
+        self._task: asyncio.Task | None = None
+
+    async def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.get_running_loop().create_task(self._loop())
+
+    async def _loop(self) -> None:
+        while True:
+            try:
+                await self._telegram.send_typing(self._chat_id)
+            except Exception as error:  # noqa: BLE001 - индикатор необязателен
+                log.debug("typing: %s", type(error).__name__)
+                return
+            await asyncio.sleep(TYPING_REPEAT_SECONDS)
+
+    async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+
+
+def _update_chat(update: dict) -> int | None:
+    message = update.get("message") or (update.get("callback_query") or {}).get("message") or {}
+    chat_id = (message.get("chat") or {}).get("id")
+    return chat_id if isinstance(chat_id, int) else None
 
 
 class Bot:
@@ -290,15 +331,22 @@ class Bot:
     async def handle(self, update: dict) -> None:
         kind = next((key for key in update if key != "update_id"), "empty")
         log.debug("update %s", kind)
+        chat_id = _update_chat(update)
+        typing = _Typing(self.telegram, chat_id) if chat_id is not None else None
         try:
-            if "message" in update:
-                await self._on_message(update["message"])
-            elif "callback_query" in update:
-                await self._on_callback(update["callback_query"])
-            elif "my_chat_member" in update:
-                await self._on_membership(update["my_chat_member"])
+            # Человеку — из копии до часа; холодные данные — с «печатает…».
+            with person_request(typing.start if typing is not None else None):
+                if "message" in update:
+                    await self._on_message(update["message"])
+                elif "callback_query" in update:
+                    await self._on_callback(update["callback_query"])
+                elif "my_chat_member" in update:
+                    await self._on_membership(update["my_chat_member"])
         except TelegramError as error:
             log.warning("update %s: %s", kind, type(error).__name__)
+        finally:
+            if typing is not None:
+                await typing.stop()
 
     async def _on_message(self, message: dict) -> None:
         chat = message.get("chat") or {}
@@ -363,7 +411,8 @@ class Bot:
             if access.known:
                 await self.reply(chat_id, self._help(access))
             else:
-                await self.reply(chat_id, f"Это бот m-ranked. {self._id_text(access)} "
+                await self.reply(chat_id, f"{icon('logo')} <b>m-ranked</b> · бот мониторинга вузов\n\n"
+                                          f"{self._id_text(access)}\n"
                                           "Пришлите его админу бота, чтобы получить доступ.")
         elif command == "help":
             await self.reply(chat_id, self._help(access))

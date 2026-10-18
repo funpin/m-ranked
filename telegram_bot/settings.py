@@ -22,6 +22,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .access import Access, allowed
+from .emoji import icon
 from .render import esc
 from .source import SourceUnavailable
 from .store import OUR_INSTITUTION, Recipient
@@ -81,8 +82,9 @@ async def _menu(bot: Bot) -> Screen:
     recipients = await bot.store.recipients()
     chats = sum(1 for r in recipients if r.kind == "chat")
     people = sum(1 for r in recipients if r.kind == "person")
-    text = "\n".join(["<b>Настройки</b>", f"Наш вуз: {esc(our_text)}",
-                      f"Рабочих чатов: {chats} · людей: {people}"])
+    text = "\n".join([f"{icon('logo')} <b>Настройки</b>", "",
+                      f"Наш вуз: <b>{esc(our_text)}</b>",
+                      f"Рабочих чатов: <b>{chats}</b> · людей: <b>{people}</b>"])
     keyboard = [[_button("🏛 Наш вуз", "s|our"), _button("💬 Рабочий чат", "s|chats")],
                 [_button("👤 Люди", "s|people"), _button("🔔 Мои уведомления", "s|me")]]
     return text, keyboard

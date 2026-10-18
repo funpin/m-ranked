@@ -1011,3 +1011,41 @@ def test_help_mentions_emoji_only_for_admin():
     from telegram_bot.render import render_help
     assert "/emoji" in render_help(alerts=True, admin=True)
     assert "/emoji" not in render_help(alerts=True, admin=False)
+
+
+# --- «печатает…», пока данные холодные ----------------------------------------
+
+def test_cold_data_shows_typing_until_the_reply(monkeypatch):
+    from telegram_bot import source as source_module
+    bot, telegram, source, _ = make_bot()
+    typing: list[int] = []
+
+    async def send_typing(chat_id):
+        typing.append(chat_id)
+
+    telegram.send_typing = send_typing
+    plain_dashboard = source.dashboard
+
+    async def cold_dashboard():
+        request = source_module._PERSON.get()
+        assert request is not None and request.on_cold is not None  # команда человека
+        await request.on_cold()
+        await asyncio.sleep(0)
+        return await plain_dashboard()
+
+    source.dashboard = cold_dashboard
+    handle(bot, private_message(ADMIN, "/week"))
+    assert typing == [ADMIN]
+    assert sent_texts(telegram, ADMIN) or telegram.of("photo")
+
+
+def test_warm_data_sends_no_typing():
+    bot, telegram, _, _ = make_bot()
+    typing: list[int] = []
+
+    async def send_typing(chat_id):
+        typing.append(chat_id)
+
+    telegram.send_typing = send_typing
+    handle(bot, private_message(ADMIN, "/week"))
+    assert typing == []

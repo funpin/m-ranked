@@ -3,8 +3,10 @@
 Скрипт тревог (operations/scripts/alerts.py) кладёт по файлу на каждый переход
 в каталог очереди. Здесь они читаются по имени (то есть по времени), глушатся
 по ключу, ночью несрочные откладываются до утренней сводки, остальные уходят
-людям с флагом «тревоги». В журнал попадают только имена файлов и классы
-ошибок: ни текстов тревог, ни Telegram ID.
+людям с флагом «тревоги». Присылаются только сбои: «прошло» людям не уходит
+(решение владельца — текущее состояние видно в /status), ночью закрытие лишь
+помечает в утренней сводке, что тревога «открылась и закрылась». В журнал
+попадают только имена файлов и классы ошибок: ни текстов тревог, ни Telegram ID.
 """
 from __future__ import annotations
 
@@ -17,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 from .access import Access
 from .handlers import STALE_BUTTON, Bot
+from .emoji import icon
 from .render import Message, esc
 from .store import Recipient
 
@@ -36,6 +39,8 @@ SPOOL_VERSION = 1
 KINDS = ("open", "repeat", "resolve")
 MUTE_BUTTON = "🔕 Заглушить на 2 часа"
 MUTED_NOTE = "заглушено на 2 часа"
+# Кнопка после нажатия: только надпись, повторное нажатие отвечает «заглушено».
+MUTED_DATA = "m|"
 
 
 # --- очередь ---------------------------------------------------------------------
@@ -116,18 +121,31 @@ def _since(event: dict) -> str:
     return datetime.fromtimestamp(since, MOSCOW).strftime("%d.%m %H:%M")
 
 
+def _topic(text: str) -> str:
+    """«Сбор Telegram: нет опросов…» → тема жирным; текст уже экранирован."""
+    topic, colon, rest = text.partition(": ")
+    if not colon or len(topic) > 40:
+        return text
+    return f"<b>{topic}</b>: {rest}"
+
+
+def _mark(event: dict) -> str:
+    return icon("alert_urgent") if event.get("urgent") else icon("anomaly")
+
+
 def _line(event: dict) -> str:
-    """Строка в формате format_event из скрипта тревог (текст экранирован под HTML)."""
-    text = esc(event["text"])
+    """Строка тревоги (текст экранирован под HTML). Закрытие людям не уходит,
+    строка «прошло» нужна только утренней сводке."""
+    text = _topic(esc(event["text"]))
     if event["kind"] == "open":
-        return f"🔴 {text}"
+        return f"{_mark(event)} {text}"
     if event["kind"] == "repeat":
-        return f"🔴 Всё ещё: {text} (с {_since(event)})"
-    return f"🟢 Прошло: {text}"
+        return f"{_mark(event)} Всё ещё: {text} <i>(с {_since(event)})</i>"
+    return f"Прошло: {text}"
 
 
 def alert_text(event: dict) -> str:
-    return f"m-ranked · {esc(event['server'])}\n{_line(event)}"
+    return f"<b>{esc(event['server'])}</b> · m-ranked\n{_line(event)}"
 
 
 def _keyboard(event: dict) -> list[list[dict]] | None:
@@ -184,7 +202,13 @@ async def deliver(bot: Bot, now: datetime) -> None:
             continue
         # Заглушка ключуется одним ключом правила: alerts.py работает только на Сервере 2,
         # правила Сервера 1 имеют приставку node_<id>_, пересечений нет.
-        if event["kind"] != "resolve" and await bot.store.muted_until(event["key"]) is not None:
+        if event["kind"] == "resolve":
+            # Людям только сбои. Ночью закрытие копится: сводка скажет «открылась и закрылась».
+            if quiet:
+                await bot.store.hold_alert(event)
+            path.unlink(missing_ok=True)
+            continue
+        if await bot.store.muted_until(event["key"]) is not None:
             path.unlink(missing_ok=True)
             continue
         if quiet and not event.get("urgent"):
@@ -207,8 +231,10 @@ async def morning(bot: Bot, now: datetime) -> None:
         return
     if not _alert_people(await bot.store.recipients()):
         return
-    lines = [_summary_line(group) for group in _by_key(held)]
-    text = "Тревоги за ночь\n" + "\n".join(lines)
+    lines = [line for line in map(_summary_line, _by_key(held)) if line is not None]
+    if not lines:
+        return
+    text = f"{icon('alert_urgent')} <b>Тревоги за ночь</b>\n" + "\n".join(lines)
     if await bot.broadcast(text, "alerts") == 0:
         moment = now.timestamp()
         for event in held:
@@ -223,13 +249,15 @@ def _by_key(held: list[dict]) -> list[list[dict]]:
     return list(groups.values())
 
 
-def _summary_line(group: list[dict]) -> str:
+def _summary_line(group: list[dict]) -> str | None:
+    """Строка сводки по ключу; тревога, закрывшаяся ещё до ночи, — без строки."""
     last = group[-1]
     server = esc(last["server"])
     if last["kind"] == "resolve":
         opened = [e for e in group if e["kind"] in ("open", "repeat")]
-        if opened:
-            return f"• {server}: за ночь открылась и закрылась: {esc(opened[0]['text'])}"
+        if not opened:
+            return None
+        return f"• {server}: за ночь открылась и закрылась: {_topic(esc(opened[0]['text']))}"
     return f"• {server}: {_line(last)}"
 
 
@@ -239,15 +267,21 @@ async def on_mute(bot: Bot, callback: dict, access: Access) -> None:
     """Вызывается только для человека из списка тревог в личке (проверяет диспетчер)."""
     key = (callback.get("data") or "")[2:]
     message = callback.get("message") or {}
+    if callback.get("data") == MUTED_DATA:
+        await bot.telegram.answer_callback(callback["id"], MUTED_NOTE)
+        return
     if not key or access.user_id is None:
         await bot.telegram.answer_callback(callback["id"], STALE_BUTTON)
         return
     until = bot.clock() + MUTE_SECONDS
     await bot.store.set_mute(key, until, access.user_id)
     clock = datetime.fromtimestamp(until, ZoneInfo(bot.config.timezone)).strftime("%H:%M")
-    text = f"{esc(message.get('text') or '')}\n🔕 заглушено до {clock}"
-    await bot.edit_and_answer(callback["id"], access.chat_id, message["message_id"], text, None,
-                              MUTED_NOTE)
+    # Меняем только кнопку: правка текста потеряла бы кастомные эмодзи и разметку.
+    keyboard = [[{"text": f"🔕 Заглушено до {clock}", "callback_data": MUTED_DATA}]]
+    try:
+        await bot.telegram.edit_keyboard(access.chat_id, message["message_id"], keyboard)
+    finally:
+        await bot.telegram.answer_callback(callback["id"], MUTED_NOTE)
 
 
 def install(bot: Bot) -> None:

@@ -211,6 +211,17 @@ class TelegramClient:
             payload["reply_markup"] = markup
         await self._call("editMessageText", payload, chat_id=chat_id)
 
+    async def edit_keyboard(self, chat_id: int, message_id: int,
+                            keyboard: list[list[dict]] | None) -> None:
+        """Сменить только кнопки: текст сообщения (с кастомными эмодзи) не трогаем."""
+        payload: dict[str, Any] = {"chat_id": chat_id, "message_id": message_id,
+                                   "reply_markup": _keyboard_markup(keyboard) or {"inline_keyboard": []}}
+        await self._call("editMessageReplyMarkup", payload, chat_id=chat_id)
+
+    async def send_typing(self, chat_id: int) -> None:
+        """«печатает…» в чате; Telegram держит его ~5 с или до ответа бота."""
+        await self._call("sendChatAction", {"chat_id": chat_id, "action": "typing"}, chat_id=chat_id)
+
     async def answer_callback(self, callback_id: str, text: str | None = None) -> None:
         payload: dict[str, Any] = {"callback_query_id": callback_id}
         if text is not None:

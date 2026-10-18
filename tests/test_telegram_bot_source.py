@@ -153,3 +153,107 @@ def test_top_body_all_mode_is_one_request():
     assert len(seen) == 1
     assert dict(seen[0].url.params) == {
         "mode": "all", "platform": "telegram", "period": "7d", "anomalies": "include", "limit": "50"}
+
+
+# --- свой кэш ответов (решение владельца: человеку — копия до часа) ----------
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def counting_source():
+    clock, answers = Clock(), iter(range(1, 1000))
+    source, seen = source_with(lambda request: httpx.Response(200, json={"n": next(answers)}), clock=clock)
+    return source, seen, clock
+
+
+def test_fresh_copy_is_reused_without_a_request():
+    source, seen, clock = counting_source()
+    first = asyncio.run(source.dashboard())
+    clock.now += 599
+    assert asyncio.run(source.dashboard()) == first == {"n": 1}
+    assert len(seen) == 1
+
+
+def test_background_jobs_do_not_take_stale_copies():
+    source, seen, clock = counting_source()
+    asyncio.run(source.dashboard())
+    clock.now += 1800
+    assert asyncio.run(source.dashboard()) == {"n": 2}
+    assert len(seen) == 2
+
+
+def test_person_gets_stale_copy_at_once_and_it_refreshes_after_the_reply():
+    from telegram_bot.source import person_request
+    source, seen, clock = counting_source()
+
+    async def scenario():
+        await source.dashboard()
+        clock.now += 1800
+        with person_request():
+            answer = await source.dashboard()
+            # Внутри команды фонового запроса ещё нет: он идёт после ответа.
+            assert len(seen) == 1
+        await asyncio.gather(*source._tasks)
+        return answer
+
+    assert asyncio.run(scenario()) == {"n": 1}
+    assert len(seen) == 2
+    assert asyncio.run(source.dashboard()) == {"n": 2}  # обновлённая копия свежая
+
+
+def test_copy_older_than_an_hour_is_fetched_and_cold_hook_runs_once():
+    from telegram_bot.source import person_request
+    source, seen, clock = counting_source()
+    cold: list[int] = []
+
+    async def on_cold():
+        cold.append(1)
+
+    async def scenario():
+        await source.dashboard()
+        clock.now += 3601
+        with person_request(on_cold):
+            first = await source.dashboard()
+            await source.forecast()
+        return first
+
+    assert asyncio.run(scenario()) == {"n": 2}
+    assert cold == [1]
+    assert len(seen) == 3
+
+
+def test_failed_refresh_keeps_the_copy():
+    from telegram_bot.source import person_request
+    clock, state = Clock(), {"down": False}
+
+    def handler(request):
+        return httpx.Response(503) if state["down"] else httpx.Response(200, json={"ok": 1})
+
+    source, seen = source_with(handler, clock=clock)
+
+    async def scenario():
+        await source.dashboard()
+        clock.now += 1800
+        state["down"] = True
+        with person_request():
+            await source.dashboard()
+        await asyncio.gather(*source._tasks)
+        with person_request():
+            return await source.dashboard()
+
+    assert asyncio.run(scenario()) == {"ok": 1}
+
+
+def test_cache_is_bounded():
+    from telegram_bot import source as module
+    source, seen, clock = counting_source()
+    for institution in range(module.CACHE_ENTRIES + 5):
+        asyncio.run(source.anomalous(institution=institution, period="7d"))
+    assert len(source._cache) == module.CACHE_ENTRIES
+    asyncio.run(source.anomalous(institution=0, period="7d"))  # самый старый вытеснен
+    assert len(seen) == module.CACHE_ENTRIES + 6
