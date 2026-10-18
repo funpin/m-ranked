@@ -472,7 +472,7 @@ def test_digest_does_not_mutate_inputs_and_is_stable():
 def test_help_lists_all_word_kinds():
     text = render_help(alerts=False, admin=False)
     for word in ("кто", "площадка", "период", "сколько", "/top все тг", "/top мфти месяц",
-                 "/week", "/digest", "/id"):
+                 "/week", "/digest", "/id", "мфти", "telegram"):
         assert word in text
     assert "/status" not in text and "/settings" not in text
     assert "/status" in render_help(alerts=True, admin=False)
