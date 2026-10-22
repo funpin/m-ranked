@@ -6,6 +6,8 @@
 --        -v cal_until=2026-09-24 -v available_before='2026-09-27 00:00+00' \
 --        -f operations/sql/mature-reference-endpoints.sql | gzip > endpoints.jsonl.gz
 --
+-- Точки читаются из ingest.publication_metric_point: после сжатия истории (0059)
+-- ранние замеры поста лежат упакованными, в сырой таблице их нет.
 -- Даты — UTC, правые границы исключены. Далее: python -m anomaly_analysis.tools.renew_mature_reference.
 BEGIN READ ONLY;
 SET LOCAL statement_timeout='60s';
@@ -29,11 +31,11 @@ posts AS (
     SELECT observed_at,age_seconds,views_count AS v,reactions_count AS r,
      views_quality::text AS vq,reactions_quality::text AS rq,
      interval_uncertain AS uncertain,created_at
-    FROM ingest.publication_metric_snapshot raw
+    FROM ingest.publication_metric_point raw
     WHERE raw.publication_id=p.id AND raw.published_month=date_trunc('month',p.published_at)::date
       AND raw.age_seconds BETWEEN (h.hours-h.slack)*3600 AND h.hours*3600
       AND NOT raw.synthetic AND raw.created_at<p.available_before AND NOT EXISTS (
-      SELECT 1 FROM ingest.publication_metric_snapshot successor
+      SELECT 1 FROM ingest.publication_metric_point successor
       WHERE successor.published_month=raw.published_month AND successor.publication_id=raw.publication_id
        AND successor.sampling_bucket=raw.sampling_bucket AND successor.correction_sequence>raw.correction_sequence
        AND successor.created_at<p.available_before)
@@ -47,10 +49,10 @@ posts AS (
     SELECT DISTINCT ON(raw.sampling_bucket) raw.observed_at,
       CASE WHEN raw.views_quality='exact' AND NOT raw.interval_uncertain THEN raw.views_count END AS v,
       CASE WHEN raw.reactions_quality='exact' AND NOT raw.interval_uncertain THEN raw.reactions_count END AS r
-    FROM ingest.publication_metric_snapshot raw
+    FROM ingest.publication_metric_point raw
     WHERE raw.publication_id=p.id AND raw.published_month=date_trunc('month',p.published_at)::date
      AND raw.age_seconds BETWEEN 0 AND 72*3600 AND NOT raw.synthetic AND raw.created_at<p.available_before AND NOT EXISTS (
-      SELECT 1 FROM ingest.publication_metric_snapshot successor
+      SELECT 1 FROM ingest.publication_metric_point successor
       WHERE successor.published_month=raw.published_month AND successor.publication_id=raw.publication_id
        AND successor.sampling_bucket=raw.sampling_bucket AND successor.correction_sequence>raw.correction_sequence
        AND successor.created_at<p.available_before)
