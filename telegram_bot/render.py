@@ -205,6 +205,11 @@ def _post_link(item: dict[str, Any]) -> str:
     return kind
 
 
+def post_head(item: dict[str, Any]) -> str:
+    """Площадка нашим значком и ссылка на слове типа поста: «🔵 фото»."""
+    return f"{_platform_icon(item.get('platform'))} {_post_link(item)}"
+
+
 def _numbers(item: dict[str, Any], views: bool) -> list[str]:
     parts = []
     if item.get("interactionIndex") is not None:
@@ -228,8 +233,7 @@ def _mixed_line(number: int, item: dict[str, Any], our_id: int | None, views: bo
     # our_id задан только там, где мы среди других (/top все); в «Других вузах» нас нет.
     if our_id is not None and item.get("institutionLegacyId") == our_id:
         name += " (мы)"
-    post = f"{_platform_icon(item.get('platform'))} {_post_link(item)}"
-    return " · ".join([name, post, *_numbers(item, views)])
+    return " · ".join([name, post_head(item), *_numbers(item, views)])
 
 
 def _mixed_list(items: list[dict[str, Any]], count: int, our_id: int | None,

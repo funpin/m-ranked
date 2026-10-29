@@ -62,6 +62,11 @@ async def announce_dedup_and_level_up(env) -> None:
     assert await store.mark_announced("anomaly", pid, 2) is True
     assert await store.has_announced_any("spike") is True
     assert await store.has_announced_any("digest") is False
+    # Забыть можно только тот уровень, что отмечен: чужую отметку не снимаем.
+    await store.forget_announced("spike", pid, 2)
+    assert await store.mark_announced("spike", pid, 3) is False
+    await store.forget_announced("spike", pid, 3)
+    assert await store.mark_announced("spike", pid, 1) is True
 
 
 async def take_held_empties(env) -> None:

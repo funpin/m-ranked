@@ -56,6 +56,7 @@ class Store(Protocol):
     async def remove_recipient(self, chat_id: int) -> None: ...
     async def migrate_chat(self, old: int, new: int) -> None: ...
     async def mark_announced(self, kind: str, publication_id: str, level: int) -> bool: ...
+    async def forget_announced(self, kind: str, publication_id: str, level: int) -> None: ...
     async def has_announced_any(self, kind: str) -> bool: ...
     async def set_mute(self, key: str, until: float, by: int) -> None: ...
     async def muted_until(self, key: str) -> float | None: ...
@@ -111,6 +112,11 @@ class MemoryStore:
             return False
         self._announced[key] = (level, time.time())
         return True
+
+    async def forget_announced(self, kind: str, publication_id: str, level: int) -> None:
+        key = (kind, str(publication_id))
+        if self._announced.get(key, (None,))[0] == level:
+            del self._announced[key]
 
     async def has_announced_any(self, kind: str) -> bool:
         return any(announced_kind == kind for announced_kind, _ in self._announced)
@@ -285,6 +291,12 @@ class PostgresStore:
             "WHERE bot_announced.level < EXCLUDED.level RETURNING 1",
             {"kind": kind, "pid": str(publication_id), "level": level}, retry=False)
         return bool(rows)
+
+    async def forget_announced(self, kind: str, publication_id: str, level: int) -> None:
+        await self._rows(
+            "DELETE FROM ops_and_admin.bot_announced "
+            "WHERE kind = %(kind)s AND publication_id = %(pid)s::uuid AND level = %(level)s",
+            {"kind": kind, "pid": str(publication_id), "level": level})
 
     async def has_announced_any(self, kind: str) -> bool:
         return bool(await self._value(
