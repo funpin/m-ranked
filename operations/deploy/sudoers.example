@@ -1,0 +1,4 @@
+# /etc/sudoers.d/m-ranked-deploy — ключ выкатки запускает от root ровно один
+# скрипт; его аргументы проверяют deploy-entrypoint и сам deploy-release.
+Defaults:m-ranked-deploy !requiretty, env_reset
+m-ranked-deploy ALL=(root) NOPASSWD: /usr/local/libexec/m-ranked/deploy-release
