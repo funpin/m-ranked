@@ -140,8 +140,11 @@ operations/scripts/release-preflight.sh <sha, выкаченный сейчас>
 gh attestation verify --owner funpin sbom-image-api.json
 ```
 
-Оба задания обязаны быть required checks для `alpha` и релизной ветки
-(Settings → Rules → Rulesets). Без этого ворота обходятся слиянием.
+Оба задания входят в `release-gate` — обязательную проверку `main`
+(`operations/github/rulesets/main.json`). Выкатка выпуска из GitHub Actions
+описана в [`operations/deploy/README.md`](../deploy/README.md); ручная
+процедура ниже нужна для Сервера 1 и для шагов, которые выкатка не делает
+сама (миграции `-- deploy: manual`, юниты, nginx, env).
 
 ## 1. Точка отката
 
