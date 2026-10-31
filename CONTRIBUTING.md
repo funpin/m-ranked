@@ -59,8 +59,12 @@ Commits should explain why a change exists and keep one coherent concern.
   the release notes.
 
 The ruleset cannot say *from which* branch a PR may come, so
-`.github/workflows/policy.yml` checks it. It runs as `pull_request_target`
-from the target branch, so a PR cannot weaken the check it is judged by.
+`.github/workflows/policy.yml` checks it. A PR could edit that check, or any
+workflow, to judge itself more leniently, so `.github/`, `operations/deploy/`
+and `operations/github/` are listed in `.github/CODEOWNERS` and both rulesets
+require code-owner approval for them; ordinary task PRs need no review.
+(`pull_request_target` is not an option: it always runs the default branch's
+workflow, and GitHub disables it for public repositories by default.)
 
 ## Checks
 
