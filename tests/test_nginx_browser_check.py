@@ -28,6 +28,11 @@ IMAGE = "nginx:1.26.3"
 CHROME = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
           "Chrome/110.0.0.0 Safari/537.36")
 GOOGLE = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+CRAWLER = ("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Reflectionbot/1.0; "
+           "+https://reflection.ai/bot) Chrome/151.0.0.0 Safari/537.36")
+META_INDEXER = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/145.0.0.0 Safari/537.36 (compatible; meta-webindexer/1.1 "
+                "(+https://developers.facebook.com/docs/sharing/webmasters/crawler))")
 BITS = 10
 
 
@@ -325,3 +330,21 @@ def test_foreign_visitors_with_cookie_share_a_cold_page_limit(site):
         get(f"{base}/publications/home-{i}", cookie=cookie)
         time.sleep(0.55)
     assert _foreign_rejections(container) == seen
+
+
+def test_crawlers_get_a_page_budget_and_search_engines_keep_their_own(site):
+    """31.10.2026 обход meta-webindexer на четырёх общих рендерах занял оба ядра.
+    Теперь у прочих роботов 12 холодных страниц в минуту (всплеск 5) — сверх
+    этого сразу 503 с Retry-After, а поисковики выдачи считаются отдельно."""
+    base, _, _ = site
+    answers = [get(f"{base}/publications/crawl-{i}", agent=CRAWLER) for i in range(10)]
+    codes = [status for status, _, _ in answers]
+    assert codes[:6] == [200] * 6 and codes[-1] == 503, codes
+    assert answers[-1][1].get("Retry-After") == "120"
+    assert [get(f"{base}/publications/search-{i}", agent=GOOGLE)[0] for i in range(5)] == [200] * 5
+
+
+def test_meta_ai_search_indexer_is_closed_like_other_ai_search(site):
+    base, _, _ = site
+    assert get(base + "/publications/meta-1", agent=META_INDEXER)[0] == 403
+    assert get(base + "/robots.txt", agent=META_INDEXER)[0] == 200

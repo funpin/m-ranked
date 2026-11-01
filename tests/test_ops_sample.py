@@ -116,6 +116,21 @@ def test_build_measures_sizes_on_schedule(tmp_path: Path) -> None:
     json.dumps(first)
 
 
+def test_sample_carries_open_alerts_and_only_new_events(tmp_path: Path) -> None:
+    status = tmp_path / "status.json"
+    event = {"key": "bots", "kind": "open", "urgent": True, "text": "роботы", "since": 900.0, "at": 900.0}
+    status.write_text(json.dumps({"version": 1, "at": 990.0, "active": [event], "recent": [event]}))
+    state: dict = {}
+    first = ops_sample.read_alerts(status, state, 1000.0)
+    assert first == {"at": 990.0, "active": [event], "events": [event]}
+    # Следующий снимок того же события не повторяет: лента собирается из строк.
+    assert ops_sample.read_alerts(status, state, 1060.0)["events"] == []
+    # Сводка устарела — тревоги не работают.
+    assert ops_sample.read_alerts(status, state, 990.0 + ops_sample.ALERTS_STALE_SECONDS + 1) is None
+    status.write_text("{")
+    assert ops_sample.read_alerts(status, state, 1000.0) is None
+
+
 def test_collection_window_starts_at_each_platform_mark() -> None:
     calls = []
 

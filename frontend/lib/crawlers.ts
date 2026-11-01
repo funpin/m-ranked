@@ -6,7 +6,7 @@
  */
 export const AI_CRAWLERS = [
   "GPTBot", "OAI-SearchBot", "ClaudeBot", "Claude-SearchBot", "anthropic-ai", "CCBot", "Amazonbot",
-  "Bytespider", "meta-externalagent", "FacebookBot", "PerplexityBot", "Google-Extended", "Applebot-Extended",
+  "Bytespider", "meta-externalagent", "meta-webindexer", "FacebookBot", "PerplexityBot", "Google-Extended", "Applebot-Extended",
   "cohere-ai", "cohere-training-data-crawler", "Diffbot", "ImagesiftBot", "Omgilibot", "YouBot", "Timpibot",
   "AI2Bot", "PanguBot", "Kangaroo Bot", "Sidetrade indexer bot", "img2dataset", "webzio-extended",
 ] as const;

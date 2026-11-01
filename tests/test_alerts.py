@@ -18,7 +18,8 @@ LIMITS = {"backup_hours": 36, "disk_free_bytes": 6 * 10**9, "load15": 6.0, "inge
           "analysis_lag_seconds": 3 * 3600, "docker_bytes": 5 * 10**9, "human_5xx": 20,
           "bot_503_share": 0.5, "misses_per_second": 20, "hit_ratio": 0.3,
           "cpu_percent": 90, "cpu_minutes": 45, "page_p95_seconds": 3.0, "memory_percent": 90,
-          "swap_bytes": 10**9, "disk_urgent_share": 0.07, "bots_per_minute": 150, "bot_minutes": 5}
+          "swap_bytes": 10**9, "disk_urgent_share": 0.07, "bots_per_minute": 150, "bot_minutes": 5,
+          "bot_renders_per_minute": 20, "bot_render_minutes": 10}
 
 
 def line(path="/", status=200, klass="human", cache="HIT"):
@@ -94,7 +95,7 @@ def test_thresholds_fire_on_the_problems_they_name():
     values['mranked_transfer_ingest_last_accepted_unixtime{producer="server-1/default"}'] = now - 3600
     traffic = alerts.empty_bucket()
     for item in ([line("/p", 503, "ai_training", "MISS")] * 150 + [line("/q", 200, "crawler", "MISS")] * 7000
-                 + [line("/", 502, "human", "MISS")] * 25):
+                 + [line("/", 502, "human", "MISS")] * 25 + [line("/h", 200, "human", "MISS")] * 300):
         alerts.add(traffic, alerts.parse_line(item))
     firing = {rule.key for rule in alerts.evaluate(now, traffic, values, **arguments) if rule.firing}
     assert firing == {"backup", "disk", "load", "units", "ingest", "human_5xx", "misses", "hit_ratio"}
@@ -314,6 +315,64 @@ def test_bots_surge_needs_five_minutes():
     assert "bots" not in firing_rules(NOW, bots_per_minute=[151] * 4)
 
 
+def test_bots_surge_also_fires_on_cold_renders():
+    """31.10.2026: 65–75 запросов роботов в минуту — ниже порога по запросам, но
+    почти все мимо кэша по 2 с, и оба ядра были заняты полтора часа."""
+    rules = firing_rules(NOW, bots_per_minute=[70] * 5, bot_renders_per_minute=[60] * 10)
+    assert rules["bots"].urgent is True and "холодных страниц" in rules["bots"].text
+    assert "bots" not in firing_rules(NOW, bots_per_minute=[70] * 5, bot_renders_per_minute=[60] * 9 + [19])
+    assert "bots" not in firing_rules(NOW, bots_per_minute=[70] * 5, bot_renders_per_minute=[60] * 9)
+
+
+def test_only_rendered_bot_misses_cost_and_hit_ratio_counts_people():
+    traffic = alerts.empty_bucket()
+    for item in ([line("/p", 200, "crawler", "MISS")] * 3 + [line("/p", 503, "crawler", "MISS")] * 4
+                 + [line("/p", 200, "search", "HIT")] + [line("/h", 200, "human", "HIT")] * 2
+                 + [line("/h", 200, "human", "MISS")]):
+        alerts.add(traffic, alerts.parse_line(item))
+    assert traffic["bot_renders"] == 3 and traffic["bot_requests"] == 8
+    assert (traffic["hits"], traffic["cacheable"]) == (2, 3)
+    assert traffic["misses"] == {"crawler": 7, "human": 1}
+    # Обход мимо кэша при людях, которым кэш отвечает, тревогу доли не открывает.
+    crawl = alerts.empty_bucket()
+    for item in [line("/p", 200, "crawler", "MISS")] * 7000 + [line("/h", 200, "human", "HIT")] * 300:
+        alerts.add(crawl, alerts.parse_line(item))
+    assert "hit_ratio" not in firing_rules(NOW, crawl)
+
+
+def test_held_alert_keeps_its_current_text_for_the_panel():
+    state = {}
+    def run(load, at):
+        values, arguments = healthy(NOW, inputs=node_inputs(load1Mean15m=load, cpus=1))
+        rules = alerts.evaluate(at, alerts.empty_bucket(), values, **arguments)
+        return [(event.key, event.kind) for event in alerts.transitions(rules, state, at)]
+    assert run(3.1, NOW) == [("node_server-1_load", "open")]
+    assert run(2.7, NOW + 60) == []          # между порогами — тревога держится
+    assert state["active"]["node_server-1_load"]["text"].startswith("Сервер 1 · сбор: load average 2.7")
+    assert run(1.9, NOW + 120) == [("node_server-1_load", "resolve")]
+    assert run(2.7, NOW + 180) == []          # закрытая между порогами не открывается
+
+
+def test_status_lists_open_alerts_and_the_last_day_of_events(tmp_path):
+    state, now = {}, NOW
+    for event in alerts.transitions([alerts.Rule("disk", True, "мало места", urgent=True)], state, now):
+        alerts.remember(state, event, now)
+    for event in alerts.transitions([alerts.Rule("disk", True, "мало места")], state, now + alerts.REPEAT_SECONDS):
+        alerts.remember(state, event, now + alerts.REPEAT_SECONDS)   # напоминание не событие
+    for event in alerts.transitions([alerts.Rule("load", True, "нагрузка")], state, now + 7 * 3600):
+        alerts.remember(state, event, now + 7 * 3600)
+    path = tmp_path / alerts.STATUS_FILE
+    alerts.write_status(path, state, "Сервер 2", now + 7 * 3600)
+    assert path.stat().st_mode & 0o777 == 0o644
+    data = json.loads(path.read_text())
+    assert [(item["key"], item["text"], item["since"]) for item in data["active"]] == [
+        ("disk", "мало места", now), ("load", "нагрузка", now + 7 * 3600)]
+    assert [(item["key"], item["kind"]) for item in data["recent"]] == [("disk", "open"), ("load", "open")]
+    # Через сутки старые события выпадают.
+    later = now + alerts.RECENT_SECONDS + 1
+    assert [item["key"] for item in alerts.status(state, "Сервер 2", later)["recent"]] == ["load"]
+
+
 def test_existing_urgency():
     now = NOW
     values, arguments = healthy(now, failed=["m-ranked-x.service"], disk_free=1)
@@ -326,7 +385,7 @@ def test_existing_urgency():
     values["mranked_host_docker_reclaimable_bytes"] = 9e9
     traffic = alerts.empty_bucket()
     for item in ([line("/p", 503, "ai_training", "MISS")] * 9000 + [line("/q", 200, "crawler", "MISS")] * 7000
-                 + [line("/", 502, "human", "MISS")] * 25):
+                 + [line("/", 502, "human", "MISS")] * 25 + [line("/h", 200, "human", "MISS")] * 300):
         alerts.add(traffic, alerts.parse_line(item))
     urgent = {rule.key: rule.urgent for rule in alerts.evaluate(now, traffic, values, **arguments) if rule.firing}
     for key in ("units", "human_5xx"):

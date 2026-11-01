@@ -237,7 +237,43 @@ def checks(now: float, sampled_at: float | None, latest: dict[str, Any] | None,
     errors = sum(((row["sample"].get("traffic") or {}).get("human5xx", 0)) for row in recent)
     result.append(_check("errors", "Ошибки для людей", "ok" if errors < 20 else "warn" if errors < 100 else "fail",
                          f"{errors} ответов 5xx за час"))
+    # Открытые тревоги Telegram — их собственным счётом: часть правил (роботы,
+    # процессор, Сервер 1, эталон MAX) проверки выше не повторяют, и 01.11.2026
+    # панель писала «всё в порядке» при тревоге, открытой с 22.10.
+    if "alerts" not in latest:
+        return result
+    alerts = latest.get("alerts")
+    active = [item for item in (alerts or {}).get("active") or [] if isinstance(item, dict)]
+    result.append(_check(
+        "alerts", "Тревоги",
+        "unknown" if alerts is None else "fail" if any(item.get("urgent") for item in active)
+        else "warn" if active else "ok",
+        "сводки тревог нет" if alerts is None else "; ".join(str(item.get("text", "")) for item in active)
+        if active else "открытых тревог нет"))
     return result
+
+
+ALERT_EVENTS_LIMIT = 100
+
+
+def alerts(latest: dict[str, Any] | None, period: list[dict[str, Any]], since: float) -> dict[str, Any] | None:
+    """Открытые тревоги из последнего снимка и открытия/закрытия за период —
+    новыми первыми. Каждый снимок несёт только события после предыдущего."""
+    current = (latest or {}).get("alerts")
+    if not isinstance(current, dict):
+        return None
+    def item(entry: dict[str, Any], *fields: str) -> dict[str, Any]:
+        result = {"key": str(entry.get("key", "")), "text": str(entry.get("text", "")),
+                  "urgent": bool(entry.get("urgent")), "since": _iso(_number(entry.get("since")))}
+        if "kind" in fields:
+            result["kind"] = "resolve" if entry.get("kind") == "resolve" else "open"
+            result["at"] = _iso(_number(entry.get("at")))
+        return result
+    events = [entry for row in period for entry in (row["sample"].get("alerts") or {}).get("events") or []
+              if isinstance(entry, dict) and (_number(entry.get("at")) or 0) >= since]
+    events.sort(key=lambda entry: _number(entry.get("at")) or 0, reverse=True)
+    return {"active": [item(entry) for entry in current.get("active") or [] if isinstance(entry, dict)],
+            "events": [item(entry, "kind") for entry in events[:ALERT_EVENTS_LIMIT]]}
 
 
 def backups(latest: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -279,8 +315,10 @@ def status_summary(rows: list[dict[str, Any]], now: float, threshold: Callable[[
         known = [moment for moment in moments if isinstance(moment, (int, float))]
         freshness[platform] = (max(known) if known else None, threshold(platform))
     recent = [row for row in rows if row["observed_at"].timestamp() >= now - 3600]
+    period = period if period is not None else period_rows(rows, now, span)
     return {
         "sampledAt": latest["observed_at"].isoformat() if latest else None,
         "checks": checks(now, sampled_at, latest["sample"] if latest else None, recent, freshness),
-        "collection": collection(period if period is not None else period_rows(rows, now, span)),
+        "collection": collection(period),
+        "alerts": alerts(latest["sample"] if latest else None, period, now - span),
     }
