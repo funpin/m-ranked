@@ -788,7 +788,8 @@ class PostgresCollectorRepository:
                                    identity.id
                           ) AS identity_external_ids,
                           latest.observed_at AS latest_observed_at,
-                          latest.sampling_bucket AS latest_sampling_bucket
+                          latest.sampling_bucket AS latest_sampling_bucket,
+                          polled.scheduled_at AS last_polled_at
                      FROM ingest.publication AS publication
                      JOIN LATERAL (
                          SELECT identity.external_id,
@@ -810,6 +811,16 @@ class PostgresCollectorRepository:
                            FROM {self._latest_point_sql("publication.id", "date_trunc('month', publication.published_at)::date")} AS snapshot
                           WHERE (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
                      ) AS latest ON true
+                     -- Последний успешный опрос: снимок без изменений не
+                     -- пишется, а отметка присутствия обновляется каждый раз.
+                     LEFT JOIN LATERAL (
+                         SELECT run.scheduled_at
+                           FROM ingest.publication_availability_state AS state
+                           JOIN ingest.collection_run AS run
+                             ON run.id=state.last_collection_run_id
+                          WHERE state.publication_id=publication.id
+                            AND state.last_probe_outcome='present'
+                     ) AS polled ON true
                     WHERE publication.primary_account_id=%s
                       AND publication.deleted_at IS NULL
                       AND publication.published_at >= %s
@@ -855,6 +866,11 @@ class PostgresCollectorRepository:
                 latest_sampling_bucket=(
                     int(_row_value(row, "latest_sampling_bucket", 7))
                     if _row_value(row, "latest_sampling_bucket", 7) is not None
+                    else None
+                ),
+                last_polled_at=(
+                    utc(_row_value(row, "last_polled_at", 8), "run.scheduled_at")
+                    if _row_value(row, "last_polled_at", 8) is not None
                     else None
                 ),
             )

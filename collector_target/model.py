@@ -310,6 +310,11 @@ class TrackedPublication:
     identity_external_ids: tuple[str, ...]
     latest_observed_at: datetime | None
     latest_sampling_bucket: int | None
+    # Плановое начало цикла, в котором публикацию последний раз видели живой.
+    # Снимок пишется только при изменении значений, поэтому latest_observed_at
+    # у старого поста отстаёт на часы, и без этой отметки он считался
+    # просроченным в каждом цикле.
+    last_polled_at: datetime | None = None
 
     @property
     def cursor(self) -> str:
