@@ -608,6 +608,24 @@ def test_node_rules():
     assert "node_server-1_silent" not in firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 29 * 60))
 
 
+def test_node_load_alert_has_hysteresis():
+    """Открывается выше трёх ядер, закрывается только ниже двух: среднее около
+    порога не открывает и не закрывает тревогу каждые несколько минут."""
+    state = {}
+    limits = {"disk_free_bytes": 0, "disk_urgent_share": 0, "memory_percent": 100}
+
+    def step(load: float, minute: int) -> list[tuple[str, str]]:
+        nodes = node_inputs(load1Mean15m=load, cpus=1)["nodes"]
+        rules = [rule for rule in alerts.node_rules(NOW, nodes, limits) if rule.key.endswith("_load")]
+        return [(event.kind, event.text) for event in alerts.transitions(rules, state, NOW + 60 * minute)]
+
+    assert step(2.9, 0) == []
+    assert step(3.1, 1) == [("open", "Сервер 1 · сбор: load average 3.1 в среднем за 15 мин на 1 яд.")]
+    assert step(2.9, 2) == [] and step(3.2, 3) == [] and step(2.0, 4) == []
+    assert step(1.9, 5) == [("resolve", "Сервер 1 · сбор: нагрузка в порядке")]
+    assert step(2.9, 6) == []
+
+
 def test_silent_node_suppresses_its_stale_resources():
     rules = firing_rules(NOW, inputs=node_inputs(observedAt=NOW - 31 * 60, diskFree=1, load1Mean15m=50.0))
     assert set(rules) == {"node_server-1_silent"}

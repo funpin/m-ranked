@@ -44,6 +44,10 @@ FAILURE_SHARE = 0.2  # доля ошибок за час выше этой
 FAILURE_MIN_RESULTS = 20  # меньше результатов за час — долю не проверяем
 NODE_SILENT_SECONDS = 30 * 60  # узел не присылал снимка ресурсов
 NODE_LOAD_FACTOR = 3  # load1 в среднем за 15 минут выше стольких ядер
+# Открытая тревога нагрузки узла закрывается, только когда среднее опустится
+# ниже стольких ядер. Без зазора среднее около порога (на Сервере 1 оно
+# держалось у 3,0) открывало и закрывало тревогу каждые несколько минут.
+NODE_LOAD_CLEAR_FACTOR = 2
 INPUTS_MAX_AGE = 300  # файл ops-sample старше — не верим (пишется раз в минуту)
 INPUTS_PATH = "/var/lib/m-ranked/ops-sample/alert-inputs.json"
 
@@ -59,6 +63,9 @@ class Rule:
     firing: bool
     text: str
     urgent: bool = False
+    # Гистерезис: уже открытая тревога не закрывается, пока hold истинно,
+    # хотя порог открытия firing уже не превышен.
+    hold: bool = False
 
 
 @dataclass(frozen=True)
@@ -447,9 +454,10 @@ def node_rules(now: float, nodes: dict, limits: dict) -> list[Rule]:
                           f"{name}: память занята {used:.0%}" if used is not None else f"{name}: память в порядке"))
         load1, cpus = node.get("load1Mean15m"), node.get("cpus")
         loaded = load1 is not None and bool(cpus) and load1 > NODE_LOAD_FACTOR * cpus
+        holding = load1 is not None and bool(cpus) and load1 >= NODE_LOAD_CLEAR_FACTOR * cpus
         rules.append(Rule(prefix + "load", loaded,
-                          f"{name}: load average {load1:.1f} в среднем за 15 мин на {cpus} яд." if loaded
-                          else f"{name}: нагрузка в порядке"))
+                          f"{name}: load average {load1:.1f} в среднем за 15 мин на {cpus} яд." if holding
+                          else f"{name}: нагрузка в порядке", hold=holding))
     return rules
 
 
@@ -473,7 +481,8 @@ def suppress(rules: list[Rule]) -> list[Rule]:
         if key.startswith("node_") and key.endswith("_silent"):
             prefix = key[:-len("silent")]
             muted.update(rule.key for rule in rules if rule.key.startswith(prefix) and rule.key != key)
-    return [replace(rule, firing=False) if rule.firing and rule.key in muted else rule for rule in rules]
+    return [replace(rule, firing=False, hold=False) if (rule.firing or rule.hold) and rule.key in muted else rule
+            for rule in rules]
 
 
 def transitions(rules: list[Rule], state: dict, now: float) -> list[Event]:
@@ -485,10 +494,11 @@ def transitions(rules: list[Rule], state: dict, now: float) -> list[Event]:
         if rule.firing and opened is None:
             active[rule.key] = {"since": now, "sent": now}
             events.append(Event(rule.key, "open", rule.urgent, rule.text, now))
-        elif rule.firing and now - opened["sent"] >= REPEAT_SECONDS:
-            opened["sent"] = now
-            events.append(Event(rule.key, "repeat", rule.urgent, rule.text, opened["since"]))
-        elif not rule.firing and opened is not None:
+        elif opened is not None and (rule.firing or rule.hold):
+            if now - opened["sent"] >= REPEAT_SECONDS:
+                opened["sent"] = now
+                events.append(Event(rule.key, "repeat", rule.urgent, rule.text, opened["since"]))
+        elif opened is not None:
             del active[rule.key]
             events.append(Event(rule.key, "resolve", rule.urgent, rule.text, opened["since"]))
     return events
