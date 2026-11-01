@@ -111,11 +111,16 @@ config_delta() {
 }
 
 wait_healthy() {
-  local commit="$1"
+  local commit="$1" html
   for _ in $(seq 1 40); do
+    # Страница — в переменную, а не в «curl | grep -q»: grep -q закрывает канал
+    # на первом совпадении, curl получает EPIPE (код 23), и под pipefail
+    # проверка проваливалась при верной странице. 01.11.2026 так был снят
+    # исправный выпуск v2026.11.0.
     if curl -fsS --max-time 10 "$MRANKED_API_URL/api/v1/health/live" >/dev/null 2>&1 \
         && curl -fsS --max-time 10 "$MRANKED_API_URL/api/v1/health/ready" >/dev/null 2>&1 \
-        && curl -fsS --max-time 20 "$MRANKED_WEB_URL/" 2>/dev/null | grep -q "dpl=$commit"; then
+        && html="$(curl -fsS --max-time 20 "$MRANKED_WEB_URL/" 2>/dev/null)" \
+        && [[ "$html" == *"dpl=$commit"* ]]; then
       return 0
     fi
     sleep 3
