@@ -1,0 +1,112 @@
+name: Deploy
+# Выкатка выпуска на Сервер 2. Вызывается из release.yml после публикации
+# выпуска или вручную (повтор, откат на прежний выпуск).
+#
+# Ворота:
+# - окружение production: ждёт одобрения ответственного (Settings →
+#   Environments), пускает только теги v*; секреты доступа живут только там;
+# - артефакт проверяется дважды: провенанс GitHub здесь и SHA-256 на сервере;
+# - ключ на сервере принудительно вызывает один скрипт выкатки
+#   (operations/deploy/README.md) — ни оболочки, ни других команд;
+# - новые миграции и изменения конфигурации сервера скрипт без явного флага
+#   не трогает: останавливается до переключения и печатает, что нужно.
+# Адреса и ключи — только в секретах окружения, никогда в репозитории.
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      apply_migrations:
+        type: boolean
+        default: false
+      config_reviewed:
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Выпуск vГГГГ.М.N (прежний — это откат)'
+        required: true
+        type: string
+      apply_migrations:
+        description: 'Применить новые миграции выпуска (просмотрены в PR)'
+        type: boolean
+        default: false
+      config_reviewed:
+        description: 'Изменения юнитов/nginx/env выпуска уже применены на сервере'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: https://m.funpin.org
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      VERSION: ${{ inputs.version }}
+      APPLY_MIGRATIONS: ${{ inputs.apply_migrations && 'yes' || 'no' }}
+      CONFIG_REVIEWED: ${{ inputs.config_reviewed && 'yes' || 'no' }}
+    steps:
+      - name: Release exists and was built by this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^v20[0-9]{2}\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)$ ]] || {
+            echo "::error::версия '$VERSION' не vГГГГ.М.N"; exit 1; }
+          gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern "m-ranked-$VERSION.tar.gz" --pattern SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+          gh attestation verify "m-ranked-$VERSION.tar.gz" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+          echo "DIGEST=$(cut -d' ' -f1 SHA256SUMS)" >> "$GITHUB_ENV"
+      - name: Deploy through the server's forced command
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            [ -n "${!name}" ] || { echo "::error::секрет $name не задан в окружении production"; exit 1; }
+          done
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          # Сервер выполняет только свой скрипт; строка ниже — его аргументы.
+          ssh -i ~/.ssh/deploy_key -p "${DEPLOY_PORT:-22}" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 -o ServerAliveInterval=30 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "deploy $VERSION $DIGEST migrations=$APPLY_MIGRATIONS config=$CONFIG_REVIEWED"
+      # Сборку (?dpl=<commit>) сверяет скрипт на сервере по петле: холодную
+      # публичную страницу может перехватить браузерная проверка от ботов.
+      - name: Public API answers from outside
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 20); do
+            if curl -fsS --max-time 20 https://m.funpin.org/api/v1/health/live >/dev/null; then
+              echo "m.funpin.org отвечает после выкатки $VERSION"; exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::публичный API не отвечает после выкатки"
+          exit 1
+      - if: always()
+        run: rm -f ~/.ssh/deploy_key

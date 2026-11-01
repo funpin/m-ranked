@@ -10,7 +10,8 @@ Environment=TZ=Europe/Moscow
 EnvironmentFile=-/etc/m-ranked/alerts.env
 ExecStart=/usr/bin/python3 /usr/local/libexec/m-ranked/alerts.py
 StateDirectory=m-ranked/alerts
-StateDirectoryMode=0700
+# 0711: status.json (0644) читает ops-sample, state.json остаётся закрытым.
+StateDirectoryMode=0711
 # Очередь событий для Telegram-бота; каталога нет — события только в журнал.
 ReadWritePaths=-/var/lib/m-ranked/telegram-bot/inbox
 TimeoutStartSec=45s

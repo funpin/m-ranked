@@ -193,10 +193,10 @@ def test_spike_text():
                           url="https://example.org/p?a=1&b=2")]
     run(content.check_spikes(bot))
     text = group_texts(telegram)[0]
-    assert text.startswith(icon("spike") + " Наш пост выстрелил: ")
-    assert '<a href="https://example.org/p?a=1&amp;b=2">ссылка</a>' in text
-    assert "Telegram" in text and "×8,4" in text and "20 ч" in text and "9,2 тыс. просм." in text
-    assert text.endswith(icon("promo") + " продвижение")
+    assert text == (f"{icon('spike')} <b>Наш пост выстрелил</b>\n"
+                    f'{icon("telegram")} <a href="https://example.org/p?a=1&amp;b=2">фото</a>'
+                    f" · ×8,4 · 9,2 тыс. просм. · 20 ч назад · {icon('promo')} продвижение")
+    assert "Telegram" not in text  # площадка — нашим значком, не подписью
     source.spikes = [post("b")]
     run(content.check_spikes(bot))
     assert "продвижение" not in group_texts(telegram)[-1]
@@ -208,13 +208,43 @@ def test_notification_icons_come_from_slots(monkeypatch):
     assert content.anomaly_message(flagged("x", 3), 3).text.startswith("⚠️ ")
     # Когда у слотов появятся id набора, значки станут кастомными без правок текстов.
     fake = "1234567890123456789"
-    for slot in ("spike", "anomaly", "promo"):
+    for slot in ("spike", "anomaly", "promo", "telegram", "vk"):
         monkeypatch.setitem(emoji.SLOTS, slot, (emoji.SLOTS[slot][0], fake))
     spike = content.spike_message(item).text
-    assert spike.startswith(f'<tg-emoji emoji-id="{fake}">🚀</tg-emoji> Наш пост выстрелил: ')
+    assert spike.startswith(f'<tg-emoji emoji-id="{fake}">🚀</tg-emoji> <b>Наш пост выстрелил</b>\n'
+                            f'<tg-emoji emoji-id="{fake}">✈️</tg-emoji> <a ')
     assert spike.endswith(f'<tg-emoji emoji-id="{fake}">📣</tg-emoji> продвижение')
     assert content.anomaly_message(flagged("x", 3), 3).text.startswith(
-        f'<tg-emoji emoji-id="{fake}">⚠️</tg-emoji> Накрутка на нашем посте: ')
+        f'<tg-emoji emoji-id="{fake}">⚠️</tg-emoji> <b>Накрутка на нашем посте</b>\n'
+        f'<tg-emoji emoji-id="{fake}">🔵</tg-emoji> <a ')
+
+
+def test_spike_retried_after_transient_telegram_failure():
+    # 29.10: пост отметили объявленным, отправка упала на временной ошибке — и он пропал.
+    bot, telegram, source, store = make()
+    seeded(store, "spike")
+    source.spikes = [post("a")]
+    telegram.failing.add(GROUP)
+    assert run(content.check_spikes(bot)) == 0
+    assert group_texts(telegram) == []
+    telegram.failing.clear()
+    assert run(content.check_spikes(bot)) == 1      # следующая проверка дослала
+    assert len(group_texts(telegram)) == 1
+    assert run(content.check_spikes(bot)) == 0      # и больше не повторяет
+    assert len(group_texts(telegram)) == 1
+
+
+def test_anomaly_level_up_retried_after_transient_failure():
+    bot, telegram, source, store = make()
+    seeded(store, "anomaly")
+    source.anomalies = [flagged("a", 2)]
+    assert run(content.check_anomalies(bot)) == 1
+    source.anomalies = [flagged("a", 3)]
+    telegram.failing.add(GROUP)
+    assert run(content.check_anomalies(bot)) == 0
+    telegram.failing.clear()
+    assert run(content.check_anomalies(bot)) == 1
+    assert group_texts(telegram)[-1].startswith(icon("anomaly") + " <b>Накрутка на нашем посте</b>")
 
 
 def test_spike_missing_numbers_are_skipped():
@@ -267,13 +297,12 @@ def test_anomaly_levels():
     assert run(content.check_anomalies(bot)) == 1
     assert source.calls.count("anomalous") == 1
     first = group_texts(telegram)[0]
-    assert first.startswith(icon("anomaly") + " Вероятно, накрутка на нашем посте: ")
-    assert "ВКонтакте" in first and "3,4 тыс. просм." in first
-    assert '<a href="https://example.org/a/1">ссылка</a>' in first
+    assert first == (f"{icon('anomaly')} <b>Вероятно, накрутка на нашем посте</b>\n"
+                     f'{icon("vk")} <a href="https://example.org/a/1">фото</a> · 3,4 тыс. просм.')
     source.anomalies = [flagged("a", 3), flagged("b", 1)]
     assert run(content.check_anomalies(bot)) == 1
     second = group_texts(telegram)[1]
-    assert second.startswith(icon("anomaly") + " Накрутка на нашем посте: ")
+    assert second.startswith(icon("anomaly") + " <b>Накрутка на нашем посте</b>\n")
     assert run(content.check_anomalies(bot)) == 0   # дальше без повторов
     assert len(group_texts(telegram)) == 2
     source.anomalies = [flagged("a", 2)]            # спад уровня не объявляется заново

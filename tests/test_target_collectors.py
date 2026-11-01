@@ -938,6 +938,40 @@ def test_refresh_plan_keeps_discovery_budget_and_stops_cursor_at_refresh_limit(
     assert reader.calls == [(NOW - timedelta(hours=960), 4)]
 
 
+def test_refresh_plan_counts_interval_from_last_poll_not_last_changed_snapshot(
+    tmp_path: Path,
+) -> None:
+    # Пост десяти дней опрашивается раз в час. Значения не менялись шесть
+    # часов, поэтому последний снимок старый; срок решает последний опрос.
+    old = NOW - timedelta(days=10)
+    unchanged = NOW - timedelta(hours=6)
+
+    def tracked(suffix: int, polled: datetime | None) -> TrackedPublication:
+        return replace(
+            _tracked(suffix, f"post-{suffix}", latest_observed_at=unchanged),
+            published_at=old,
+            last_polled_at=polled,
+        )
+
+    plan = plan_refresh(
+        tracking=_Tracking((
+            tracked(1, NOW + timedelta(minutes=35)),
+            tracked(2, NOW - timedelta(minutes=55)),
+            tracked(3, None),
+        )),
+        account=account(Platform.TELEGRAM),
+        context=CollectionContext.create(
+            Platform.TELEGRAM, "default", "test-v1",
+            NOW + timedelta(minutes=40), NOW + timedelta(minutes=40),
+        ),
+        settings=target_settings(tmp_path),
+        observed_at=NOW + timedelta(minutes=40),
+        discovered_external_ids=set(),
+    )
+
+    assert [item.external_id for item in plan.publications] == ["post-2", "post-3"]
+
+
 def test_tracking_policy_rejects_single_check_deletion_and_inverted_limits(
     tmp_path: Path,
 ) -> None:

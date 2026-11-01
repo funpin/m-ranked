@@ -1,0 +1,147 @@
+name: Release
+# Выпуск: слияние PR «release: vГГГГ.М.N» из develop в main.
+# 1. Версия берётся из заголовка слитого PR и должна быть больше последней.
+# 2. Собирается один неизменяемый артефакт: дерево коммита (git archive) и
+#    standalone-сайт, собранный в том же образе Node, что работает на проде.
+# 3. На артефакт выдаётся провенанс; тег и GitHub Release создаются только
+#    после успешной сборки.
+# 4. Выкатка — deploy.yml с окружением production: она ждёт одобрения
+#    ответственного в окружении и без него ничего не трогает.
+# Ворота выпуска (release-gates.yml) к этому моменту прошли на PR в main —
+# правило main не даёт слить PR без них.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Повторить выпуск версии vГГГГ.М.N для HEAD main (если тег ещё не создан)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: version
+        name: Version from the merged release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ] || {
+            echo "::error::выпуск собирается только из main"; exit 1; }
+          if [ -n "${INPUT_VERSION:-}" ]; then
+            version="$INPUT_VERSION"
+          else
+            title="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+              --jq '[.[] | select(.base.ref == "main" and .merged_at != null)][0].title // ""')"
+            version="${title#release: }"
+          fi
+          [[ "$version" =~ ^v20[0-9]{2}\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)$ ]] || {
+            echo "::error::коммит $GITHUB_SHA не пришёл выпускным PR «release: vГГГГ.М.N» (версия: '$version')"
+            exit 1
+          }
+          if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            echo "::error::тег $version уже есть: выпуск неизменяем, нужна следующая версия"
+            exit 1
+          fi
+          latest="$(git tag --list 'v20*' --sort=-version:refname | head -1)"
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -1)" != "$version" ]; then
+            echo "::error::версия $version не больше последней $latest"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "выпуск $version из $GITHUB_SHA"
+
+  build:
+    needs: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      # Тот же образ, что на проде (Node 24.21.0, glibc Debian bookworm).
+      NODE_IMAGE: node:24.21.0-bookworm
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Stage the commit tree
+        run: |
+          set -euo pipefail
+          install -d "$RUNNER_TEMP/stage"
+          git archive --format=tar HEAD | tar -x -C "$RUNNER_TEMP/stage"
+      - name: Build the production frontend in the production Node image
+        run: |
+          set -euo pipefail
+          # Сборка из каталога frontend: corepack берёт pnpm из его package.json.
+          docker run --rm --platform linux/amd64 \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp/home -e COREPACK_HOME=/tmp/corepack \
+            -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+            -e MRANKED_DEPLOYMENT_ID="$GITHUB_SHA" \
+            -e NEXT_TELEMETRY_DISABLED=1 \
+            -v "$RUNNER_TEMP/stage:/release" -w /release/frontend \
+            "$NODE_IMAGE" bash -euo pipefail -c '
+              corepack pnpm install --frozen-lockfile
+              corepack pnpm build
+              corepack pnpm check:bundle'
+          bash operations/scripts/finalize-web-release.sh "$RUNNER_TEMP/stage"
+      - name: Package the release
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/stage"
+          build_id="$(cat "$stage/frontend/.next/BUILD_ID")"
+          jq -n --arg version "$VERSION" --arg commit "$GITHUB_SHA" \
+            --arg build_id "$build_id" --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{version: $version, commit: $commit, frontend_build_id: $build_id,
+              built_at: $built_at, build_run: $run}' > "$stage/release.json"
+          test -f "$stage/frontend/server.js"
+          test -d "$stage/frontend/.next/static"
+          test -d "$stage/frontend/.next/cache"
+          # Не «! find | grep»: инвертированный конвейер не останавливает set -e.
+          if find "$stage" -name '.env' -o -name '*.env' | grep -q .; then
+            echo "::error::в дерево выпуска попал .env"; exit 1
+          fi
+          tar -C "$stage" --owner=0 --group=0 --numeric-owner --sort=name \
+            -czf "m-ranked-$VERSION.tar.gz" .
+          sha256sum "m-ranked-$VERSION.tar.gz" > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: m-ranked-${{ needs.version.outputs.version }}.tar.gz
+      - name: Tag and publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$VERSION" "m-ranked-$VERSION.tar.gz" SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$VERSION" --generate-notes
+
+  deploy:
+    needs: [version, build]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets: inherit

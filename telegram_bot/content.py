@@ -18,13 +18,11 @@ from zoneinfo import ZoneInfo
 
 from .emoji import icon
 from .render import (
-    PLATFORM_NAMES,
-    PUBLICATION_TYPES,
     Message,
-    esc,
     format_count,
     format_index,
     our_week_stats,
+    post_head,
     render_digest,
     text_only,
     week_label,
@@ -115,18 +113,6 @@ def _today(bot: Bot) -> date:
     return datetime.fromtimestamp(bot.clock(), ZoneInfo(bot.config.timezone)).date()
 
 
-def _link(item: dict[str, Any]) -> str | None:
-    url = item.get("publicUrl")
-    if isinstance(url, str) and url.startswith(("https://", "http://")):
-        return f'<a href="{esc(url)}">ссылка</a>'
-    return None
-
-
-def _kind(item: dict[str, Any]) -> str:
-    platform = PLATFORM_NAMES.get(item.get("platform"), esc(item.get("platform") or "—"))
-    return f"{platform}, {PUBLICATION_TYPES.get(item.get('publicationType'), 'пост')}"
-
-
 def _publication_id(item: dict[str, Any]) -> str | None:
     value = item.get("publicationId")
     return None if value is None else str(value)
@@ -164,13 +150,25 @@ def _is_spike(item: dict[str, Any]) -> bool:
 
 
 def spike_message(item: dict[str, Any]) -> Message:
-    parts = [part for part in (_link(item), _kind(item), format_index(item["interactionIndex"]),
-                               f"{round(item['ageHours'])} ч") if part]
+    """Заголовок, ниже строка поста: площадка нашим значком, ссылка на типе поста, цифры."""
+    parts = [post_head(item), format_index(item["interactionIndex"])]
     if item.get("views") is not None:
         parts.append(f"{format_count(int(item['views']))} просм.")
+    parts.append(f"{round(item['ageHours'])} ч назад")
     if item.get("promotion"):
         parts.append(f"{icon('promo')} продвижение")
-    return Message(f"{icon('spike')} Наш пост выстрелил: " + " · ".join(parts))
+    return Message(f"{icon('spike')} <b>Наш пост выстрелил</b>\n" + " · ".join(parts))
+
+
+async def _announce(bot: Bot, kind: str, publication: str, level: int, message: Message) -> bool:
+    """Разослать объявление; если никому не дошло из-за временного сбоя Telegram,
+    снять отметку, чтобы следующая проверка (через 15 минут) попробовала снова.
+    Иначе пост, отмеченный до отправки, молча терялся (VK-пост 29.10)."""
+    result = await bot.broadcast_report(message, kind)
+    if result.delivered == 0 and result.transient > 0:
+        await bot.store.forget_announced(kind, publication, level)
+        return False
+    return True
 
 
 async def check_spikes(bot: Bot) -> int:
@@ -193,8 +191,8 @@ async def check_spikes(bot: Bot) -> int:
             continue
         if not await store.mark_announced(SPIKE, publication, 1) or seeding:
             continue  # первый прогон только запоминает: старое не объявляем
-        await bot.broadcast(spike_message(item), SPIKE)
-        announced += 1
+        if await _announce(bot, SPIKE, publication, 1, spike_message(item)):
+            announced += 1
     await _mark_seeded(bot, SPIKE, our)
     await store.set_job_run("spikes", bot.clock())
     return announced
@@ -204,10 +202,10 @@ async def check_spikes(bot: Bot) -> int:
 
 def anomaly_message(item: dict[str, Any], level: int) -> Message:
     title = "Накрутка на нашем посте" if level >= LEVEL_EXPLICIT else "Вероятно, накрутка на нашем посте"
-    parts = [part for part in (_link(item), _kind(item)) if part]
+    parts = [post_head(item)]
     if item.get("views") is not None:
         parts.append(f"{format_count(int(item['views']))} просм.")
-    return Message(f"{icon('anomaly')} {title}: " + " · ".join(parts))
+    return Message(f"{icon('anomaly')} <b>{title}</b>\n" + " · ".join(parts))
 
 
 async def check_anomalies(bot: Bot) -> int:
@@ -231,8 +229,8 @@ async def check_anomalies(bot: Bot) -> int:
         level = min(level, LEVEL_EXPLICIT)
         if not await store.mark_announced(ANOMALY, publication, level) or seeding:
             continue
-        await bot.broadcast(anomaly_message(item, level), ANOMALY)
-        announced += 1
+        if await _announce(bot, ANOMALY, publication, level, anomaly_message(item, level)):
+            announced += 1
     await _mark_seeded(bot, ANOMALY, our)
     await store.set_job_run("anomalies", bot.clock())
     return announced

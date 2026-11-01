@@ -1,0 +1,27 @@
+# Обновления зависимостей — обычными PR в develop (ветки dependabot/*
+# разрешены проверкой веток, заголовок «deps: …» — проверкой заголовков).
+# Python-зависимости здесь не обновляются: lock-файлы с хешами собирает
+# operations/scripts/generate_python_lock.py, Dependabot их не пересоздаст.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      frontend-minor:
+        update-types: [minor, patch]
