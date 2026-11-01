@@ -278,6 +278,7 @@ def cycle_gaps(starts: list[Mapping[str, Any]], platforms: list[str], now: float
             by_platform[row["platform"]].append((float(row["started"]), None))
     result = {}
     for platform, points in by_platform.items():
+        points.sort()
         threshold = PROFILE_B_FRESHNESS.get(platform, 2700)
         # Шаг задан порогом: ждать дольше него — уже тревога сбора.
         result[platform] = gaps(points, now, start, step=threshold / GAP_STEP_FACTOR)["items"]
