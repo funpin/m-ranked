@@ -33,7 +33,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -82,7 +82,7 @@ jobs:
       # Тот же образ, что на проде (Node 24.21.0, glibc Debian bookworm).
       NODE_IMAGE: node:24.21.0-bookworm
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Stage the commit tree
@@ -127,7 +127,7 @@ jobs:
             -czf "m-ranked-$VERSION.tar.gz" .
           sha256sum "m-ranked-$VERSION.tar.gz" > SHA256SUMS
           cat SHA256SUMS
-      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: m-ranked-${{ needs.version.outputs.version }}.tar.gz
       - name: Tag and publish the GitHub Release
