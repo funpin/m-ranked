@@ -3,12 +3,13 @@ name: Branch policy
 # требовать PR и проверки, но не умеет ограничить, ИЗ какой ветки PR открыт.
 # Это задание — обязательная проверка обеих защищённых веток (см. AGENTS.md).
 #
-# pull_request_target, а не pull_request: правила и скрипт берутся из целевой
-# ветки, и PR не может ослабить проверку собственной правкой. Код PR здесь не
-# выгружается и не исполняется, секретов задание не получает — только
-# метаданные события через окружение.
+# Обычный pull_request, а не pull_request_target: тот с 08.12.2025 берёт
+# workflow из ветки по умолчанию, а в публичных репозиториях с 02.12.2026
+# по умолчанию отключён. Чтобы PR не мог ослабить проверку, которой его
+# судят, .github/ закреплён в CODEOWNERS, а правила веток требуют одобрения
+# владельца кода для таких изменений.
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, reopened, synchronize, ready_for_review]
 
 permissions:
@@ -21,8 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          # Целевая ветка, а не голова PR.
-          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
           sparse-checkout: .github/scripts
       # Имена веток и заголовок приходят из PR — только через окружение,
