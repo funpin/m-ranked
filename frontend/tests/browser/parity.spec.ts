@@ -373,14 +373,17 @@ test("brand and favicon follow viewport and explicit theme", async ({ page }) =>
   await page.addInitScript(() => localStorage.setItem("m-ranked-theme", "light"));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/review?platform=telegram");
-  await expect(page.getByTestId("brand-logo-mark-light")).toBeVisible();
-  await expect(page.getByTestId("brand-logo-wordmark")).toBeHidden();
+  // Живая шапка: пока клиент подменяет серверную заглушку (brand-fallback),
+  // логотип на странице дважды, и глобальный локатор ловил оба (01.11.2026).
+  const brand = page.getByTestId("brand");
+  await expect(brand.getByTestId("brand-logo-mark-light")).toBeVisible();
+  await expect(brand.getByTestId("brand-logo-wordmark")).toBeHidden();
   const favicon = page.locator('link[rel~="icon"][type="image/svg+xml"]');
   await expect(favicon).toHaveCount(1);
   await expect(favicon).toHaveAttribute("href", /logo-mark-light/);
 
   await page.getByRole("button", { name: /Переключить на тёмную/ }).click();
-  await expect(page.getByTestId("brand-logo-mark-dark")).toBeVisible();
+  await expect(brand.getByTestId("brand-logo-mark-dark")).toBeVisible();
   await expect(favicon).toHaveAttribute("href", /logo-mark-dark/);
 
   await expect(page.locator('link[rel="icon"][type="image/png"][sizes="32x32"]')).toHaveAttribute("href", /\/icons\/favicon-32\.png\?v=20260921/);
@@ -395,13 +398,13 @@ test("brand and favicon follow viewport and explicit theme", async ({ page }) =>
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
 
   await page.setViewportSize({ width: 1200, height: 800 });
-  await expect(page.getByTestId("brand-logo-mark-dark")).toBeVisible();
-  await expect(page.getByTestId("brand-logo-wordmark")).toBeVisible();
-  await expect(page.getByTestId("brand-logo-wordmark")).toHaveText("m-ranked");
-  await expect(page.getByTestId("brand-logo-wordmark")).toHaveCSS("white-space", "nowrap");
+  await expect(brand.getByTestId("brand-logo-mark-dark")).toBeVisible();
+  await expect(brand.getByTestId("brand-logo-wordmark")).toBeVisible();
+  await expect(brand.getByTestId("brand-logo-wordmark")).toHaveText("m-ranked");
+  await expect(brand.getByTestId("brand-logo-wordmark")).toHaveCSS("white-space", "nowrap");
   await page.getByRole("button", { name: /Переключить на светлую/ }).click();
-  await expect(page.getByTestId("brand-logo-mark-light")).toBeVisible();
-  await expect(page.getByTestId("brand-logo-wordmark")).toBeVisible();
+  await expect(brand.getByTestId("brand-logo-mark-light")).toBeVisible();
+  await expect(brand.getByTestId("brand-logo-wordmark")).toBeVisible();
   await expect(favicon).toHaveAttribute("href", /logo-mark-light/);
 });
 

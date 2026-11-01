@@ -141,6 +141,13 @@ jobs:
 
   deploy:
     needs: [version, build]
+    # Вызываемому workflow нельзя дать прав больше, чем у вызывающей задачи:
+    # без этого блока она наследует верхний `contents: read`, а deploy.yml
+    # просит ещё `attestations: read`, и GitHub отклонил весь запуск
+    # (startup_failure первого выпуска v2026.11.0, 01.11.2026).
+    permissions:
+      contents: read
+      attestations: read
     uses: ./.github/workflows/deploy.yml
     with:
       version: ${{ needs.version.outputs.version }}
