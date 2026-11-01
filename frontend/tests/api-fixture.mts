@@ -344,19 +344,88 @@ const server = createServer(async (request, response) => {
     const days=Array.from({length},(_,index)=>{const day=new Date(Date.UTC(2026,8,30-length+1+index));return {day:day.toISOString().slice(0,10),visitors:40+((index*37)%55),views:120+((index*53)%140)};});
     return json({range:length===30?"month":"week",online:3,onlineWindowSeconds:300,today:days[days.length-1],days});
   }
-  if(url.pathname==="/api/v1/admin/system/live") {
-    if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
-    // Живой буфер привязан к настоящим часам: в браузере видно, как он растёт.
-    const step=5_000,last=Math.floor(Date.now()/step)*step,since=Date.parse(url.searchParams.get("since")??"");
+  // Живые точки привязаны к настоящим часам: в браузере видно, как буфер растёт.
+  // Сервер 2 — буфер API (5 с), Сервер 1 — минутные точки агента.
+  const liveBody=(server:string,sinceRaw:string|null)=>{
+    const main=server==="server-2",step=main?5_000:60_000,count=main?720:180;
+    const last=Math.floor(Date.now()/step)*step,since=Date.parse(sinceRaw??"");
     const wave=(t:number,period:number,phase=0)=>Math.sin(t/period+phase);
-    const points=Array.from({length:720},(_,index)=>last-(719-index)*step).filter((at)=>Number.isNaN(since)||at>since).map((at)=>{
+    const scale=main?1:0.35,memory=main?4*1024**3:1.9*1024**3;
+    // У Сервера 1 — пропуск в 9 минут час назад: перезапуск приёмника при выкатке.
+    const gap=(at:number)=>!main&&at>last-70*60_000&&at<last-61*60_000;
+    const points=Array.from({length:count},(_,index)=>last-(count-1-index)*step).filter((at)=>(Number.isNaN(since)||at>since)&&!gap(at)).map((at)=>{
       const t=at/1000;
-      return {at:new Date(at).toISOString(),cpu:Math.round((38+18*wave(t,90)+9*wave(t,13,1))*10)/10,memory:Math.round((64+3*wave(t,600,2))*10)/10,
-        memoryUsedBytes:Math.round(4*1024**3*(0.64+0.03*wave(t,600,2))),swapUsedBytes:150*1024**2,load:Math.round((1.6+0.5*wave(t,120))*100)/100,
-        netRxBytesPerSecond:Math.round(180_000+120_000*Math.abs(wave(t,25))),netTxBytesPerSecond:Math.round(420_000+300_000*Math.abs(wave(t,31,1))),
-        diskReadBytesPerSecond:Math.round(40_000+30_000*Math.abs(wave(t,17))),diskWriteBytesPerSecond:Math.round(900_000+600_000*Math.abs(wave(t,23,2)))};
+      return {at:new Date(at).toISOString(),cpu:Math.round((main?38+18*wave(t,90)+9*wave(t,13,1):71+14*wave(t,400)+6*wave(t,77,1))*10)/10,
+        memory:Math.round((main?64+3*wave(t,600,2):53+4*wave(t,900))*10)/10,
+        memoryUsedBytes:Math.round(memory*(main?0.64+0.03*wave(t,600,2):0.53+0.04*wave(t,900))),swapUsedBytes:main?150*1024**2:420*1024**2,
+        load:Math.round((main?1.6+0.5*wave(t,120):1.9+0.4*wave(t,500))*100)/100,
+        netRxBytesPerSecond:Math.round((180_000+120_000*Math.abs(wave(t,25)))*scale),netTxBytesPerSecond:Math.round((420_000+300_000*Math.abs(wave(t,31,1)))*scale),
+        diskReadBytesPerSecond:Math.round((40_000+30_000*Math.abs(wave(t,17)))*scale),diskWriteBytesPerSecond:Math.round((900_000+600_000*Math.abs(wave(t,23,2)))*scale)};
     });
-    return json({intervalSeconds:5,cores:2,memoryTotalBytes:4*1024**3,diskTotalBytes:49*1024**3,diskFreeBytes:15.5*1024**3,points});
+    return {intervalSeconds:main?5:60,cores:main?2:1,memoryTotalBytes:memory,diskTotalBytes:main?49*1024**3:29.4*1024**3,diskFreeBytes:main?15.5*1024**3:13.7*1024**3,points};
+  };
+  const nowIso=()=>new Date().toISOString(),ago=(seconds:number)=>new Date(Date.now()-seconds*1000).toISOString();
+  const status=(server:string)=>server==="server-2"
+    ?{state:"ok",label:"работает",detail:"v2026.11.0",since:null,release:"v2026.11.0",seenAt:nowIso(),failed:[]}
+    :{state:"restarted",label:"перезапущен",detail:"службы перезапущены · v2026.11.0",since:ago(240),release:"v2026.11.0",seenAt:nowIso(),failed:[]};
+  const serverItems=()=>[
+    {id:"server-2",displayName:"Сервер 2 · основной",role:"main",state:"active",platforms:[],status:status("server-2")},
+    {id:"server-1",displayName:"Сервер 1 · сбор",role:"collector",state:"active",platforms:["telegram","vk","max","rutube"],status:status("server-1")}];
+  const task=(unit:string,scheduled:boolean,extra:Record<string,unknown>={})=>({unit,scheduled,active:scheduled?"inactive":"active",sub:scheduled?"dead":"running",result:"success",
+    since:ago(scheduled?3600:86400*2),startedAt:ago(scheduled?600:86400*2),exitedAt:scheduled?ago(540):null,restarts:0,lastAt:scheduled?ago(600):null,nextAt:scheduled?new Date(Date.now()+3000_000).toISOString():null,...extra});
+  const mainTasks=()=>[task("api",false),task("web",false),task("transfer-ingest",false),task("anomaly-analysis",false),task("telegram-bot",false),
+    task("ops-sample",true,{lastAt:ago(20),nextAt:new Date(Date.now()+40_000).toISOString()}),task("anomaly-norms",true,{lastAt:ago(55_800)}),
+    task("anomaly-tail",true,{lastAt:ago(57_240)}),task("dump-backup",true,{active:"activating",sub:"start",startedAt:ago(420),lastAt:ago(420)}),
+    task("history-compaction",true,{result:"exit-code",lastAt:ago(7200)}),task("alerts",true,{lastAt:ago(30)})];
+  const nodeTasks=()=>[task("collector@telegram",false,{since:ago(240)}),task("collector@vk",false,{since:ago(240)}),task("collector@max",false,{since:ago(240)}),
+    task("collector@rutube",false,{since:ago(240)}),task("transfer-sender",false,{since:ago(240)}),task("collector-watchdog",true,{lastAt:ago(300)}),
+    task("reindex",true,{lastAt:ago(80_000)}),task("node-agent",true,{lastAt:ago(25)})];
+  const gaps=(server:string)=>server==="server-2"
+    ?{stepSeconds:60,count:1,seconds:180,items:[{from:ago(5400),to:ago(5220),seconds:180,cause:"обновление v2026.10.3 → v2026.11.0"}]}
+    :{stepSeconds:60,count:1,seconds:540,items:[{from:ago(70*60),to:ago(61*60),seconds:540,cause:null}]};
+  if(url.pathname==="/api/v1/admin/storage") {
+    if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
+    const server=(id:string,displayName:string,role:string,platforms:string[],total:number,free:number,memory:number,available:number,load1:number,cpus:number)=>({id,displayName,role,platforms,state:"active",
+      storesObjects:true,reserveBytes:3*1024**3,lastSeenAt:nowIso(),online:true,agentVersion:role==="main"?"main-1":"2",
+      disk:{totalBytes:total,freeBytes:free,storeBytes:3.6*1024**3,rootTotalBytes:total,rootFreeBytes:free},memory:{totalBytes:memory,availableBytes:available},load1,cpus,
+      units:{},copies:{verified:{objects:5,bytes:3.6*1024**3}},updatedAt:asOf,updatedBy:"admin"});
+    return json({servers:[server("server-2","Сервер 2 · основной","main",[],49*1024**3,22.1*1024**3,3.8*1024**3,1.4*1024**3,1.42,2),
+      server("server-1","Сервер 1 · сбор","collector",["telegram","vk","max","rutube"],29.4*1024**3,13.7*1024**3,1.9*1024**3,0.9*1024**3,1.81,1)],
+      policies:{},limits:{collection:{pollIntervalMinutes:[1,60],refreshLimit:[10,5000]},finalAnalysisDays:[3,3650]},backups:[]});
+  }
+  const serverLive=/^\/api\/v1\/admin\/servers\/([a-z0-9-]+)\/live$/.exec(url.pathname);
+  if(serverLive||url.pathname==="/api/v1/admin/system/live") {
+    if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
+    const server=serverLive?.[1]??"server-2";
+    if(!["server-1","server-2"].includes(server)) return json({detail:"server not found"},404);
+    return json(liveBody(server,url.searchParams.get("since")));
+  }
+  if(url.pathname==="/api/v1/admin/servers") {
+    if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
+    const requested=url.searchParams.get("range")??"day",range=["1h","3h","day","week"].includes(requested)?requested:"day";
+    const id=url.searchParams.get("server")==="server-1"?"server-1":"server-2",main=id==="server-2";
+    const count={"1h":60,"3h":180,day:288,week:168}[range]!,step={"1h":60_000,"3h":60_000,day:300_000,week:3600_000}[range]!,end=Math.floor(Date.now()/step)*step;
+    const series=Array.from({length:count},(_,index)=>({at:new Date(end-(count-1-index)*step).toISOString(),
+      cpu:main?20+(index*7)%35:55+(index*11)%30,memory:main?55+(index*3)%20:48+(index*5)%14,load:main?0.4+((index*11)%30)/20:1.2+((index*7)%20)/15,
+      netRxBytesPerSecond:main?null:60_000+(index*997)%40_000,netTxBytesPerSecond:main?null:140_000+(index*1999)%90_000,
+      diskReadBytesPerSecond:main?null:12_000+(index*331)%9_000,diskWriteBytesPerSecond:main?null:300_000+(index*7919)%200_000}));
+    const host=main
+      ?{cpuPercent:23.5,cores:2,load:[1.42,1.31,1.28],memoryTotalBytes:3.8*1024**3,memoryUsedBytes:2.4*1024**3,swapUsedBytes:219*1024**2,diskTotalBytes:49*1024**3,diskFreeBytes:22.1*1024**3,unitsActive:26,unitsTotal:42,failedUnits:[]}
+      :{cpuPercent:74.2,cores:1,load:[1.81,2.05,2.1],memoryTotalBytes:1.9*1024**3,memoryUsedBytes:1.0*1024**3,swapUsedBytes:420*1024**2,diskTotalBytes:29.4*1024**3,diskFreeBytes:13.7*1024**3,unitsActive:5,unitsTotal:5,failedUnits:[]};
+    const selected=serverItems().find((item)=>item.id===id)!;
+    return json({range,servers:serverItems(),selected:{...selected,host,liveSeconds:main?5:60,series,gaps:gaps(id),tasks:main?mainTasks():nodeTasks()}});
+  }
+  if(url.pathname==="/api/v1/admin/collectors") {
+    if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
+    const requested=url.searchParams.get("range")??"day",range=["1h","3h","day","week"].includes(requested)?requested:"day";
+    const span={"1h":3600,"3h":10800,day:86400,week:604800}[range]!;
+    const cycle=(platform:string,cadence:number,freshness:number,index:number)=>({platform,runs:Math.round(span/cadence),succeeded:Math.round(span/cadence)-index,partial:index,failed:platform==="max"?2:0,
+      accounts:Math.round(span/cadence)*(140+index*30),errors:index*3,lastStartedAt:ago(40+index*50),lastCompletedAt:ago(10+index*40),runningSince:platform==="telegram"?ago(40):null,
+      medianSeconds:[58,96,141,1210][index]!,lastSuccessAt:ago(20+index*45),cycleSeconds:[61,102,150,1250][index]!,scheduleLagSeconds:[2,4,31,8][index]!,freshnessSeconds:freshness,
+      gaps:platform==="max"?[{from:ago(5*3600),to:ago(4*3600),seconds:3600,cause:null}]:[]});
+    return json({range,collectors:serverItems().filter((item)=>item.role==="collector"),selected:{server:serverItems()[1],
+      cycles:[cycle("telegram",300,2700,0),cycle("vk",300,2700,1),cycle("max",300,2700,2),cycle("rutube",1800,5400,3)],
+      transfer:{backlog:3,delivered:18_211,failures:0,lastAcceptedAt:ago(45),queueDelaySeconds:38},tasks:nodeTasks()}});
   }
   if(url.pathname==="/api/v1/admin/system") {
     if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
@@ -372,7 +441,7 @@ const server = createServer(async (request, response) => {
       ["units","Службы","ok","все службы работают"],["disk","Диск","ok","свободно 14.4 ГБ (27%)"],["memory","Память","ok","занято 61%"],
       ["backup","Резервная копия","ok","последняя 9.2 ч назад"],["errors","Ошибки для людей","ok","0 ответов 5xx за час"],["alerts","Тревоги","ok","открытых тревог нет"]].map(([key,label,state,detail])=>({key,label,state,detail}));
     const opened={key:"bots",text:"Роботам рендерится 20+ холодных страниц в минуту уже 10 мин (сейчас 61)",urgent:true,since:asOf};
-    return json({range,sampledAt:asOf,checks,
+    return json({range,server:status("server-2"),tasks:mainTasks(),gaps:gaps("server-2"),sampledAt:asOf,checks,
       alerts:{active:[],events:[{...opened,kind:"resolve",at:asOf},{...opened,kind:"open",at:asOf}]},
       host:{cpuPercent:23.5,cores:2,load:[0.42,0.51,0.48],memoryTotalBytes:4*1024**3,memoryUsedBytes:2.5*1024**3,swapUsedBytes:0,diskTotalBytes:49*1024**3,diskFreeBytes:13.4*1024**3,unitsActive:24,unitsTotal:27,failedUnits:[]},
       pipeline:{ingestAcceptedAt:asOf,analysisLagSeconds:360,analysisBacklog:12,analysisCompletedAt:asOf,normsRunAt:asOf,tailRunAt:asOf,backupAt:asOf},

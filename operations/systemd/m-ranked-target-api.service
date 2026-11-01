@@ -27,8 +27,11 @@ Environment=MRANKED_SECURITY_METRICS_FILE=/var/lib/node_exporter/textfile_collec
 Environment=PYTHONUNBUFFERED=1
 # Каталог запросов «Обновить резервную копию»: пишет API, читает root.
 Environment=MRANKED_BACKUP_REQUEST_DIR=/var/lib/m-ranked/backup-request
-StateDirectory=m-ranked/backup-request
+# live-host: живой буфер ресурсов (api/live_host.py) переживает перезапуск и
+# выкатку — при остановке он пишется сюда, при старте читается (~300 КБ).
+StateDirectory=m-ranked/backup-request m-ranked/live-host
 StateDirectoryMode=0700
+Environment=API_LIVE_MONITOR_STATE_FILE=/var/lib/m-ranked/live-host/buffer.json
 Environment=TZ=Europe/Moscow
 # A crashed worker leaves a PID-named Prometheus textfile. The next API master
 # removes every stale worker file before it starts publishing a fresh set.
