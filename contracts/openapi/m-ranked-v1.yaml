@@ -3303,6 +3303,51 @@ components:
           - unknown
         detail:
           type: string
+    AdminSystemAlert:
+      type: object
+      additionalProperties: false
+      required:
+      - key
+      - text
+      - urgent
+      - since
+      properties:
+        key:
+          type: string
+        text:
+          type: string
+        urgent:
+          type: boolean
+        since:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        kind:
+          type: string
+          enum:
+          - open
+          - resolve
+        at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    AdminSystemAlerts:
+      type: object
+      additionalProperties: false
+      required:
+      - active
+      - events
+      properties:
+        active:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminSystemAlert'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminSystemAlert'
     AdminSystemPoint:
       type: object
       additionalProperties: false
@@ -3761,6 +3806,7 @@ components:
       - range
       - sampledAt
       - checks
+      - alerts
       - host
       - pipeline
       - restarts
@@ -3784,6 +3830,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AdminSystemCheck'
+        alerts:
+          description: Открытые тревоги Telegram и их открытия/закрытия за период, новыми первыми; null — на сервере нет сводки тревог.
+          oneOf:
+          - $ref: '#/components/schemas/AdminSystemAlerts'
+          - type: 'null'
         host:
           type:
           - object

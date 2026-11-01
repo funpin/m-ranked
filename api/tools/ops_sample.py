@@ -34,7 +34,7 @@ logger = logging.getLogger("ops-sample")
 VERSION = 1
 RETENTION_DAYS = 30
 SIZE_INTERVAL_SECONDS = 6 * 3600
-BOT_CLASSES = frozenset({"ai_user", "ai_search", "ai_training", "seo", "crawler"})
+BOT_CLASSES = frozenset({"ai_user", "ai_search", "ai_training", "seo", "search", "crawler"})
 CACHE_HITS = frozenset({"HIT", "STALE", "UPDATING", "REVALIDATED"})
 # Не страницы: служебные файлы и картинки реакций (тот же список, что у
 # шлюза в operations/nginx/traffic.conf). Отказ картинки Telegram ждёт 10 с —
@@ -294,9 +294,38 @@ def size_paths(raw: str) -> dict[str, Path]:
     return paths
 
 
+# Сводка тревог (operations/scripts/alerts.py). Старше этого — тревоги не
+# работают, и панель покажет «нет данных», а не «всё в порядке».
+ALERTS_STALE_SECONDS = 600
+ALERTS_STATUS = Path("/var/lib/m-ranked/alerts/status.json")
+
+
+def read_alerts(path: Path, state: dict[str, Any], now: float) -> dict[str, Any] | None:
+    """Открытые тревоги и события, которых прошлые снимки ещё не видели; None —
+    сводка испорчена или устарела.
+
+    В снимок идут только новые события: лента за сутки в каждой минутной строке
+    host_sample стоила бы сотни мегабайт за срок хранения, а панель и так
+    читает строки своего периода и собирает ленту из них."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        at = float(data["at"])
+    except (ValueError, KeyError, TypeError):
+        return None
+    if now - at > ALERTS_STALE_SECONDS:
+        return None
+    seen = state.get("alertsSeenAt", 0.0)
+    events = [item for item in data.get("recent") or [] if isinstance(item, dict)
+              and isinstance(item.get("at"), (int, float)) and item["at"] > seen]
+    if events:
+        state["alertsSeenAt"] = max(item["at"] for item in events)
+    return {"at": at, "active": data.get("active") or [], "events": events}
+
+
 def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: Path,
           disk: Path, sizes: dict[str, Path], run: Any = subprocess.run,
-          backup_dir: Path | None = None, backup_request: Path = Path("/nonexistent")) -> dict[str, Any]:
+          backup_dir: Path | None = None, backup_request: Path = Path("/nonexistent"),
+          alerts: Path | None = None) -> dict[str, Any]:
     usage = shutil.disk_usage(disk)
     sample: dict[str, Any] = {
         "v": VERSION,
@@ -310,6 +339,13 @@ def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: 
         "pipeline": pipeline(textfile_metrics(metrics)),
         "backups": backups(backup_dir, backup_request, run) if backup_dir else None,
     }
+    # Нет файла — тревоги здесь не стоят, и проверки «Тревоги» нет вовсе;
+    # файл есть, но не читается или устарел — None, панель покажет «нет данных».
+    if alerts is not None and alerts.exists():
+        try:
+            sample["alerts"] = read_alerts(alerts, state, now)
+        except OSError:
+            sample["alerts"] = None
     sample["load"] = [float(value) for value in sample["load"]]
     measured = state.get("sizesAt")
     if sizes and (measured is None or now - measured >= SIZE_INTERVAL_SECONDS):
@@ -586,7 +622,8 @@ def main() -> int:
             "OPS_SAMPLE_SIZE_PATHS",
             "releases=/opt/m-ranked,state=/var/lib/m-ranked,pageCache=/var/cache/nginx")),
         backup_dir=Path(os.environ.get("OPS_SAMPLE_BACKUP_DIR", "/var/backups/m-ranked")),
-        backup_request=Path("/var/lib/m-ranked/backup-request/refresh"))
+        backup_request=Path("/var/lib/m-ranked/backup-request/refresh"),
+        alerts=ALERTS_STATUS)
     try:
         store(dsn, sample, state, now, state_dir / ALERT_INPUTS_FILE)
     except Exception as error:  # noqa: BLE001 — снимок необязателен, причина в журнал

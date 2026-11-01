@@ -29,9 +29,9 @@ import sys
 import time
 from typing import Literal
 
-BOT_CLASSES = ("ai_user", "ai_search", "ai_training", "seo", "crawler")
+BOT_CLASSES = ("ai_user", "ai_search", "ai_training", "seo", "search", "crawler")
 WINDOW_MINUTES = 5
-HISTORY_MINUTES = 15  # сколько минутных корзин хранить: для роботов нужно 5 законченных минут
+HISTORY_MINUTES = 15  # сколько минутных корзин хранить: для роботов нужно 10 законченных минут
 LOAD_MINUTES = 15
 REPEAT_SECONDS = 6 * 3600
 SPOOL_LIMIT = 500  # файлов очереди; при переполнении самые старые отбрасываются
@@ -48,6 +48,10 @@ NODE_LOAD_FACTOR = 3  # load1 в среднем за 15 минут выше ст
 # ниже стольких ядер. Без зазора среднее около порога (на Сервере 1 оно
 # держалось у 3,0) открывало и закрывало тревогу каждые несколько минут.
 NODE_LOAD_CLEAR_FACTOR = 2
+# События для панели: сколько хранить и сколько последних отдавать.
+RECENT_SECONDS = 24 * 3600
+RECENT_LIMIT = 200
+STATUS_FILE = "status.json"
 INPUTS_MAX_AGE = 300  # файл ops-sample старше — не верим (пишется раз в минуту)
 INPUTS_PATH = "/var/lib/m-ranked/ops-sample/alert-inputs.json"
 
@@ -91,6 +95,8 @@ class Host:
     bots_per_minute: list[int]
     # Запросы роботов по классам за те же законченные минуты, что bots_per_minute.
     bot_classes: dict[str, int] = field(default_factory=dict)
+    # Холодные страницы, отрендеренные роботам, по законченным минутам.
+    bot_renders_per_minute: list[int] = field(default_factory=list)
 
 
 def env_int(name: str, default: int) -> int:
@@ -122,7 +128,7 @@ def parse_line(line: str) -> dict | None:
 
 def empty_bucket() -> dict:
     return {"requests": 0, "human_5xx": 0, "bot_requests": 0, "bot_503": 0, "hits": 0,
-            "cacheable": 0, "misses": {}, "bots": {}}
+            "cacheable": 0, "misses": {}, "bots": {}, "bot_renders": 0}
 
 
 def add(bucket: dict, item: dict) -> None:
@@ -138,11 +144,21 @@ def add(bucket: dict, item: dict) -> None:
             bucket["bot_503"] += 1
     if item["static"] or item["cache"] == "-":
         return
+    miss = item["cache"] in ("MISS", "EXPIRED", "BYPASS")
+    if miss:
+        bucket["misses"][item["klass"]] = bucket["misses"].get(item["klass"], 0) + 1
+    if bot:
+        # Отрендеренная роботу холодная страница — то, что стоит процессора;
+        # отказ шлюза (503) почти ничего не стоит.
+        if miss and item["status"] < 500:
+            bucket["bot_renders"] = bucket.get("bot_renders", 0) + 1
+        return
+    # Доля попаданий — только у людей: робот приходит за страницами, которых
+    # никто не открывал, и 31.10.2026 обход ронял долю до 1%: тревога
+    # восемь раз открылась и закрылась, хотя людям кэш отвечал как обычно.
     bucket["cacheable"] += 1
     if item["cache"] in ("HIT", "STALE", "UPDATING", "REVALIDATED"):
         bucket["hits"] += 1
-    elif item["cache"] in ("MISS", "EXPIRED", "BYPASS"):
-        bucket["misses"][item["klass"]] = bucket["misses"].get(item["klass"], 0) + 1
 
 
 def read_log(path: Path, state: dict, minute: int) -> None:
@@ -222,6 +238,12 @@ def bots_per_minute(state: dict, minute: int, count: int) -> list[int]:
     """Запросы роботов за последние count законченных минут, старые первыми; пропущенная минута — 0."""
     buckets = state.get("buckets", {})
     return [buckets.get(str(number), {}).get("bot_requests", 0) for number in range(minute - count, minute)]
+
+
+def bot_renders_per_minute(state: dict, minute: int, count: int) -> list[int]:
+    """Холодные страницы, отрендеренные роботам, за последние count законченных минут."""
+    buckets = state.get("buckets", {})
+    return [buckets.get(str(number), {}).get("bot_renders", 0) for number in range(minute - count, minute)]
 
 
 def bot_classes(state: dict, minute: int, count: int) -> dict[str, int]:
@@ -312,9 +334,20 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], host: Host, in
         f"Память занята {memory_share:.0%}, подкачка {(swap or 0) / 1e9:.1f} ГБ")
     rules.append(Rule("memory", memory_full or swap_full, memory_text))
     bots = host.bots_per_minute[-limits["bot_minutes"]:]
-    surge = len(bots) >= limits["bot_minutes"] and min(bots) > limits["bots_per_minute"]
-    bots_text = (f"Роботы шлют больше {limits['bots_per_minute']} запросов в минуту уже "
-                 f"{limits['bot_minutes']} мин (сейчас {bots[-1] if bots else 0})")
+    flood = len(bots) >= limits["bot_minutes"] and min(bots) > limits["bots_per_minute"]
+    # Цена обхода — холодные страницы, а не запросы: 31.10.2026 обход в 65–75
+    # запросов в минуту не дотягивал до порога по запросам, но почти все они
+    # шли мимо кэша по 2 с и заняли оба ядра.
+    renders = host.bot_renders_per_minute[-limits["bot_render_minutes"]:]
+    costly = (len(renders) >= limits["bot_render_minutes"]
+              and min(renders) >= limits["bot_renders_per_minute"])
+    surge = flood or costly
+    if costly and not flood:
+        bots_text = (f"Роботам рендерится {limits['bot_renders_per_minute']}+ холодных страниц в минуту уже "
+                     f"{limits['bot_render_minutes']} мин (сейчас {renders[-1]})")
+    else:
+        bots_text = (f"Роботы шлют больше {limits['bots_per_minute']} запросов в минуту уже "
+                     f"{limits['bot_minutes']} мин (сейчас {bots[-1] if bots else 0})")
     if host.bot_classes:
         bots_text += f"; за {limits['bot_minutes']} мин: " + ", ".join(f"{klass} {count}" for klass, count in
                                       sorted(host.bot_classes.items(), key=lambda x: (-x[1], x[0])))
@@ -376,7 +409,7 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], host: Host, in
                       f"Промахов кэша {rate:.1f}/с (цель ≤ {limits['misses_per_second']}): {detail}"))
     hit_ratio = traffic["hits"] / traffic["cacheable"] if traffic["cacheable"] else 1
     rules.append(Rule("hit_ratio", traffic["cacheable"] >= 300 and hit_ratio < limits["hit_ratio"],
-                      f"Доля попаданий в кэш {hit_ratio:.0%} из {traffic['cacheable']} страниц"))
+                      f"Доля попаданий в кэш у людей {hit_ratio:.0%} из {traffic['cacheable']} страниц"))
     if inputs is None:
         rules.append(Rule("inputs_stale", True,
                           "Файл замеров ops-sample не обновляется: тревоги по сбору площадок, входу MAX и "
@@ -491,17 +524,53 @@ def transitions(rules: list[Rule], state: dict, now: float) -> list[Event]:
     events = []
     for rule in rules:
         opened = active.get(rule.key)
-        if rule.firing and opened is None:
-            active[rule.key] = {"since": now, "sent": now}
+        firing = rule.firing or (opened is not None and rule.hold)
+        if firing and opened is None:
+            active[rule.key] = {"since": now, "sent": now, "text": rule.text, "urgent": rule.urgent}
             events.append(Event(rule.key, "open", rule.urgent, rule.text, now))
-        elif opened is not None and (rule.firing or rule.hold):
-            if now - opened["sent"] >= REPEAT_SECONDS:
-                opened["sent"] = now
-                events.append(Event(rule.key, "repeat", rule.urgent, rule.text, opened["since"]))
+        elif firing and now - opened["sent"] >= REPEAT_SECONDS:
+            opened.update(sent=now, text=rule.text, urgent=rule.urgent)
+            events.append(Event(rule.key, "repeat", rule.urgent, rule.text, opened["since"]))
+        elif firing:
+            opened.update(text=rule.text, urgent=rule.urgent)
         elif opened is not None:
             del active[rule.key]
             events.append(Event(rule.key, "resolve", rule.urgent, rule.text, opened["since"]))
     return events
+
+
+def remember(state: dict, event: Event, now: float) -> None:
+    """Запомнить открытие и закрытие для панели; напоминания — не события."""
+    if event.kind == "repeat":
+        return
+    recent = [item for item in state.get("recent", []) if now - item["at"] < RECENT_SECONDS]
+    recent.append({"key": event.key, "kind": event.kind, "urgent": event.urgent, "text": event.text,
+                   "since": event.since, "at": now})
+    state["recent"] = recent[-RECENT_LIMIT:]
+
+
+def status(state: dict, server: str, now: float) -> dict:
+    """Открытые тревоги и события суток — то, что видит панель (через ops-sample)."""
+    active = [{"key": key, "text": entry.get("text") or key, "urgent": bool(entry.get("urgent")),
+               "since": entry["since"]} for key, entry in state.get("active", {}).items()]
+    recent = [item for item in state.get("recent", []) if now - item["at"] < RECENT_SECONDS]
+    return {"version": 1, "server": server, "at": now,
+            "active": sorted(active, key=lambda item: item["since"]), "recent": recent}
+
+
+def write_status(path: Path, state: dict, server: str, now: float) -> None:
+    """Сводка для ops-sample: каталог состояния 0711, сам файл 0644 — state.json
+    при этом остаётся закрытым."""
+    temporary = path.with_name(f".{path.name}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            os.fchmod(stream.fileno(), 0o644)
+            json.dump(status(state, server, now), stream, ensure_ascii=False)
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def format_event(event: Event) -> str:
@@ -559,6 +628,8 @@ def main() -> int:
         "disk_urgent_share": env_int("ALERTS_DISK_URGENT_PERCENT", 7) / 100,
         "bots_per_minute": env_int("ALERTS_BOTS_PER_MINUTE", 150),
         "bot_minutes": max(1, env_int("ALERTS_BOT_MINUTES", 5)),
+        "bot_renders_per_minute": max(1, env_int("ALERTS_BOT_RENDERS_PER_MINUTE", 20)),
+        "bot_render_minutes": min(HISTORY_MINUTES - 1, max(1, env_int("ALERTS_BOT_RENDER_MINUTES", 10))),
         "ingest_minutes": max(1, env_int("ALERTS_INGEST_MINUTES", 20)),
         "ingest_lag_minutes": max(1, env_int("ALERTS_INGEST_LAG_MINUTES", 10)),
         "analysis_lag_seconds": max(1, env_int("ALERTS_ANALYSIS_LAG_MINUTES", 180)) * 60,
@@ -577,7 +648,8 @@ def main() -> int:
                 memory_used_share=memory_share, swap_used_bytes=swap, failed=failed_units(),
                 dump_mtime=newest_dump(Path(os.environ.get("ALERTS_BACKUP_DIR", "/var/backups/m-ranked"))),
                 bots_per_minute=bots_per_minute(state, minute, limits["bot_minutes"]),
-                bot_classes=bot_classes(state, minute, limits["bot_minutes"]))
+                bot_classes=bot_classes(state, minute, limits["bot_minutes"]),
+                bot_renders_per_minute=bot_renders_per_minute(state, minute, limits["bot_render_minutes"]))
     inputs = read_inputs(Path(os.environ.get("ALERTS_INPUTS_PATH", INPUTS_PATH)), now)
     rules = evaluate(now, window(state), metrics(Path(os.environ.get(
         "ALERTS_METRICS_DIR", "/var/lib/node_exporter/textfile_collector"))), host, inputs, limits)
@@ -587,22 +659,26 @@ def main() -> int:
     for event in transitions(rules, state, now):
         print(format_event(event), flush=True)
         if not spool.is_dir():
+            remember(state, event, now)
             continue
         try:
             write_event(spool, event, server, now)
+            remember(state, event, now)
         except OSError as error:
             print(f"spool write failed class={type(error).__name__}", file=sys.stderr)
             # Не удалось записать — вернуть отметку как была, чтобы попробовать в следующую минуту.
             if event.kind == "open":
                 state["active"].pop(event.key, None)
-            elif event.kind == "repeat":
-                state["active"][event.key]["sent"] = before[event.key]["sent"]
             else:
                 state["active"][event.key] = before[event.key]
     state_dir.mkdir(parents=True, exist_ok=True)
     temporary = state_path.with_suffix(".tmp")
     temporary.write_text(json.dumps(state))
     os.replace(temporary, state_path)
+    try:
+        write_status(state_dir / STATUS_FILE, state, server, now)
+    except OSError as error:
+        print(f"status write failed class={type(error).__name__}", file=sys.stderr)
     return 0
 
 
