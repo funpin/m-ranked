@@ -59,7 +59,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     outbox = OutboxMarker(settings.outbox_dsn) if settings.outbox_dsn else None
     # Посещения пишутся административным соединением; без него маячок молчит.
     counter = VisitCounter(database) if settings.admin_dsn else None
-    monitor = HostMonitor(interval=settings.live_monitor_seconds) if settings.live_monitor_seconds else None
+    monitor = (HostMonitor(interval=settings.live_monitor_seconds, state_file=settings.live_monitor_state_file)
+               if settings.live_monitor_seconds else None)
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

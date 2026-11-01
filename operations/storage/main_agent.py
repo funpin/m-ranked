@@ -2,7 +2,8 @@
 
 Раз в минуту (таймер systemd, root — ему нужны дампы базы и хранилище):
 
-1. пишет метрики машины в реестр серверов, как агенты других узлов;
+1. пишет метрики машины и процессы проекта (службы, задания по расписанию,
+   идущая выкатка) в реестр серверов, как агенты других узлов;
 2. регистрирует законченные дампы базы как резервные копии (жёсткая ссылка в
    хранилище, без второй копии на диске);
 3. сверяет свою опись с базой: пропавшая копия снова становится нужной;
@@ -26,13 +27,17 @@ import sys
 from typing import Any
 import uuid
 
-from . import reconcile, store
-from .agent import unit_states
+from . import hostinfo, reconcile, store
+from .agent import DEFAULT_METRICS_DIR, processes
 
 logger = logging.getLogger("node-agent-main")
 DUMP = re.compile(r"^mranked-[0-9]{8}T[0-9]{6}Z\.dump$")
 RETRY_BASE_SECONDS = 120
 RETRY_MAX_ATTEMPTS = 40
+# Маркер идущей выкатки (operations/deploy/deploy-release.sh). Маркер старше
+# суток — остаток оборванной выкатки, а не выкатка.
+DEPLOY_MARKER = Path("/var/lib/m-ranked/deploy/in-progress.json")
+DEPLOY_MARKER_MAX_AGE_SECONDS = 86400
 
 NODES_SQL = """
 SELECT id, role, state, stores_objects, reserve_bytes, last_seen_at,
@@ -51,9 +56,29 @@ def _main_id(connection: Any) -> str:
     return row["id"]
 
 
-def record_heartbeat(connection: Any, node: str, root: Path, units: list[str]) -> dict[str, Any]:
+def deploy_marker(path: Path = DEPLOY_MARKER, now: float | None = None) -> dict[str, Any] | None:
+    """Идущая выкатка: версия, шаг и начало; нет маркера — None."""
+    try:
+        if (now or datetime.now(timezone.utc).timestamp()) - path.stat().st_mtime > DEPLOY_MARKER_MAX_AGE_SECONDS:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(value, dict):
+        return None
+    started = value.get("startedAt")
+    return {"version": value["version"] if isinstance(value.get("version"), str)
+            and hostinfo.RELEASE.fullmatch(value["version"]) else None,
+            "phase": str(value.get("phase") or "")[:40] or None,
+            "startedAt": started if isinstance(started, (int, float)) and not isinstance(started, bool) else None}
+
+
+def record_heartbeat(connection: Any, node: str, root: Path, units: list[str],
+                     metrics_dir: Path = DEFAULT_METRICS_DIR) -> dict[str, Any]:
     metrics = store.host_metrics(root)
-    report = {"metrics": metrics, "units": unit_states(units), "files": store.inventory(root)}
+    found, unit_state = processes(units, metrics_dir)
+    found["deploy"] = deploy_marker()
+    report = {"metrics": metrics, "units": unit_state, "files": store.inventory(root), "processes": found}
     connection.execute(
         "UPDATE ops_and_admin.server_node SET last_seen_at = transaction_timestamp(), agent_version = 'main-1',"
         " report = %(report)s::jsonb WHERE id = %(node)s", {"node": node, "report": json.dumps(report)})

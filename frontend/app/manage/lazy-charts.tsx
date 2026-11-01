@@ -10,6 +10,7 @@ const cards = (count: number, className: string) => function CardsLoading() {
 };
 export const LazyVisitorsChart = dynamic(() => import("./charts").then((module) => module.VisitorsChart), { ssr: false, loading });
 export const LazySystemCharts = dynamic(() => import("./charts").then((module) => module.SystemCharts), { ssr: false, loading });
+export const LazyResourceCharts = dynamic(() => import("./charts").then((module) => module.ResourceCharts), { ssr: false, loading });
 export const LazyHostCards = dynamic(() => import("./system-visuals").then((module) => module.HostCards),
   { ssr: false, loading: cards(5, "mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5") });
 export const LazyStorageCards = dynamic(() => import("./system-visuals").then((module) => module.StorageCards),

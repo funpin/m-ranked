@@ -59,14 +59,14 @@ function Sparkline({ data, series, unit, fromZero = false }: {
   );
 }
 
-function Metric({ label, live, ring, children, spark, footer }: {
-  label: string; live: boolean; ring?: React.ReactNode; children: React.ReactNode; spark?: React.ReactNode; footer?: React.ReactNode;
+function Metric({ label, live, ring, children, spark, footer, every = "каждые несколько секунд" }: {
+  label: string; live: boolean; ring?: React.ReactNode; children: React.ReactNode; spark?: React.ReactNode; footer?: React.ReactNode; every?: string;
 }) {
   return (
     <Card className="min-w-0 gap-3 p-4" data-metric={label}>
       <div className="flex items-center justify-between gap-2">
         <p className="font-heading text-sm font-semibold tracking-tight">{label}</p>
-        {live ? <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px]" title="Обновляется каждые несколько секунд">
+        {live ? <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px]" title={`Обновляется ${every}`}>
           <span className="relative flex size-1.5" aria-hidden="true">
             <span className="bg-success absolute inline-flex size-full animate-ping rounded-full opacity-60 motion-reduce:hidden" />
             <span className="bg-success relative inline-flex size-1.5 rounded-full" />
@@ -97,11 +97,14 @@ function stamp(at: string) {
 /** Пять карточек ресурсов: CPU, RAM, диск, сеть и службы. Кольца и
  *  спарклайны идут от живого буфера API; пока его нет (первый запрос,
  *  перезапуск API) — от последнего минутного снимка. */
-export function HostCards({ host, fallback }: { host: Host; fallback: SystemPoint[] }) {
+export function HostCards({ host, fallback }: { host: Host; fallback: Pick<SystemPoint, "at" | "cpu" | "memory">[] }) {
   const live = useLiveHost();
   const latest: SystemLivePoint | undefined = live.points[live.points.length - 1];
   const isLive = live.state === "live" && !!latest;
-  const edge = latest ? Date.parse(latest.at) - SPARK_MS : 0;
+  const step = live.meta?.intervalSeconds ?? 5;
+  // Минутным точкам сборщика пять минут — пять точек: им спарклайн за полчаса.
+  const edge = latest ? Date.parse(latest.at) - Math.max(SPARK_MS, 30_000 * step) : 0;
+  const every = step >= 60 ? "раз в минуту — отчётом агента" : "каждые несколько секунд";
   const recent: Spark[] = isLive
     ? live.points.filter((point) => Date.parse(point.at) >= edge).map((point) => ({ ...point, stamp: stamp(point.at) }))
     : fallback.slice(-24).map((point) => ({ ...point, stamp: stamp(point.at) }));
@@ -120,21 +123,21 @@ export function HostCards({ host, fallback }: { host: Host; fallback: SystemPoin
   const pct = (value: number) => `${value.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`;
   return (
     <div data-testid="host-cards" className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-      <Metric label="CPU" live={isLive}
+      <Metric label="CPU" live={isLive} every={every}
         ring={<Ring value={cpu} color="var(--chart-2)" label="CPU"><Center value={cpu} caption={`${cores} ${cores === 1 ? "ядро" : cores < 5 ? "ядра" : "ядер"}`} /></Ring>}
         spark={<Sparkline data={recent} unit={pct} series={[{ key: "cpu", label: "CPU", color: "var(--chart-2)" }]} />}>
         <p>load average</p>
         <p className="text-foreground font-medium tabular-nums">{load.map((value) => value.toFixed(2)).join(" · ") || "—"}</p>
         <p>{load[0] != null && load[0] > cores * 2 ? "выше двух на ядро" : "в пределах ядер"}</p>
       </Metric>
-      <Metric label="RAM" live={isLive}
+      <Metric label="RAM" live={isLive} every={every}
         ring={<Ring value={memory} color="var(--chart-4)" label="RAM"><Center value={memory} caption="занято" /></Ring>}
         spark={<Sparkline data={recent} unit={pct} series={[{ key: "memory", label: "RAM", color: "var(--chart-4)" }]} />}>
         <p className="text-foreground font-medium tabular-nums">{bytes(memoryUsed)}</p>
         <p>из {bytes(memoryTotal)}</p>
         <p>swap {bytes(swap)}</p>
       </Metric>
-      <Metric label="Disk" live={isLive}
+      <Metric label="Disk" live={isLive} every={every}
         ring={<Ring value={disk} color="var(--chart-3)" label="Disk"><Center value={disk} caption="занято" /></Ring>}
         spark={isLive ? <Sparkline data={recent} unit={rate} fromZero series={[
           { key: "diskWriteBytesPerSecond", label: "запись", color: "var(--chart-3)" },
@@ -144,12 +147,12 @@ export function HostCards({ host, fallback }: { host: Host; fallback: SystemPoin
         <p>свободно из {bytes(diskTotal)}</p>
         {isLive ? <p className="tabular-nums">запись {rate(latest.diskWriteBytesPerSecond)}</p> : null}
       </Metric>
-      <Metric label="Network" live={isLive}
+      <Metric label="Network" live={isLive} every={every}
         spark={isLive ? <Sparkline data={recent} unit={rate} fromZero series={[
           { key: "netTxBytesPerSecond", label: "отдано", color: "var(--chart-1)" },
           { key: "netRxBytesPerSecond", label: "получено", color: "var(--chart-9)" },
         ]} /> : undefined}
-        footer={isLive ? undefined : "Скорости сети появятся с живым буфером API."}>
+        footer={isLive ? undefined : "Скорости сети появятся с живыми точками сервера."}>
         <p className="flex items-baseline gap-2"><span className="bg-chart-1 inline-block size-2 rounded-full" aria-hidden="true" />отдано
           <b className="text-foreground font-heading text-base tabular-nums">{isLive ? rate(latest.netTxBytesPerSecond) : "—"}</b></p>
         <p className="flex items-baseline gap-2"><span className="bg-chart-9 inline-block size-2 rounded-full" aria-hidden="true" />получено

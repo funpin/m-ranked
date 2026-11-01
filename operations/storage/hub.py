@@ -19,12 +19,26 @@ from pathlib import Path
 import time
 from typing import Any, Callable, Mapping
 
-from . import store
+from . import hostinfo, store
 
 logger = logging.getLogger("transfer_ingest.node")
 
 MAX_CHUNK = store.CHUNK_BYTES
-SAMPLE_EVERY_SECONDS = 300
+# Агент отчитывается раз в минуту; без очереди точек (агент версии 1) строка
+# истории пишется не чаще, чем раз в этот срок.
+SAMPLE_EVERY_SECONDS = 50
+# Точки из очереди агента: не больше трёх часов назад и не из будущего с
+# поправкой на расхождение часов серверов.
+SAMPLE_MAX_AGE_SECONDS = 4 * 3600
+SAMPLE_MAX_AHEAD_SECONDS = 120
+MAX_SAMPLES = 200
+SAMPLE_FIELDS = {
+    "diskTotalBytes": "disk_total_bytes", "diskFreeBytes": "disk_free_bytes", "storeBytes": "store_bytes",
+    "memoryTotalBytes": "memory_total_bytes", "memoryAvailableBytes": "memory_available_bytes", "load1": "load1",
+    "cpuPercent": "cpu_percent", "swapUsedBytes": "swap_used_bytes",
+    "netRxBytesPerSecond": "net_rx_bytes_per_second", "netTxBytesPerSecond": "net_tx_bytes_per_second",
+    "diskReadBytesPerSecond": "disk_read_bytes_per_second", "diskWriteBytesPerSecond": "disk_write_bytes_per_second",
+}
 
 
 class NodeRejected(Exception):
@@ -50,11 +64,13 @@ UPDATE ops_and_admin.server_node
  WHERE id = %(node)s
 """
 LAST_SAMPLE_SQL = "SELECT max(observed_at) AS at FROM ops_and_admin.server_node_sample WHERE node_id = %(node)s"
-SAMPLE_SQL = """
-INSERT INTO ops_and_admin.server_node_sample (node_id, disk_total_bytes, disk_free_bytes, store_bytes,
-       memory_total_bytes, memory_available_bytes, load1)
-VALUES (%(node)s, %(diskTotalBytes)s, %(diskFreeBytes)s, %(storeBytes)s, %(memoryTotalBytes)s,
-        %(memoryAvailableBytes)s, %(load1)s)
+# Время точки — время замера на узле; повтор той же точки (отчёт дошёл, а
+# ответ потерялся) отсекает первичный ключ.
+SAMPLE_SQL = f"""
+INSERT INTO ops_and_admin.server_node_sample (node_id, observed_at, release, {", ".join(SAMPLE_FIELDS.values())})
+VALUES (%(node)s, coalesce(to_timestamp(%(at)s), transaction_timestamp()), %(release)s,
+        {", ".join(f"%({key})s" for key in SAMPLE_FIELDS)})
+ON CONFLICT (node_id, observed_at) DO NOTHING
 """
 TASKS_SQL = """
 SELECT replica.object_id::text AS object_id, replica.state, object.kind, object.name, object.size_bytes,
@@ -112,18 +128,81 @@ def membership(nodes: list[Mapping[str, Any]]) -> str | None:
     return ",".join(entries) if len(entries) > 1 else None
 
 
+def _number(value: Any) -> float | int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value if value == value and abs(value) < 1e18 else None  # NaN и бесконечности — мимо
+
+
+def _release(value: Any) -> str | None:
+    return value if isinstance(value, str) and hostinfo.RELEASE.fullmatch(value) else None
+
+
+TASK_TEXT = {"unit": 80, "active": 20, "sub": 20, "result": 30, "timerActive": 20}
+TASK_NUMBERS = ("since", "startedAt", "exitedAt", "restarts", "lastAt", "nextAt")
+
+
+def _clean_processes(value: Any) -> dict[str, Any]:
+    """Процессы узла: только известные поля, строки и списки ограничены."""
+    if not isinstance(value, dict):
+        return {}
+    tasks = []
+    for item in (value.get("tasks") if isinstance(value.get("tasks"), list) else [])[:hostinfo.MAX_TASKS]:
+        if not isinstance(item, dict) or not isinstance(item.get("unit"), str):
+            continue
+        task: dict[str, Any] = {key: str(item[key])[:limit] for key, limit in TASK_TEXT.items()
+                                if isinstance(item.get(key), str)}
+        task["scheduled"] = bool(item.get("scheduled"))
+        task.update({key: _number(item.get(key)) for key in TASK_NUMBERS if _number(item.get(key)) is not None})
+        tasks.append(task)
+    collectors = {}
+    raw = value.get("collectors") if isinstance(value.get("collectors"), dict) else {}
+    for platform in hostinfo.PLATFORMS:
+        entry = raw.get(platform)
+        if isinstance(entry, dict):
+            collectors[platform] = {key: _number(entry.get(key)) for key in (
+                "lastSuccessAt", "cycleSeconds", "scheduleLagSeconds", "shutdowns", "providerErrors")
+                if _number(entry.get(key)) is not None}
+    transfer = value.get("transfer") if isinstance(value.get("transfer"), dict) else None
+    return {
+        "release": _release(value.get("release")), "bootAt": _number(value.get("bootAt")), "tasks": tasks,
+        "collectors": collectors,
+        "transfer": {key: _number(transfer.get(key)) for key in ("backlog", "delivered", "failures")
+                     if _number(transfer.get(key)) is not None} if transfer else None,
+    }
+
+
+def clean_samples(report: Mapping[str, Any], now: float) -> list[dict[str, Any]]:
+    """Минутные точки из очереди агента: числа, время в разумных пределах."""
+    samples = report.get("samples") if isinstance(report.get("samples"), list) else []
+    result, seen = [], set()
+    for item in samples[-MAX_SAMPLES:]:
+        if not isinstance(item, dict):
+            continue
+        at = _number(item.get("at"))
+        if at is None or not now - SAMPLE_MAX_AGE_SECONDS <= at <= now + SAMPLE_MAX_AHEAD_SECONDS or at in seen:
+            continue
+        seen.add(at)
+        result.append({"at": at, "release": _release(item.get("release")),
+                       **{key: _number(item.get(key)) for key in SAMPLE_FIELDS}})
+    return result
+
+
 def _clean_report(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
     numeric = {key: metrics.get(key) for key in (
         "diskTotalBytes", "diskFreeBytes", "storeBytes", "rootTotalBytes", "rootFreeBytes",
-        "memoryTotalBytes", "memoryAvailableBytes", "load1", "cpus")
-        if isinstance(metrics.get(key), (int, float)) and not isinstance(metrics.get(key), bool)}
+        "memoryTotalBytes", "memoryAvailableBytes", "swapUsedBytes", "load1", "load5", "load15", "cpus",
+        "cpuPercent", "netRxBytesPerSecond", "netTxBytesPerSecond", "diskReadBytesPerSecond",
+        "diskWriteBytesPerSecond")
+        if _number(metrics.get(key)) is not None}
     units = report.get("units") if isinstance(report.get("units"), dict) else {}
     units = {str(key)[:80]: str(value)[:20] for key, value in list(units.items())[:40]}
     inventory = report.get("inventory") if isinstance(report.get("inventory"), list) else []
     files = [{"name": str(item.get("name"))[:200], "size": int(item.get("size") or 0)}
              for item in inventory[:2000] if isinstance(item, dict)]
-    return {"metrics": numeric, "units": units, "files": files, "transfers": report.get("transfers") or {}}
+    return {"metrics": numeric, "units": units, "files": files, "transfers": report.get("transfers") or {},
+            "processes": _clean_processes(report.get("processes"))}
 
 
 class NodeHub:
@@ -163,12 +242,15 @@ class NodeHub:
             with connection.transaction():
                 connection.execute(HEARTBEAT_SQL, {"node": node["id"], "version": str(report.get("agentVersion", ""))[:40],
                                                    "report": json.dumps(cleaned)})
-                last = connection.execute(LAST_SAMPLE_SQL, {"node": node["id"]}).fetchone()
-                if last is None or last["at"] is None or (time.time() - last["at"].timestamp()) >= SAMPLE_EVERY_SECONDS:
-                    metrics = {key: cleaned["metrics"].get(key) for key in (
-                        "diskTotalBytes", "diskFreeBytes", "storeBytes", "memoryTotalBytes",
-                        "memoryAvailableBytes", "load1")}
-                    connection.execute(SAMPLE_SQL, {"node": node["id"], **metrics})
+                samples = clean_samples(report, time.time())
+                if samples:
+                    with connection.cursor() as cursor:
+                        cursor.executemany(SAMPLE_SQL, [{"node": node["id"], **sample} for sample in samples])
+                else:
+                    last = connection.execute(LAST_SAMPLE_SQL, {"node": node["id"]}).fetchone()
+                    if last is None or last["at"] is None or (time.time() - last["at"].timestamp()) >= SAMPLE_EVERY_SECONDS:
+                        metrics = {key: cleaned["metrics"].get(key) for key in SAMPLE_FIELDS}
+                        connection.execute(SAMPLE_SQL, {"node": node["id"], "at": None, "release": None, **metrics})
                 for result in (report.get("results") or [])[:200]:
                     self._apply_result(connection, node["id"], result)
             tasks = self._tasks(connection, node["id"])

@@ -1,22 +1,28 @@
 import type * as React from "react";
-import { HardDrive, Plus, Save } from "lucide-react";
+import { Plus, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { StorageOverview } from "@/lib/catalog-api";
+import type { CatalogStatus, ServersOverview, StorageOverview } from "@/lib/catalog-api";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { LazyHostCards, LazyResourceCharts, LazyStorageCards } from "./lazy-charts";
+import { LiveHostProvider } from "./live-host";
+import { GapList, GapSummary, ServerStatusPill, ServerSwitch, TaskList } from "./processes";
+import { RangeSwitch } from "./range-switch";
 import { ago, bytes, fields, Pill, Section } from "./shared";
+
+const RANGES = [["1h", "1 час"], ["3h", "3 часа"], ["day", "Сутки"], ["week", "Неделя"]] as const;
+export type ServerRange = (typeof RANGES)[number][0];
 
 type Server = StorageOverview["servers"][number];
 type Replica = StorageOverview["backups"][number]["replicas"][number];
 type Platform = Server["platforms"][number];
 
 const PLATFORMS: Platform[] = ["telegram", "vk", "max", "rutube"];
-const number = new Intl.NumberFormat("ru-RU");
 const ROLE: Record<Server["role"], string> = { main: "основной", collector: "сборщик", storage: "хранение" };
 const STATE: Record<Server["state"], [string, string]> = {
   active: ["подключён", "text-success"], pending: ["ожидает", "text-muted-foreground"],
@@ -104,42 +110,59 @@ function ServerForm({ server, csrf, canEdit }: { server: Server; csrf: string; c
   </details>;
 }
 
-function Servers({ servers, csrf, canEdit, now }: { servers: Server[]; csrf: string; canEdit: boolean; now: number }) {
-  return <Section title="Серверы" description="Каждый сервер раз в минуту присылает отчёт агента: диск, память, службы и файлы хранилища. Сервер без отчёта дольше трёх минут считается не на связи.">
-    <div className="grid gap-4 lg:grid-cols-2" data-testid="storage-servers">
-      {servers.map((server) => {
-        const [stateLabel, stateTone] = STATE[server.state];
-        const units = Object.entries(server.units);
-        const failed = units.filter(([, state]) => state !== "active");
-        const verified = server.copies.verified;
-        return <article key={server.id} data-server={server.id} className="min-w-0 rounded-lg border p-4">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="font-medium"><HardDrive className="mr-1.5 inline size-4" aria-hidden="true" />{server.displayName}</h3>
-              <p className="text-muted-foreground font-mono text-xs">{server.id} · {ROLE[server.role]}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Pill className={stateTone}>{stateLabel}</Pill>
-              <Pill className={server.online ? "text-success" : "text-destructive"}>{server.online ? "на связи" : server.lastSeenAt ? `нет связи · ${ago(server.lastSeenAt, now)}` : "агент не отвечал"}</Pill>
-            </div>
-          </div>
-          <Disk server={server} />
-          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            <dt className="text-muted-foreground">Память</dt>
-            <dd className="text-right tabular-nums">{server.memory.availableBytes == null ? "—" : `${bytes(server.memory.availableBytes)} свободно из ${bytes(server.memory.totalBytes)}`}</dd>
-            <dt className="text-muted-foreground">Нагрузка</dt>
-            <dd className="text-right tabular-nums">{server.load1 == null ? "—" : `${server.load1.toFixed(2)} на ${server.cpus ?? "—"} ядр.`}</dd>
-            <dt className="text-muted-foreground">Площадки</dt>
-            <dd className="text-right">{server.platforms.length ? server.platforms.map((platform) => PLATFORM_LONG_LABELS[platform]).join(", ") : "—"}</dd>
-            <dt className="text-muted-foreground">Сверенных копий</dt>
-            <dd className="text-right tabular-nums">{verified ? `${number.format(verified.objects)} · ${bytes(verified.bytes)}` : "нет"}</dd>
-            <dt className="text-muted-foreground">Службы</dt>
-            <dd className={cn("text-right", failed.length && "text-destructive")}>{units.length ? failed.length ? `не работают: ${failed.map(([unit]) => unit.replace(/\.service$/, "")).join(", ")}` : `${units.length} работают` : "—"}</dd>
-          </dl>
-          <ServerForm server={server} csrf={csrf} canEdit={canEdit} />
-        </article>;
-      })}
+type Panel = NonNullable<ServersOverview["selected"]>;
+
+/** Панель выбранного сервера: состояние и версия, ресурсы вживую и за
+ *  период, пропуски замеров, службы и задания, место и настройки. Живые точки
+ *  читает только открытая панель: основной — буфер API раз в шаг (5 с),
+ *  сборщик — минутные точки агента раз в полминуты. */
+function ServerPanel({ panel, storageServer, storage, range, csrf, canEdit, now }: {
+  panel: Panel; storageServer: Server | undefined; storage: CatalogStatus["storage"] | null; range: ServerRange;
+  csrf: string; canEdit: boolean; now: number;
+}) {
+  const main = panel.role === "main";
+  const endpoint = `/api/v1/admin/servers/${encodeURIComponent(panel.id)}/live`;
+  const step = panel.liveSeconds ?? 60;
+  const description = main
+    ? "Основной: принимает пакеты сборщиков, анализирует, отдаёт сайт. Ресурсы — вживую из памяти API каждые несколько секунд, история — минутными снимками сервера."
+    : "Сборщик: опрашивает площадки и отправляет пачки на основной. Ресурсы — минутными точками агента узла; точки, не дошедшие из-за перезапуска основного, приходят следующим отчётом.";
+  return <Section title={panel.displayName} description={description} data-server={panel.id}
+    action={<div className="flex flex-wrap gap-2"><ServerStatusPill status={panel.status} now={now} />
+      {panel.status.release ? <Pill className="font-mono">{panel.status.release}</Pill> : null}</div>}>
+    <dl className="mb-5 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-4">
+      <div><dt className="text-muted-foreground">Роль</dt><dd className="font-medium">{ROLE[panel.role]}</dd></div>
+      <div><dt className="text-muted-foreground">Последний отчёт</dt><dd className="font-medium">{ago(panel.status.seenAt, now)}</dd></div>
+      <div><dt className="text-muted-foreground">Состояние</dt><dd className="font-medium">{panel.status.detail || "—"}</dd></div>
+      <div><dt className="text-muted-foreground">Площадки</dt><dd className="font-medium">{panel.platforms.length ? panel.platforms.map((platform) => PLATFORM_LONG_LABELS[platform]).join(", ") : "—"}</dd></div>
+    </dl>
+    <LiveHostProvider key={endpoint} endpoint={endpoint}>
+      {panel.host ? <LazyHostCards host={panel.host} fallback={panel.series} /> : <p className="text-muted-foreground mb-5">Ресурсов ещё нет: агент присылает первый отчёт в течение минуты.</p>}
+      {main ? <LazyStorageCards storage={storage} /> : null}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-heading font-semibold">Ресурсы за период</h3>
+        <RangeSwitch label="Период" value={range} options={RANGES} href={(value) => `/manage?tab=servers&server=${encodeURIComponent(panel.id)}&range=${value}`} />
+      </div>
+      {panel.series.length || range === "1h" || range === "3h"
+        ? <LazyResourceCharts points={panel.series} range={range} step={step} />
+        : <p className="text-muted-foreground">Точек за период пока нет.</p>}
+    </LiveHostProvider>
+    <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="min-w-0 rounded-lg border p-4" data-testid="server-gaps">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="font-medium">Пропуски замеров</p><GapSummary gaps={panel.gaps} />
+        </div>
+        <GapList gaps={panel.gaps.items} />
+        <p className="text-muted-foreground mt-3 text-xs">Пропуск — нет замеров дольше {Math.max(150, Math.round(panel.gaps.stepSeconds * 2.5))} с при шаге {panel.gaps.stepSeconds} с. Выкатка не теряет замеров: агент держит неотправленные точки, снимок основного дописывается следующим запуском, буфер API переживает перезапуск.</p>
+      </div>
+      <div className="min-w-0 rounded-lg border p-4">
+        <p className="mb-2 font-medium">Службы и задания</p>
+        <TaskList tasks={panel.tasks} now={now} />
+      </div>
     </div>
+    {storageServer ? <div className="mt-5 rounded-lg border p-4">
+      <Disk server={storageServer} />
+      <ServerForm server={storageServer} csrf={csrf} canEdit={canEdit} />
+    </div> : null}
   </Section>;
 }
 
@@ -270,16 +293,24 @@ function Backups({ overview, servers, now }: { overview: StorageOverview; server
   </Section>;
 }
 
-export function ServersTab({ overview, csrf, canEdit, now, status, error }: {
-  overview: StorageOverview | null; csrf: string; canEdit: boolean; now: number; status?: string; error?: string;
+export function ServersTab({ overview, monitor, storage, range, csrf, canEdit, now, status, error }: {
+  overview: StorageOverview | null; monitor: ServersOverview | null; storage: CatalogStatus["storage"] | null; range: ServerRange;
+  csrf: string; canEdit: boolean; now: number; status?: string; error?: string;
 }) {
-  if (!overview) return <Section title="Серверы"><p className="text-destructive">Не удалось получить состояние серверов и хранилища.</p></Section>;
+  const selected = monitor?.selected ?? null;
+  const panel = monitor ? <>
+    <ServerSwitch servers={monitor.servers} selected={selected?.id ?? null} label="Сервер" now={now}
+      href={(id) => `/manage?tab=servers&server=${encodeURIComponent(id)}&range=${range}`} />
+    {selected ? <ServerPanel panel={selected} storageServer={overview?.servers.find((server) => server.id === selected.id)} storage={storage}
+      range={range} csrf={csrf} canEdit={canEdit} now={now} /> : <Section title="Серверы"><p className="text-muted-foreground">Серверов в реестре нет.</p></Section>}
+  </> : <Section title="Серверы"><p className="text-destructive">Не удалось получить состояние серверов.</p></Section>;
+  if (!overview) return <>{panel}<Section title="Хранение"><p className="text-destructive">Не удалось получить состояние хранилища и политик.</p></Section></>;
   const servers = new Map(overview.servers.map((server) => [server.id, server.displayName]));
   return <>
     {status && STATUS[status] ? <p role="status" className="text-success mb-4 text-sm">{STATUS[status]}</p> : null}
     {error ? <p role="alert" className="text-destructive mb-4 text-sm">{ERROR[error] ?? "Не удалось сохранить изменение."}</p> : null}
     {!canEdit ? <p className="text-muted-foreground mb-4 text-sm">Изменять серверы и политики может роль ADMIN.</p> : null}
-    <Servers servers={overview.servers} csrf={csrf} canEdit={canEdit} now={now} />
+    {panel}
     <AddServer csrf={csrf} canEdit={canEdit} />
     <div className="grid gap-x-5 xl:grid-cols-2">
       <StoragePolicy overview={overview} csrf={csrf} canEdit={canEdit} now={now} />

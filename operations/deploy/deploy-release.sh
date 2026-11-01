@@ -42,6 +42,11 @@ RELEASES="$MRANKED_ROOT/releases"
 DEPLOYMENTS="$MRANKED_ROOT/deployments"
 CURRENT="$MRANKED_ROOT/current"
 LEDGER="$MRANKED_STATE_DIR/applied-migrations"
+# Маркер идущей выкатки: агент основного сервера (operations/storage/main_agent.py)
+# раз в минуту кладёт его в отчёт, и панель с ботом показывают «обновляется».
+MARKER="$MRANKED_STATE_DIR/in-progress.json"
+MARKED=""
+DEPLOY_STARTED="$(date +%s)"
 LOCK=/run/lock/m-ranked-release.lock
 VERSION_RE='^v20[0-9]{2}\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)$'
 LOCKS=(tooling api collector anomaly)
@@ -159,8 +164,14 @@ activate() {
   wait_healthy "$commit"
 }
 
+mark() {  # шаг выкатки для панели; ошибка записи выкатку не останавливает
+  jq -n --arg version "$1" --arg phase "$2" --argjson started "$DEPLOY_STARTED" \
+    '{version: $version, phase: $phase, startedAt: $started}' > "$MARKER.next" 2>/dev/null \
+    && mv -f "$MARKER.next" "$MARKER" && MARKED=1 || true
+}
+
 STAGING=""
-trap '[[ -n "$STAGING" ]] && rm -rf -- "$STAGING"' EXIT
+trap '[[ -n "$STAGING" ]] && rm -rf -- "$STAGING"; [[ -n "$MARKED" ]] && rm -f -- "$MARKER"' EXIT
 
 deploy() {
   local version="$1" digest="$2" migrations="$3" config="$4"
@@ -178,6 +189,7 @@ deploy() {
   target="$RELEASES/$name"
   previous="$(readlink -f "$CURRENT")"
   [[ "$target" != "$previous" ]] || { log "$version уже выкачен"; status; return 0; }
+  mark "$version" "подготовка"
 
   if [[ -d "$target" ]]; then
     # Повторная активация — откат на уже проверенный прежний выпуск.
@@ -235,6 +247,7 @@ deploy() {
     age=$(( ( $(date +%s) - $(stat -c %Y "$dump") ) / 3600 ))
     (( age <= MRANKED_BACKUP_MAX_AGE_HOURS )) \
       || die "последний дамп ${dump##*/} старше $MRANKED_BACKUP_MAX_AGE_HOURS ч ($age ч)"
+    mark "$version" "миграции"
     for file in "${pending[@]}"; do
       log "миграция ${file##*/}"
       { echo "SET ROLE migration_owner;"; echo "SET lock_timeout = '10s';"; cat "$file"; } \
@@ -248,8 +261,10 @@ deploy() {
   install -d -m 0750 "$record"
   cp -p "$MRANKED_BUILD_CONF" "$record/build.conf.before"
   log "переключение $(basename "$previous") → $name"
+  mark "$version" "переключение"
   if ! activate "$target" "$commit"; then
     log "проверка не прошла: возврат на $(basename "$previous")"
+    mark "$version" "откат"
     switch_to "$previous"
     cp -p "$record/build.conf.before" "$MRANKED_BUILD_CONF"
     nginx -t -q && systemctl reload nginx
