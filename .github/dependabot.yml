@@ -9,6 +9,11 @@ updates:
     target-branch: develop
     schedule:
       interval: weekly
+    # Неделя на отзыв выпуска, прежде чем он попадёт в PR: свежие версии —
+    # главный риск цепочки поставок (01.11.2026 в одной группе пришли выпуски
+    # трёх- и пятидневной давности).
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: deps
     groups:
@@ -20,8 +25,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: deps
+    # Типы Node — под мажорную версию рантайма (node:24 в release.yml,
+    # engines >=24): с @types/node 26 сборка падает (#65).
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
     groups:
       frontend-minor:
         update-types: [minor, patch]
