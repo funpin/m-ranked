@@ -7,6 +7,11 @@
 --        -f operations/sql/mature-reference-endpoints.sql | gzip > endpoints.jsonl.gz
 --
 -- Даты — UTC, правые границы исключены. Далее: python -m anomaly_analysis.tools.renew_mature_reference.
+--
+-- Замеры старше двух суток упаковщик (0059) переносит в ingest.publication_metric_history и удаляет
+-- из горячей таблицы, поэтому точки поста — обе части: горячие строки и упакованные версии первых
+-- 80 часов (с запасом на версии бакета у границы 72 ч). Распакованная точка сохраняет created_at,
+-- бакет и номер коррекции, так что видимость на момент доступности считается как по горячим строкам.
 BEGIN READ ONLY;
 SET LOCAL statement_timeout='60s';
 SET LOCAL lock_timeout='2s';
@@ -21,43 +26,51 @@ posts AS (
  WHERE p.deleted_at IS NULL AND NOT p.is_repost
  AND ((p.published_at>=:'fit_from'::timestamptz AND p.published_at<:'fit_until'::timestamptz)
    OR (p.published_at>=:'cal_from'::timestamptz AND p.published_at<:'cal_until'::timestamptz))
+), snapshots AS (
+ SELECT s.publication_id,s.observed_at,s.age_seconds,s.views_count,s.reactions_count,s.views_quality,
+  s.reactions_quality,s.interval_uncertain,s.synthetic,s.created_at,s.sampling_bucket,s.correction_sequence
+ FROM posts p JOIN ingest.publication_metric_snapshot s
+  ON s.publication_id=p.id AND s.published_month=date_trunc('month',p.published_at)::date
+ UNION ALL
+ SELECT u.publication_id,u.observed_at,u.age_seconds,u.views_count,u.reactions_count,u.views_quality,
+  u.reactions_quality,u.interval_uncertain,u.synthetic,u.created_at,u.sampling_bucket,u.correction_sequence
+ FROM posts p JOIN ingest.publication_metric_history h ON h.publication_id=p.id
+ CROSS JOIN LATERAL (SELECT max(t.o)::integer AS hi FROM unnest(h.observed_at) WITH ORDINALITY t(at,o)
+                     WHERE t.at<=p.published_at+interval '80 hours') slice
+ CROSS JOIN LATERAL ingest.unpack_history(h,1,slice.hi) u
+ WHERE slice.hi IS NOT NULL
+), visible AS (
+ -- Видима на момент доступности последняя записанная к тому времени версия бакета.
+ SELECT * FROM (
+  SELECT s.*,rank() OVER(PARTITION BY publication_id,sampling_bucket ORDER BY correction_sequence DESC) AS version_rank
+  FROM snapshots s WHERE s.created_at<:'available_before'::timestamptz
+ ) ranked WHERE version_rank=1 AND NOT synthetic
+), endpoints AS (
+ SELECT DISTINCT ON(p.id,w.hours) p.id,w.hours,raw.observed_at,raw.age_seconds,raw.views_count AS v,
+  raw.reactions_count AS r,raw.views_quality::text AS vq,raw.reactions_quality::text AS rq,
+  raw.interval_uncertain AS uncertain,raw.created_at
+ FROM posts p CROSS JOIN (VALUES(24,3),(72,6)) w(hours,slack)
+ JOIN visible raw ON raw.publication_id=p.id AND raw.age_seconds BETWEEN (w.hours-w.slack)*3600 AND w.hours*3600
+ ORDER BY p.id,w.hours,raw.observed_at DESC,raw.correction_sequence DESC
+), point_sets AS (
+ SELECT z.id,jsonb_agg(to_jsonb(z)-'id' ORDER BY z.hours) AS points FROM (
+  SELECT p.id,w.hours,e.observed_at,e.age_seconds,e.v,e.r,e.vq,e.rq,e.uncertain,e.created_at
+  FROM posts p CROSS JOIN (VALUES(24),(72)) w(hours) LEFT JOIN endpoints e ON e.id=p.id AND e.hours=w.hours
+ ) z GROUP BY z.id
+), decreases AS (
+ SELECT publication_id,bool_or(v<previous_v OR r<previous_r) AS known_decrease FROM (
+  SELECT publication_id,v,r,max(v) OVER w AS previous_v,max(r) OVER w AS previous_r FROM (
+   SELECT DISTINCT ON(publication_id,sampling_bucket) publication_id,observed_at,
+     CASE WHEN views_quality='exact' AND NOT interval_uncertain THEN views_count END AS v,
+     CASE WHEN reactions_quality='exact' AND NOT interval_uncertain THEN reactions_count END AS r
+   FROM visible WHERE age_seconds BETWEEN 0 AND 72*3600
+   ORDER BY publication_id,sampling_bucket,correction_sequence DESC
+  ) q
+  WINDOW w AS (PARTITION BY publication_id ORDER BY observed_at ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
+ ) q GROUP BY publication_id
 ), results AS (
- SELECT p.*,
-  (SELECT jsonb_agg(to_jsonb(z) ORDER BY hours) FROM (
-   SELECT h.hours,s.* FROM (VALUES(24,3),(72,6)) h(hours,slack)
-   LEFT JOIN LATERAL (
-    SELECT observed_at,age_seconds,views_count AS v,reactions_count AS r,
-     views_quality::text AS vq,reactions_quality::text AS rq,
-     interval_uncertain AS uncertain,created_at
-    FROM ingest.publication_metric_snapshot raw
-    WHERE raw.publication_id=p.id AND raw.published_month=date_trunc('month',p.published_at)::date
-      AND raw.age_seconds BETWEEN (h.hours-h.slack)*3600 AND h.hours*3600
-      AND NOT raw.synthetic AND raw.created_at<p.available_before AND NOT EXISTS (
-      SELECT 1 FROM ingest.publication_metric_snapshot successor
-      WHERE successor.published_month=raw.published_month AND successor.publication_id=raw.publication_id
-       AND successor.sampling_bucket=raw.sampling_bucket AND successor.correction_sequence>raw.correction_sequence
-       AND successor.created_at<p.available_before)
-    ORDER BY raw.observed_at DESC,raw.correction_sequence DESC LIMIT 1
-   ) s ON true
-  ) z) AS points,
-  (SELECT coalesce(bool_or(v<previous_v OR r<previous_r),false) FROM (
-   SELECT *,max(v) OVER(ORDER BY observed_at ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS previous_v,
-     max(r) OVER(ORDER BY observed_at ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS previous_r
-   FROM (
-    SELECT DISTINCT ON(raw.sampling_bucket) raw.observed_at,
-      CASE WHEN raw.views_quality='exact' AND NOT raw.interval_uncertain THEN raw.views_count END AS v,
-      CASE WHEN raw.reactions_quality='exact' AND NOT raw.interval_uncertain THEN raw.reactions_count END AS r
-    FROM ingest.publication_metric_snapshot raw
-    WHERE raw.publication_id=p.id AND raw.published_month=date_trunc('month',p.published_at)::date
-     AND raw.age_seconds BETWEEN 0 AND 72*3600 AND NOT raw.synthetic AND raw.created_at<p.available_before AND NOT EXISTS (
-      SELECT 1 FROM ingest.publication_metric_snapshot successor
-      WHERE successor.published_month=raw.published_month AND successor.publication_id=raw.publication_id
-       AND successor.sampling_bucket=raw.sampling_bucket AND successor.correction_sequence>raw.correction_sequence
-       AND successor.created_at<p.available_before)
-    ORDER BY raw.sampling_bucket,raw.correction_sequence DESC
-   ) q
-  ) q) AS known_decrease
- FROM posts p
+ SELECT p.*,s.points,coalesce(d.known_decrease,false) AS known_decrease
+ FROM posts p JOIN point_sets s ON s.id=p.id LEFT JOIN decreases d ON d.publication_id=p.id
 )
 SELECT to_jsonb(results) FROM results ORDER BY published_at,id;
 COMMIT;
