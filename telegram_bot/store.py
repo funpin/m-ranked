@@ -19,6 +19,8 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from api import server_monitor as monitor
+
 # Ключи настроек.
 OUR_INSTITUTION = "our_institution"
 
@@ -68,6 +70,10 @@ class Store(Protocol):
     async def set_job_run(self, name: str, at: float) -> None: ...
     async def prune(self, now: float) -> None: ...
     async def status_rows(self, seconds: int) -> list[dict]: ...
+    async def server_nodes(self) -> list[dict]: ...
+    async def main_marks(self, seconds: int) -> list[tuple[float, str | None]]: ...
+    async def node_samples(self, node: str, seconds: int) -> list[dict]: ...
+    async def collection_starts(self, platforms: list[str], seconds: int) -> list[dict]: ...
 
 
 class MemoryStore:
@@ -82,6 +88,10 @@ class MemoryStore:
         self._snapshots: dict[date, dict] = {}
         self._jobs: dict[str, float] = {}
         self.host_samples: list[dict] = []
+        # Реестр серверов, точки агентов и старты циклов сбора подкладывает тест.
+        self.nodes: list[dict] = []
+        self.node_points: dict[str, list[dict]] = {}
+        self.run_starts: list[dict] = []
 
     async def get_setting(self, key: str) -> Any:
         return copy.deepcopy(self._settings.get(key))
@@ -159,6 +169,20 @@ class MemoryStore:
         since = datetime.now(UTC) - timedelta(seconds=seconds)
         rows = [row for row in self.host_samples if row["observed_at"] >= since]
         return [copy.deepcopy(row) for row in sorted(rows, key=lambda row: row["observed_at"])]
+
+    async def server_nodes(self) -> list[dict]:
+        return copy.deepcopy(self.nodes)
+
+    async def main_marks(self, seconds: int) -> list[tuple[float, str | None]]:
+        return [(row["observed_at"].timestamp(), row["sample"].get("rel")) for row in await self.status_rows(seconds)]
+
+    async def node_samples(self, node: str, seconds: int) -> list[dict]:
+        since = datetime.now(UTC) - timedelta(seconds=seconds)
+        return [dict(row) for row in self.node_points.get(node, []) if row["observed_at"] > since]
+
+    async def collection_starts(self, platforms: list[str], seconds: int) -> list[dict]:
+        since = datetime.now(UTC).timestamp() - seconds
+        return [dict(row) for row in self.run_starts if row["platform"] in platforms and row["started"] >= since]
 
 
 class PostgresStore:
@@ -370,3 +394,21 @@ class PostgresStore:
             "SELECT observed_at, sample - 'sizes' AS sample FROM ops_and_admin.host_sample "
             "WHERE observed_at >= now() - make_interval(secs => %(seconds)s) ORDER BY observed_at",
             {"seconds": float(seconds)})
+
+    # Серверы — те же чтения, что у панели (api/server_monitor.py): реестр без
+    # описи файлов, история по первичному ключу, старты циклов по индексу.
+    async def server_nodes(self) -> list[dict]:
+        return await self._rows(monitor.LIST_SQL, {})
+
+    async def main_marks(self, seconds: int) -> list[tuple[float, str | None]]:
+        rows = await self._rows(
+            "SELECT extract(epoch FROM observed_at) AS at, sample->>'rel' AS rel FROM ops_and_admin.host_sample "
+            "WHERE observed_at >= now() - make_interval(secs => %(seconds)s) ORDER BY observed_at",
+            {"seconds": float(seconds)})
+        return [(float(row["at"]), row["rel"]) for row in rows]
+
+    async def node_samples(self, node: str, seconds: int) -> list[dict]:
+        return await self._rows(monitor.NODE_SAMPLES_SQL, {"node": node, "seconds": float(seconds)})
+
+    async def collection_starts(self, platforms: list[str], seconds: int) -> list[dict]:
+        return await self._rows(monitor.RUN_STARTS_SQL, {"platforms": platforms, "seconds": float(seconds)})

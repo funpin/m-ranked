@@ -35,6 +35,7 @@ from .render import (
     week_label,
 )
 from .source import ApiSource, SourceUnavailable, person_request
+from .servers import LIST_DATA, ServerMonitor, parse_data, server_buttons
 from .status import STATUS_WINDOW_SECONDS, render_status
 from .store import OUR_INSTITUTION, Recipient, Store
 from .telegram import BotBlocked, CannotInitiate, TelegramClient, TelegramError
@@ -180,6 +181,8 @@ class Bot:
         self.pending: dict[int, str] = {}
         # Имя бота из getMe: в группах команды «/x@чужой_бот» пропускаем.
         self.username: str | None = None
+        # Серверы под /status: кэш, кулдаун кнопок и живые сеансы.
+        self.servers = ServerMonitor(store, clock, config.timezone)
 
     # --- запуск ---------------------------------------------------------
 
@@ -430,17 +433,62 @@ class Bot:
 
     async def _status_message(self) -> Message:
         rows = await self.store.status_rows(STATUS_WINDOW_SECONDS)
-        return render_status(rows, self.clock(), self.config.timezone)
+        servers = await self.servers.servers()
+        return render_status(rows, self.clock(), self.config.timezone, servers=server_buttons(servers))
 
     async def _status_callback(self, callback: dict, access: Access, message: dict) -> None:
-        """«Обновить» под /status: те же условия, что у самой команды."""
+        """Кнопки под /status и под сервером: те же условия, что у самой команды
+        (получатель тревог, личка); нажатия чата — не чаще раза в 3 с."""
         if not (access.alerts and access.private):
             await self.telegram.answer_callback(callback["id"], "недоступно")
             return
-        fresh = await self._status_message()
-        # Текст не изменился — Telegram ответит «not modified», клиент это глотает.
-        await self.edit_and_answer(callback["id"], access.chat_id, message["message_id"],
-                                   fresh.text, fresh.keyboard, "обновлено")
+        chat_id, message_id = access.chat_id, message["message_id"]
+        data = callback.get("data") or ""
+        if self.servers.pressed_too_often(chat_id):
+            await self.telegram.answer_callback(callback["id"], "не так часто — раз в 3 секунды")
+            return
+        if data == LIST_DATA:
+            self.servers.stop_live(chat_id)
+            fresh = await self._status_message()
+            # Текст не изменился — Telegram ответит «not modified», клиент это глотает.
+            await self.edit_and_answer(callback["id"], chat_id, message_id, fresh.text, fresh.keyboard, "обновлено")
+            return
+        parsed = parse_data(data)
+        item = None
+        if parsed is not None:
+            item = next((entry for entry in await self.servers.servers() if entry["id"] == parsed[1]), None)
+        if parsed is None or item is None:
+            await self.telegram.answer_callback(callback["id"], STALE_BUTTON)
+            return
+        action, server = parsed
+        note = None
+        live_until = None
+        if action == "v":
+            kind = "main" if item["role"] == "main" else "node"
+
+            async def edit(fresh: Message) -> None:
+                await self.telegram.edit_message(chat_id, message_id, fresh.text, fresh.keyboard)
+
+            if self.servers.start_live(chat_id, message_id, server, kind, edit):
+                live_until = self.servers.live[chat_id].until
+                note = "вживую 2 минуты"
+            else:
+                note = "сейчас смотрят другие — попробуйте через пару минут"
+        elif action == "x":
+            self.servers.stop_live(chat_id)
+            note = "остановлено"
+        else:
+            # Другой сервер или «Обновить» — прежний живой сеанс этого чата не нужен.
+            live = self.servers.live.get(chat_id)
+            if live is not None and live.server != server:
+                self.servers.stop_live(chat_id)
+            elif live is not None:
+                live_until = live.until
+        fresh = await self.servers.message(server, live_until)
+        if fresh is None:
+            await self.telegram.answer_callback(callback["id"], STALE_BUTTON)
+            return
+        await self.edit_and_answer(callback["id"], chat_id, message_id, fresh.text, fresh.keyboard, note)
 
     def _addressed_elsewhere(self, text: str) -> bool:
         head = text.strip().split(None, 1)[0]

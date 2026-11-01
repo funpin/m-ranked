@@ -65,9 +65,19 @@ def test_server_block_order():
     lines = lines_of(rows_for(healthy_sample()))
     server = lines[lines.index("<b>СЕРВЕР 2</b>") + 1:]
     names = ["Приём с Сервера 1", "Очередь анализа", "Службы", "Диск", "Память",
-             "Резервная копия", "Ошибки для людей"]
+             "Резервная копия", "Ошибки для людей", "Пропуски снимков за 3 ч"]
     assert [line.split(" ", 1)[1].split(" · ")[0] for line in server] == names
     assert server[0] == "🟢 Приём с Сервера 1 · последний пакет 0 мин назад"
+
+
+def test_snapshot_gaps_line_names_an_update():
+    """Пропуск снимков виден в /status, даже когда проверки уже зелёные."""
+    def row(minutes: float, release: str) -> dict:
+        return {"observed_at": datetime.fromtimestamp(NOW - minutes * 60, timezone.utc),
+                "sample": {**healthy_sample(), "rel": release}}
+    rows = [row(minute, "v2026.10.3") for minute in range(180, 40, -1)]
+    rows += [row(minute, "v2026.11.0") for minute in range(30, 0, -1)]
+    assert lines_of(rows)[-1] == "🟡 Пропуски снимков за 3 ч · 1, всего 11 мин · обновление v2026.10.3 → v2026.11.0"
 
 
 def test_warn_only_verdict_and_problem_block_before_collection():
