@@ -7,8 +7,10 @@
 /proc (десятки микросекунд), без записи куда-либо.
 
 Точки лежат в кольцевом буфере: три часа по пять секунд — 2 160 точек, около
-300 КБ. Перезапуск API буфер обнуляет; панель тогда достраивает часы по
-минутным снимкам из базы. При нескольких воркерах каждый ведёт свой буфер:
+300 КБ. При остановке API буфер и последние счётчики пишутся в файл
+(API_LIVE_MONITOR_STATE_FILE), при старте читаются: выкатка и перезапуск не
+стирают часы истории, а первая точка после старта считается от счётчиков до
+остановки — пропуск виден одной длинной точкой, а не дырой. При нескольких воркерах каждый ведёт свой буфер:
 читают они одни и те же счётчики машины, так что ответы совпадают с
 точностью до момента снимка.
 """
@@ -16,73 +18,21 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
-import re
 import shutil
 import time
 from collections import deque
 from pathlib import Path
 from typing import Any
 
+# Разбор /proc общий с агентами узлов; имена остаются здесь для совместимости.
+from operations.storage.hostinfo import (  # noqa: F401
+    SECTOR_BYTES, VIRTUAL_NET, WHOLE_DISK, _whole_disk, cpu_counters, disk_bytes, memory, net_bytes,
+)
+
 logger = logging.getLogger(__name__)
-
-# Виртуальные и петлевые интерфейсы трафика машины не несут.
-VIRTUAL_NET = ("lo", "docker", "veth", "br-", "virbr", "wg", "tun", "tap")
-# Целые диски, без разделов и псевдоустройств: иначе байты считаются дважды.
-WHOLE_DISK = re.compile(r"^(?:[sv]d[a-z]+|xvd[a-z]+|nvme\d+n\d+|mmcblk\d+)$")
-SECTOR_BYTES = 512
-
-
-def cpu_counters(text: str) -> tuple[int, int] | None:
-    """(всего тактов, простой) из первой строки /proc/stat; iowait — тоже простой."""
-    for line in text.splitlines():
-        if line.startswith("cpu "):
-            values = [int(value) for value in line.split()[1:9]]
-            if len(values) < 5:
-                return None
-            return sum(values), values[3] + values[4]
-    return None
-
-
-def memory(text: str) -> dict[str, int]:
-    wanted = {"MemTotal": "total", "MemAvailable": "available", "SwapTotal": "swapTotal", "SwapFree": "swapFree"}
-    result: dict[str, int] = {}
-    for line in text.splitlines():
-        name, _, rest = line.partition(":")
-        if name in wanted and rest.split():
-            result[wanted[name]] = int(rest.split()[0]) * 1024
-    return result
-
-
-def net_bytes(text: str) -> tuple[int, int]:
-    """Суммарно принято и отправлено физическими интерфейсами."""
-    received = sent = 0
-    for line in text.splitlines()[2:]:
-        name, _, rest = line.partition(":")
-        name = name.strip()
-        fields = rest.split()
-        if not name or name.startswith(VIRTUAL_NET) or len(fields) < 9:
-            continue
-        received += int(fields[0])
-        sent += int(fields[8])
-    return received, sent
-
-
-def _whole_disk(name: str) -> bool:
-    return WHOLE_DISK.match(name) is not None
-
-
-def disk_bytes(text: str) -> tuple[int, int]:
-    """Прочитано и записано целыми дисками, в байтах."""
-    read = written = 0
-    for line in text.splitlines():
-        fields = line.split()
-        if len(fields) < 10 or not _whole_disk(fields[2]):
-            continue
-        read += int(fields[5]) * SECTOR_BYTES
-        written += int(fields[9]) * SECTOR_BYTES
-    return read, written
 
 
 class HostMonitor:
@@ -93,10 +43,12 @@ class HostMonitor:
     """
 
     def __init__(self, *, interval: float = 5.0, horizon: float = 3 * 3600, proc: Path = Path("/proc"),
-                 disk: Path = Path("/"), clock: Any = time.time) -> None:
+                 disk: Path = Path("/"), clock: Any = time.time, state_file: Path | None = None) -> None:
         self.interval = interval
+        self.horizon = horizon
         self.points: deque[dict[str, Any]] = deque(maxlen=max(1, int(horizon // interval)))
         self._proc, self._disk, self._clock = proc, disk, clock
+        self._state_file = state_file
         self._previous: dict[str, Any] | None = None
         self._task: asyncio.Task[None] | None = None
         self.cores = os.cpu_count() or 1
@@ -170,6 +122,42 @@ class HostMonitor:
             return list(self.points)
         return [point for point in self.points if point["at"] > moment]
 
+    def save(self) -> bool:
+        """Буфер и последние счётчики — в файл, атомарно; ошибка только в журнал."""
+        if self._state_file is None:
+            return False
+        document = {"v": 1, "interval": self.interval, "previous": self._previous, "points": list(self.points)}
+        temporary = self._state_file.with_name(f".{self._state_file.name}.{os.getpid()}")
+        try:
+            temporary.write_text(json.dumps(document, separators=(",", ":")))
+            os.replace(temporary, self._state_file)
+        except OSError as error:
+            logger.warning("живой буфер не сохранён: %s", type(error).__name__)
+            temporary.unlink(missing_ok=True)
+            return False
+        return True
+
+    def load(self) -> int:
+        """Вернуть сохранённый буфер: точки не старше горизонта и счётчики,
+        от которых посчитается первая точка после старта. Число точек."""
+        if self._state_file is None:
+            return 0
+        try:
+            document = json.loads(self._state_file.read_text())
+        except (OSError, ValueError):
+            return 0
+        if not isinstance(document, dict) or document.get("v") != 1:
+            return 0
+        edge = self._clock() - self.horizon
+        points = [point for point in document.get("points") or []
+                  if isinstance(point, dict) and isinstance(point.get("at"), (int, float)) and point["at"] >= edge]
+        self.points.extend(sorted(points, key=lambda point: point["at"]))
+        previous = document.get("previous")
+        if isinstance(previous, dict) and isinstance(previous.get("at"), (int, float)) and previous["at"] >= edge:
+            # JSON отдаёт списки, а разности ждут пары — форма не важна, важны числа.
+            self._previous = previous
+        return len(points)
+
     async def _run(self) -> None:
         while True:
             try:
@@ -180,6 +168,9 @@ class HostMonitor:
 
     async def start(self) -> None:
         if self._task is None:
+            restored = self.load()
+            if restored:
+                logger.info("живой буфер восстановлен: %s точек", restored)
             self._task = asyncio.create_task(self._run(), name="host-monitor")
 
     async def stop(self) -> None:
@@ -188,3 +179,4 @@ class HostMonitor:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+            self.save()

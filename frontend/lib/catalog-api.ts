@@ -10,6 +10,15 @@ export type SystemPoint=components["schemas"]["AdminSystemPoint"];
 export type SystemLive=components["schemas"]["AdminSystemLive"];
 export type SystemLivePoint=components["schemas"]["AdminSystemLivePoint"];
 export type StorageOverview=components["schemas"]["AdminStorage"];
+export type ServersOverview=components["schemas"]["AdminServers"];
+export type ServerPoint=components["schemas"]["AdminServerPoint"];
+export type ServerTask=components["schemas"]["AdminServerTask"];
+export type ServerStatus=components["schemas"]["AdminServerStatus"];
+export type ServerItem=components["schemas"]["AdminServerItem"];
+export type MeasurementGaps=components["schemas"]["AdminMeasurementGaps"];
+export type MeasurementGap=components["schemas"]["AdminMeasurementGap"];
+export type CollectorsOverview=components["schemas"]["AdminCollectors"];
+export type CollectorCycle=components["schemas"]["AdminCollectorCycle"];
 export class CatalogApiError extends Error {constructor(readonly status:number,message:string){super(message);}}
 type Fetcher=(input:string|URL,init?:RequestInit)=>Promise<Response>;
 
@@ -66,5 +75,7 @@ export function catalogReader(incoming:Headers,fetcher:Fetcher=fetch,base=proces
     visitors:(range:"week"|"month")=>request(client.GET("/api/v1/admin/visitors",{params:{query:{range}}})),
     system:(range:"1h"|"3h"|"day"|"week")=>request(client.GET("/api/v1/admin/system",{params:{query:{range}}})),
     storage:()=>request(client.GET("/api/v1/admin/storage")),
+    servers:(range:"1h"|"3h"|"day"|"week",server?:string)=>request(client.GET("/api/v1/admin/servers",{params:{query:{range,server}}})),
+    collectors:(range:"1h"|"3h"|"day"|"week",server?:string)=>request(client.GET("/api/v1/admin/collectors",{params:{query:{range,server}}})),
   };
 }

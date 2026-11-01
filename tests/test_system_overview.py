@@ -171,6 +171,9 @@ def test_system_route_computes_period_rows_once(monkeypatch) -> None:
         async def admin_fetch_all(self, sql, params):
             return rows
 
+        async def admin_fetch_one(self, sql, params=None):
+            return None  # основной ещё не зарегистрирован
+
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
         clock=lambda: now, db=Db(), settings=settings)))
     calls = []
@@ -188,8 +191,12 @@ def test_system_route_computes_period_rows_once(monkeypatch) -> None:
     span, bucket = overview.RANGES["3h"]
     summary = overview.status_summary(rows, now, lambda platform: _threshold(settings, platform), span)
     period = original(rows, now, span)
+    from api import server_monitor
     expected = {
-        "range": "3h", "sampledAt": summary["sampledAt"], "checks": summary["checks"],
+        "range": "3h", "server": None, "tasks": [],
+        "gaps": server_monitor.gaps([(row["observed_at"].timestamp(), row["sample"].get("rel")) for row in period],
+                                    now, now - span, step=60),
+        "sampledAt": summary["sampledAt"], "checks": summary["checks"],
         "alerts": summary["alerts"], "host": overview.host(rows[-1]["sample"], rows[-2]["sample"]),
         "pipeline": overview.pipeline(rows[-1]["sample"]),
         "restarts": overview.restarts(period), "collection": summary["collection"],

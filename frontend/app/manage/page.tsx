@@ -10,7 +10,7 @@ import { AdminLogin, AdminSignOut } from "./admin-access";
 import { LiveRefresh } from "./live-refresh";
 import { ChannelsTab } from "./channels";
 import { plural } from "./shared";
-import { ServersTab } from "./servers";
+import { ServersTab, type ServerRange } from "./servers";
 import { SystemTab, type SystemRange } from "./system";
 import { VisitorsTab } from "./visitors";
 import { PageTitle } from "@/components/page-title";
@@ -39,8 +39,8 @@ const commandErrors: Record<string, string> = {
 const TABS = [
   { id: "channels", label: "Каналы", title: "Управление каналами", description: "Добавляйте, временно отключайте или полностью удаляйте мониторинг каналов.", icon: LayoutList },
   { id: "visitors", label: "Посетители", title: "Посетители сайта", description: "Уникальные посетители без cookie: кто на сайте сейчас и как меняется посещаемость.", icon: Users },
-  { id: "system", label: "Система", title: "Состояние системы", description: "CPU, RAM, диск и сеть — вживую каждые 5 секунд; сбор, анализ, трафик и хранилище — по снимкам сервера раз в минуту.", icon: Activity },
-  { id: "servers", label: "Серверы", title: "Серверы и хранение", description: "Серверы-сборщики и место на дисках, политики сбора, хранения и анализа, резервные копии и холодный архив.", icon: Server },
+  { id: "system", label: "Система", title: "Состояние системы", description: "Работа основного сервера и сборщиков: проверки и тревоги, приём, анализ и задачи, циклы сбора, ответы людям и резервные копии.", icon: Activity },
+  { id: "servers", label: "Серверы", title: "Серверы и хранение", description: "Каждый сервер отдельно: CPU, RAM, диск и сеть вживую и за период, пропуски замеров, службы; политики сбора, хранения и анализа, резервные копии.", icon: Server },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 // Момент отрисовки для подписей «N мин назад»: страница динамическая и
@@ -100,14 +100,20 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
   if (tab === "system") {
     const requested = first(query.range);
     const range: SystemRange = requested === "1h" || requested === "3h" || requested === "week" ? requested : "day";
-    const [overview, status] = await Promise.all([reader.system(range).catch(() => null), reader.status().catch(() => null)]);
-    return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} status={status} range={range} now={now} csrf={csrf} canRefreshBackup={canDelete} backupOutcome={first(query.backup_status)} /></>;
+    const [overview, collectors] = await Promise.all([reader.system(range).catch(() => null),
+      reader.collectors(range, first(query.collector)).catch(() => null)]);
+    return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} collectors={collectors} range={range} now={now} csrf={csrf} canRefreshBackup={canDelete} backupOutcome={first(query.backup_status)} /></>;
   }
 
   if (tab === "servers") {
-    const storage = await reader.storage().catch(() => null);
-    return <>{header()}<ManageTabs active={tab} /><ServersTab overview={storage} csrf={csrf} canEdit={canDelete} now={now}
-      status={first(query.storage_status)} error={first(query.storage_error)} /></>;
+    const requested = first(query.range);
+    const range: ServerRange = requested === "day" || requested === "3h" || requested === "week" ? requested : "1h";
+    const [storage, monitor] = await Promise.all([reader.storage().catch(() => null),
+      reader.servers(range, first(query.server)).catch(() => null)]);
+    // Место проекта и базы — только у основного: его карточки читают сводку каталога.
+    const status = monitor?.selected?.role === "main" ? await reader.status().catch(() => null) : null;
+    return <>{header()}<ManageTabs active={tab} /><ServersTab overview={storage} monitor={monitor} storage={status?.storage ?? null} range={range}
+      csrf={csrf} canEdit={canDelete} now={now} status={first(query.storage_status)} error={first(query.storage_error)} /></>;
   }
 
   const [catalogResult, statusResult] = await Promise.allSettled([reader.institutions(), reader.status()]);

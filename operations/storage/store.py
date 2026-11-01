@@ -120,10 +120,12 @@ def host_metrics(root: Path) -> dict[str, Any]:
                 values[key] = int(rest.split()[0]) * 1024
         metrics["memoryTotalBytes"] = values.get("MemTotal")
         metrics["memoryAvailableBytes"] = values.get("MemAvailable")
+        if values.get("SwapTotal") is not None and values.get("SwapFree") is not None:
+            metrics["swapUsedBytes"] = values["SwapTotal"] - values["SwapFree"]
     except OSError:
         pass
     try:
-        metrics["load1"] = os.getloadavg()[0]
+        metrics["load1"], metrics["load5"], metrics["load15"] = os.getloadavg()
         metrics["cpus"] = os.cpu_count()
     except OSError:
         pass

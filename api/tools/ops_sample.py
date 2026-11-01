@@ -13,6 +13,12 @@ node_exporter. Снимок — одна строка JSON в ops_and_admin.host
 Размеры каталогов проекта меряются раз в шесть часов: обход страничного кэша
 стоит заметно дороже всего остального снимка. Хранится 30 суток — около
 43 000 строк по килобайту.
+
+В снимке — версия выпуска (rel): по её смене панель и бот связывают пропуск
+снимков с выкаткой. Снимок, который не удалось записать (база
+перезапускается, выкатка держит блокировку), остаётся в очереди state.json и
+дописывается следующим запуском со своим временем: пропуск в истории
+остаётся только там, где таймер действительно не работал.
 """
 from __future__ import annotations
 
@@ -29,10 +35,15 @@ import time
 from pathlib import Path
 from typing import Any
 
+from operations.storage import hostinfo
+
 logger = logging.getLogger("ops-sample")
 
 VERSION = 1
 RETENTION_DAYS = 30
+# Неудавшиеся снимки ждут следующего запуска; два часа — дальше старые
+# отбрасываются, чтобы долгий простой базы не раздул state.json.
+MAX_PENDING = 120
 SIZE_INTERVAL_SECONDS = 6 * 3600
 BOT_CLASSES = frozenset({"ai_user", "ai_search", "ai_training", "seo", "search", "crawler"})
 CACHE_HITS = frozenset({"HIT", "STALE", "UPDATING", "REVALIDATED"})
@@ -347,6 +358,7 @@ def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: 
         except OSError:
             sample["alerts"] = None
     sample["load"] = [float(value) for value in sample["load"]]
+    sample["rel"] = hostinfo.release()
     measured = state.get("sizesAt")
     if sizes and (measured is None or now - measured >= SIZE_INTERVAL_SECONDS):
         sample["sizes"] = {name: directory_bytes(path, run) for name, path in sizes.items()}
@@ -585,8 +597,13 @@ def store(dsn: str, sample: dict[str, Any], state: dict[str, Any], now: float,
         connection.execute("SET statement_timeout = '10s'")
         since = collection_marks(state, now)
         sample["collection"] = collection(connection, since, now)
-        connection.execute("INSERT INTO ops_and_admin.host_sample(sample) VALUES (%s::jsonb)",
-                           (json.dumps(sample),))
+        # Сначала то, что не записалось прошлыми запусками, — со своим временем.
+        for pending in state.get("pending") or []:
+            connection.execute(
+                "INSERT INTO ops_and_admin.host_sample(observed_at, sample) VALUES (to_timestamp(%s), %s::jsonb)"
+                " ON CONFLICT (observed_at) DO NOTHING", (pending["at"], json.dumps(pending["sample"])))
+        connection.execute("INSERT INTO ops_and_admin.host_sample(observed_at, sample) VALUES (to_timestamp(%s), %s::jsonb)",
+                           (now, json.dumps(sample)))
         connection.execute(
             "DELETE FROM ops_and_admin.host_sample WHERE observed_at < now() - make_interval(days => %s)",
             (RETENTION_DAYS,))
@@ -596,6 +613,15 @@ def store(dsn: str, sample: dict[str, Any], state: dict[str, Any], now: float,
             refresh_alert_inputs(connection, now, inputs_path)
     state["collectionAt"] = now
     state["collectionMarks"] = advance_marks(since, sample["collection"])
+    state.pop("pending", None)
+
+
+def keep_pending(state: dict[str, Any], sample: dict[str, Any], now: float) -> None:
+    """Отложить снимок до следующего запуска. Сбор по площадкам он не несёт:
+    его окна посчитает следующий удачный запуск, и аккаунты не задвоятся."""
+    pending = [item for item in state.get("pending") or [] if now - item.get("at", 0) <= MAX_PENDING * 60]
+    pending.append({"at": now, "sample": {key: value for key, value in sample.items() if key != "sizes"}})
+    state["pending"] = pending[-MAX_PENDING:]
 
 
 def main() -> int:
@@ -626,15 +652,18 @@ def main() -> int:
         alerts=ALERTS_STATUS)
     try:
         store(dsn, sample, state, now, state_dir / ALERT_INPUTS_FILE)
+        code = 0
     except Exception as error:  # noqa: BLE001 — снимок необязателен, причина в журнал
-        logger.error("снимок не записан: %s", type(error).__name__)
-        return 1
+        logger.error("снимок не записан, отложен: %s", type(error).__name__)
+        keep_pending(state, sample, now)
+        code = 1
     state_dir.mkdir(parents=True, exist_ok=True)
     temporary = state_path.with_suffix(".tmp")
     temporary.write_text(json.dumps(state))
     os.replace(temporary, state_path)
-    logger.info("снимок записан: %.2f с", time.time() - now)
-    return 0
+    if code == 0:
+        logger.info("снимок записан: %.2f с", time.time() - now)
+    return code
 
 
 if __name__ == "__main__":

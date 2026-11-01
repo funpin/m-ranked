@@ -137,8 +137,8 @@ test("admin tabs show visitors and system state and the table scrolls inside its
   await page.getByRole("link",{name:"Месяц"}).click();
   await expect(page).toHaveURL(/tab=visitors&range=month/);
 
-  // В проде /api/v1/admin раздаёт nginx; здесь живой буфер берётся у фикстуры API.
-  await page.route("**/api/v1/admin/system/live**",async(route)=>{
+  // В проде /api/v1/admin раздаёт nginx; здесь живые точки берутся у фикстуры API.
+  await page.route("**/api/v1/admin/servers/*/live**",async(route)=>{
     const url=new URL(route.request().url());
     await route.fulfill({response:await route.fetch({url:`http://127.0.0.1:18091${url.pathname}${url.search}`})});
   });
@@ -148,25 +148,40 @@ test("admin tabs show visitors and system state and the table scrolls inside its
   await expect(page.getByTestId("system-checks").locator("li")).toHaveCount(12);
   await expect(page.getByTestId("system-alert-events").locator("li")).toHaveCount(2);
   await expect(page.getByText("1 требует внимания")).toBeVisible();
-  // Ресурсы — кольца и живые спарклайны из буфера API, хранилище — сразу под ними.
+  // «Система» — назначение серверов, не нагрузка: конвейер, задачи, сборщики.
+  await expect(page.getByTestId("host-cards")).toHaveCount(0);
+  await expect(page.getByTestId("pipeline-stages").locator("li")).toHaveCount(6);
+  await expect(page.getByTestId("main-tasks").locator("[data-task]")).toHaveCount(11);
+  await expect(page.getByTestId("main-tasks")).toContainText("идёт");
+  await expect(page.getByTestId("collector-cycles").locator("[data-platform]")).toHaveCount(4);
+  await expect(page.getByTestId("collector-transfer")).toContainText("3 пачки");
+  await expect(page.getByTestId("collection-platforms").locator("li")).toHaveCount(4);
+  await expect(page.getByTestId("system-gaps")).toContainText("обновление v2026.10.3 → v2026.11.0");
+  await page.getByTestId("collectors").getByRole("link",{name:"1 час"}).click();
+  await expect(page).toHaveURL(/tab=system&range=1h&collector=server-1/);
+  // Резервные копии: список с отметкой проверки; кнопка обновления — только ADMIN.
+  await expect(page.getByTestId("backup-state")).toHaveText("готова");
+  await expect(page.getByText("проверена восстановлением")).toHaveCount(1);
+  await expect(page.getByRole("button",{name:"Обновить резервную копию"})).toBeDisabled();
+
+  // «Серверы»: переключатель по числу подключённых и панель выбранного.
+  await page.getByRole("link",{name:"Серверы"}).first().click();
+  await expect(page.getByTestId("server-switch").locator("a")).toHaveCount(2);
   const host=page.getByTestId("host-cards");
   for(const label of ["CPU","RAM","Disk","Network","Services"]) await expect(host.locator(`[data-metric="${label}"]`)).toBeVisible();
   await expect(host.locator('[data-metric="CPU"] [data-slot="chart"]')).toHaveCount(2);
   await expect(host.locator('[data-metric="Network"]')).toContainText("/с");
   await expect(page.getByTestId("storage-cards")).toContainText("релизы");
-  await expect(page.getByTestId("storage-cards")).toContainText("1.0 ГБ");
-  await expect(page.getByTestId("pipeline-stages").locator("li")).toHaveCount(6);
-  await expect(page.getByTestId("collection-platforms").locator("li")).toHaveCount(4);
-  await page.getByRole("link",{name:"1 час"}).click();
-  await expect(page).toHaveURL(/tab=system&range=1h/);
   await expect(page.getByText("Дисковый ввод-вывод")).toBeVisible();
-  // Резервные копии: список с отметкой проверки; кнопка обновления — только ADMIN.
-  await expect(page.getByTestId("backup-state")).toHaveText("готова");
-  await expect(page.getByText("проверена восстановлением")).toHaveCount(1);
-  await expect(page.getByRole("button",{name:"Обновить резервную копию"})).toBeDisabled();
+  await page.getByTestId("server-switch").getByRole("link",{name:/Сервер 1/}).click();
+  await expect(page).toHaveURL(/tab=servers&server=server-1/);
+  await expect(page.getByTestId("server-switch").getByRole("link",{name:/Сервер 1/})).toHaveAttribute("aria-current","page");
+  await expect(page.getByTestId("storage-cards")).toHaveCount(0);
+  await expect(page.getByTestId("server-gaps")).toContainText("9 мин");
+  await expect(page.getByText("перезапущен").first()).toBeVisible();
 });
 
-for(const tab of ["visitors","system"]) test(`admin ${tab} tab passes accessibility checks`,async({page})=>{
+for(const tab of ["visitors","system","servers"]) test(`admin ${tab} tab passes accessibility checks`,async({page})=>{
   await signIn(page,"admin");
   await page.goto(`/manage?tab=${tab}`);
   await expect(page.locator('[data-slot="chart"]').first()).toBeVisible();

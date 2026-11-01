@@ -13,12 +13,14 @@ export type LiveHost = { meta: LiveMeta | null; points: SystemLivePoint[]; state
 const LiveHostContext = createContext<LiveHost>({ meta: null, points: [], state: "loading" });
 
 /**
- * Живой мониторинг вкладки «Система». Первый запрос забирает весь буфер API
- * (до трёх часов точек), дальше раз в шаг снимка — только точки новее
- * последней (since), обычно одну. Скрытая вкладка браузера не опрашивает
- * сервер; при возвращении данные дочитываются сразу.
+ * Живой мониторинг сервера. Первый запрос забирает весь буфер (до трёх часов
+ * точек), дальше раз в шаг снимка — только точки новее последней (since),
+ * обычно одну. Шаг задаёт сервер: основной — буфер API в несколько секунд,
+ * сборщик — минутные точки агента, и чаще раза в шаг панель не спрашивает.
+ * Скрытая вкладка браузера не опрашивает сервер; при возвращении данные
+ * дочитываются сразу.
  */
-export function LiveHostProvider({ children }: { children: ReactNode }) {
+export function LiveHostProvider({ children, endpoint = "/api/v1/admin/system/live" }: { children: ReactNode; endpoint?: string }) {
   const [live, setLive] = useState<LiveHost>({ meta: null, points: [], state: "loading" });
   const last = useRef<string | null>(null);
 
@@ -36,13 +38,14 @@ export function LiveHostProvider({ children }: { children: ReactNode }) {
         controller = new AbortController();
         try {
           const query = last.current ? `?since=${encodeURIComponent(last.current)}` : "";
-          const response = await fetch(`/api/v1/admin/system/live${query}`, {
+          const response = await fetch(`${endpoint}${query}`, {
             cache: "no-store", credentials: "same-origin", signal: controller.signal, headers: { Accept: "application/json" },
           });
           if (!response.ok) throw new Error(String(response.status));
           const body = await response.json() as SystemLive;
           const { points: fresh, ...meta } = body;
-          if (meta.intervalSeconds) interval = Math.max(2_000, meta.intervalSeconds * 1000);
+          // Минутным точкам хватает опроса раз в полшага: новая точка видна не позже чем через 30 с.
+          if (meta.intervalSeconds) interval = Math.max(2_000, meta.intervalSeconds * (meta.intervalSeconds >= 60 ? 500 : 1000));
           if (fresh.length) last.current = fresh[fresh.length - 1].at;
           setLive((previous) => {
             const merged = fresh.length ? [...previous.points, ...fresh] : previous.points;
@@ -66,7 +69,7 @@ export function LiveHostProvider({ children }: { children: ReactNode }) {
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [endpoint]);
 
   return <LiveHostContext.Provider value={live}>{children}</LiveHostContext.Provider>;
 }

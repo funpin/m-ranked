@@ -4,7 +4,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, ComposedChart, Line, Lin
 import {
   ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig,
 } from "@/components/ui/chart";
-import type { SystemLivePoint, SystemPoint, Visitors } from "@/lib/catalog-api";
+import type { ServerPoint, SystemLivePoint, SystemPoint, Visitors } from "@/lib/catalog-api";
 import { useLiveHost } from "./live-host";
 
 const AXIS = { tickLine: false, axisLine: false, fontSize: 11 } as const;
@@ -44,7 +44,7 @@ export function VisitorsChart({ days }: { days: Visitors["days"] }) {
 type Range = "1h" | "3h" | "day" | "week";
 const SPAN_MS: Record<Range, number> = { "1h": 3600_000, "3h": 3 * 3600_000, day: 86400_000, week: 7 * 86400_000 };
 
-function prepare(points: SystemPoint[], range: Range) {
+function prepare<T extends { at: string }>(points: T[], range: Range) {
   return points.map((point) => ({
     ...point,
     label: range === "week" ? dayLabel.format(new Date(point.at)) : hourLabel.format(new Date(point.at)),
@@ -54,19 +54,25 @@ function prepare(points: SystemPoint[], range: Range) {
 
 const secondLabel = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: MOSCOW });
 
-/** Ресурсы для часовых масштабов: живые точки буфера API (шаг в секунды),
- *  а то, что старше буфера (после перезапуска API), — по минутным снимкам. */
-function liveResources(points: SystemPoint[], live: SystemLivePoint[], range: Range) {
+/** Ресурсы для часовых масштабов: живые точки сервера (буфер API — шаг в
+ *  секунды, агент сборщика — минута), а то, что старше них, — по ряду периода.
+ *  Пропуск замеров — разрыв линии, а не прямая через него. */
+function liveResources(points: ServerPoint[], live: SystemLivePoint[], range: Range, step: number) {
   const edge = Date.now() - SPAN_MS[range];
   const fresh = live.filter((point) => Date.parse(point.at) >= edge);
   const start = fresh.length ? Date.parse(fresh[0].at) : Infinity;
-  const older = points.filter((point) => Date.parse(point.at) >= edge && Date.parse(point.at) < start)
-    .map((point) => ({ at: point.at, cpu: point.cpu, memory: point.memory, netRxBytesPerSecond: null, netTxBytesPerSecond: null, diskReadBytesPerSecond: null, diskWriteBytesPerSecond: null }));
-  return [...older, ...fresh].map((point) => ({
-    ...point,
-    label: hourLabel.format(new Date(point.at)),
-    stamp: secondLabel.format(new Date(point.at)),
-  }));
+  const older = points.filter((point) => Date.parse(point.at) >= edge && Date.parse(point.at) < start);
+  const merged: Record<string, string | number | null>[] = [];
+  let previous = 0;
+  for (const point of [...older, ...fresh]) {
+    const at = Date.parse(point.at);
+    if (previous && at - previous > Math.max(150_000, 2.5 * step * 1000))
+      merged.push({ at: new Date(previous + 1000).toISOString(), label: "", stamp: "нет замеров", cpu: null, memory: null });
+    previous = at;
+    merged.push({ ...point, label: (range === "week" ? dayLabel : hourLabel).format(new Date(point.at)),
+      stamp: (step < 60 ? secondLabel : stampLabel).format(new Date(point.at)) });
+  }
+  return merged;
 }
 
 function tooltip(format?: (value: number) => string) {
@@ -92,14 +98,14 @@ function rate(value: number) {
   return `${unit ? n.toFixed(1) : Math.round(n)} ${["Б", "КБ", "МБ", "ГБ"][unit]}/с`;
 }
 
-/** Графики состояния системы: ресурсы, сеть и диск, трафик, конвейер, сбор.
- *  Две величины разного масштаба никогда не делят одну ось: у каждой свой график. */
-export function SystemCharts({ points, range }: { points: SystemPoint[]; range: Range }) {
+/** Ресурсы сервера: CPU и RAM, сеть, диск. Две величины разного масштаба
+ *  никогда не делят одну ось: у каждой свой график. Сеть и диск рисуются,
+ *  только когда сервер их меряет (у основного — живой буфер часовых масштабов). */
+export function ResourceCharts({ points, range, step }: { points: ServerPoint[]; range: Range; step: number }) {
   const live = useLiveHost();
   const hourly = range === "1h" || range === "3h";
-  const data = prepare(points, range);
-  // Живые и минутные точки — разные формы; графику нужны только общие поля.
-  const resourcesData: Record<string, string | number | null>[] = hourly ? liveResources(points, live.points, range) : data;
+  // Сутки и неделя — корзины ряда; пустая корзина тоже рвёт линию.
+  const data = liveResources(points, hourly ? live.points : [], range, hourly ? step : range === "week" ? 3600 : 300);
   const resources = {
     cpu: { label: "CPU, %", color: "var(--chart-2)" },
     memory: { label: "RAM, %", color: "var(--chart-4)" },
@@ -112,6 +118,60 @@ export function SystemCharts({ points, range }: { points: SystemPoint[]; range: 
     diskWriteBytesPerSecond: { label: "запись", color: "var(--chart-3)" },
     diskReadBytesPerSecond: { label: "чтение", color: "var(--chart-5)" },
   } satisfies ChartConfig;
+  const has = (key: string) => data.some((point) => point[key] != null);
+  const axis = <XAxis dataKey="label" {...AXIS} minTickGap={range === "week" ? 24 : 32} />;
+  const pointsHint = hourly
+    ? step < 60 ? `Живые точки каждые ${step} с; старше буфера API — минутные снимки` : "Минутные точки агента сервера"
+    : range === "week" ? "Средние за час" : "Средние за пять минут";
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Frame wide title="CPU и RAM" hint={`${pointsHint}. Разрыв линии — пропуск замеров.`}>
+        <ChartContainer config={resources} className={FRAME}>
+          <AreaChart data={data} margin={{ left: 0, right: 8, top: 8 }}>
+            <CartesianGrid vertical={false} />
+            {axis}
+            <YAxis {...AXIS} width={36} domain={[0, 100]} unit="%" />
+            {tooltip()}
+            <ChartLegend content={<ChartLegendContent />} />
+            <Area isAnimationActive={false} dataKey="memory" type="monotone" stroke="var(--color-memory)" fill="var(--color-memory)" fillOpacity={0.12} strokeWidth={1.5} />
+            <Area isAnimationActive={false} dataKey="cpu" type="monotone" stroke="var(--color-cpu)" fill="var(--color-cpu)" fillOpacity={0.2} strokeWidth={1.5} />
+          </AreaChart>
+        </ChartContainer>
+      </Frame>
+      {has("netTxBytesPerSecond") || has("netRxBytesPerSecond") ? <Frame title="Сеть" hint="Байты в секунду через физические интерфейсы сервера">
+        <ChartContainer config={network} className={FRAME}>
+          <AreaChart data={data} margin={{ left: 0, right: 8, top: 8 }}>
+            <CartesianGrid vertical={false} />
+            {axis}
+            <YAxis {...AXIS} width={64} tickFormatter={rate} />
+            {tooltip(rate)}
+            <ChartLegend content={<ChartLegendContent />} />
+            <Area isAnimationActive={false} dataKey="netTxBytesPerSecond" type="monotone" stroke="var(--color-netTxBytesPerSecond)" fill="var(--color-netTxBytesPerSecond)" fillOpacity={0.15} strokeWidth={1.5} />
+            <Area isAnimationActive={false} dataKey="netRxBytesPerSecond" type="monotone" stroke="var(--color-netRxBytesPerSecond)" fill="var(--color-netRxBytesPerSecond)" fillOpacity={0.15} strokeWidth={1.5} />
+          </AreaChart>
+        </ChartContainer>
+      </Frame> : null}
+      {has("diskWriteBytesPerSecond") || has("diskReadBytesPerSecond") ? <Frame title="Дисковый ввод-вывод" hint="Чтение и запись целых дисков, байты в секунду">
+        <ChartContainer config={io} className={FRAME}>
+          <AreaChart data={data} margin={{ left: 0, right: 8, top: 8 }}>
+            <CartesianGrid vertical={false} />
+            {axis}
+            <YAxis {...AXIS} width={64} tickFormatter={rate} />
+            {tooltip(rate)}
+            <ChartLegend content={<ChartLegendContent />} />
+            <Area isAnimationActive={false} dataKey="diskWriteBytesPerSecond" type="monotone" stroke="var(--color-diskWriteBytesPerSecond)" fill="var(--color-diskWriteBytesPerSecond)" fillOpacity={0.15} strokeWidth={1.5} />
+            <Area isAnimationActive={false} dataKey="diskReadBytesPerSecond" type="monotone" stroke="var(--color-diskReadBytesPerSecond)" fill="var(--color-diskReadBytesPerSecond)" fillOpacity={0.15} strokeWidth={1.5} />
+          </AreaChart>
+        </ChartContainer>
+      </Frame> : null}
+    </div>
+  );
+}
+
+/** Назначение основного сервера во времени: трафик и ответы людям, скорость
+ *  страниц, конвейер, сбор. Ресурсы машины — на вкладке «Серверы». */
+export function SystemCharts({ points, range }: { points: SystemPoint[]; range: Range }) {
+  const data = prepare(points, range);
   const traffic = { requestsPerMinute: { label: "запросов в минуту", color: "var(--chart-2)" } } satisfies ChartConfig;
   const errors = { humanErrors: { label: "ответов 5xx людям", color: "var(--destructive)" } } satisfies ChartConfig;
   const speed = { p95Ms: { label: "p95 ответа страниц, мс", color: "var(--chart-3)" } } satisfies ChartConfig;
@@ -125,51 +185,9 @@ export function SystemCharts({ points, range }: { points: SystemPoint[]; range: 
     collectedFailed: { label: "с ошибкой", color: "var(--destructive)" },
   } satisfies ChartConfig;
   const minGap = range === "week" ? 24 : 32;
-  const step = live.meta?.intervalSeconds;
   const axis = <XAxis dataKey="label" {...AXIS} minTickGap={minGap} />;
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Frame title="CPU и RAM" hint={hourly ? `Живые точки каждые ${step ?? 5} с; старше буфера API — минутные снимки` : "Средняя загрузка CPU и доля занятой RAM"}>
-        <ChartContainer config={resources} className={FRAME}>
-          <AreaChart data={resourcesData} margin={{ left: 0, right: 8, top: 8 }}>
-            <CartesianGrid vertical={false} />
-            {axis}
-            <YAxis {...AXIS} width={36} domain={[0, 100]} unit="%" />
-            {tooltip()}
-            <ChartLegend content={<ChartLegendContent />} />
-            <Area isAnimationActive={false} dataKey="memory" type="monotone" stroke="var(--color-memory)" fill="var(--color-memory)" fillOpacity={0.12} strokeWidth={1.5} connectNulls />
-            <Area isAnimationActive={false} dataKey="cpu" type="monotone" stroke="var(--color-cpu)" fill="var(--color-cpu)" fillOpacity={0.2} strokeWidth={1.5} connectNulls />
-          </AreaChart>
-        </ChartContainer>
-      </Frame>
-      {hourly ? <>
-        <Frame title="Сеть" hint="Байты в секунду через физические интерфейсы сервера">
-          <ChartContainer config={network} className={FRAME}>
-            <AreaChart data={resourcesData} margin={{ left: 0, right: 8, top: 8 }}>
-              <CartesianGrid vertical={false} />
-              {axis}
-              <YAxis {...AXIS} width={64} tickFormatter={rate} />
-              {tooltip(rate)}
-              <ChartLegend content={<ChartLegendContent />} />
-              <Area isAnimationActive={false} dataKey="netTxBytesPerSecond" type="monotone" stroke="var(--color-netTxBytesPerSecond)" fill="var(--color-netTxBytesPerSecond)" fillOpacity={0.15} strokeWidth={1.5} />
-              <Area isAnimationActive={false} dataKey="netRxBytesPerSecond" type="monotone" stroke="var(--color-netRxBytesPerSecond)" fill="var(--color-netRxBytesPerSecond)" fillOpacity={0.15} strokeWidth={1.5} />
-            </AreaChart>
-          </ChartContainer>
-        </Frame>
-        <Frame title="Дисковый ввод-вывод" hint="Чтение и запись целых дисков, байты в секунду">
-          <ChartContainer config={io} className={FRAME}>
-            <AreaChart data={resourcesData} margin={{ left: 0, right: 8, top: 8 }}>
-              <CartesianGrid vertical={false} />
-              {axis}
-              <YAxis {...AXIS} width={64} tickFormatter={rate} />
-              {tooltip(rate)}
-              <ChartLegend content={<ChartLegendContent />} />
-              <Area isAnimationActive={false} dataKey="diskWriteBytesPerSecond" type="monotone" stroke="var(--color-diskWriteBytesPerSecond)" fill="var(--color-diskWriteBytesPerSecond)" fillOpacity={0.15} strokeWidth={1.5} />
-              <Area isAnimationActive={false} dataKey="diskReadBytesPerSecond" type="monotone" stroke="var(--color-diskReadBytesPerSecond)" fill="var(--color-diskReadBytesPerSecond)" fillOpacity={0.15} strokeWidth={1.5} />
-            </AreaChart>
-          </ChartContainer>
-        </Frame>
-      </> : null}
       <Frame title="Трафик" hint="Все запросы к сайту; ниже — ответы 5xx, полученные людьми">
         <ChartContainer config={traffic} className="aspect-auto h-40 w-full">
           <AreaChart data={data} margin={{ left: 0, right: 8, top: 8 }} syncId="traffic">

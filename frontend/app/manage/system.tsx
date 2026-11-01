@@ -5,12 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { CatalogStatus, SystemOverview } from "@/lib/catalog-api";
+import type { CollectorsOverview, SystemOverview } from "@/lib/catalog-api";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { LazyCollectionChart, LazyHostCards, LazyStorageCards, LazySystemCharts } from "./lazy-charts";
-import { LiveHostProvider } from "./live-host";
+import { LazyCollectionChart, LazySystemCharts } from "./lazy-charts";
 import { LiveNumber } from "./live-number";
+import { CollectorProcesses, GapList, GapSummary, ServerStatusPill, TaskList } from "./processes";
 import { RangeSwitch } from "./range-switch";
 import { ago, bytes, fields, Pill, plural, Section } from "./shared";
 
@@ -54,11 +54,14 @@ function AlertEvents({ events, now }: { events: NonNullable<SystemOverview["aler
   );
 }
 
-function Checks({ checks, alerts, now }: { checks: SystemOverview["checks"]; alerts: SystemOverview["alerts"]; now: number }) {
+function Checks({ checks, alerts, server, now }: { checks: SystemOverview["checks"]; alerts: SystemOverview["alerts"]; server: SystemOverview["server"]; now: number }) {
   const problems = checks.filter((check) => check.state === "warn" || check.state === "fail").length;
   return (
     <Section title="Проверки" description="Те же пороги, что у тревог в Telegram: сбор по площадкам, приём с Сервера 1, анализ, службы, ресурсы и резервные копии; «Тревоги» — всё, что сейчас открыто в Telegram."
-      action={<Pill className={problems ? "text-warning" : "text-success"}>{problems ? `${problems} ${plural(problems, "требует", "требуют", "требуют")} внимания` : "Всё в порядке"}</Pill>}>
+      action={<div className="flex flex-wrap gap-2">
+        {server ? <ServerStatusPill status={server} now={now} /> : null}
+        <Pill className={problems ? "text-warning" : "text-success"}>{problems ? `${problems} ${plural(problems, "требует", "требуют", "требуют")} внимания` : "Всё в порядке"}</Pill>
+      </div>}>
       <ul data-testid="system-checks" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {checks.map((check) => {
           const tone = TONES[check.state];
@@ -234,27 +237,43 @@ function Backups({ backups, now, csrf, canRefresh, outcome }: {
 const RANGES = [["1h", "1 час"], ["3h", "3 часа"], ["day", "Сутки"], ["week", "Неделя"]] as const;
 export type SystemRange = (typeof RANGES)[number][0];
 
-export function SystemTab({ overview, status, range, now, csrf, canRefreshBackup, backupOutcome }: {
-  overview: SystemOverview | null; status: CatalogStatus | null; range: SystemRange; now: number;
+export function SystemTab({ overview, collectors, range, now, csrf, canRefreshBackup, backupOutcome }: {
+  overview: SystemOverview | null; collectors: CollectorsOverview | null; range: SystemRange; now: number;
   csrf: string; canRefreshBackup: boolean; backupOutcome?: string;
 }) {
   if (!overview) return <Section title="Состояние системы"><p className="text-destructive">Не удалось получить снимки сервера.</p></Section>;
-  const hourly = range === "1h" || range === "3h";
-  const step = range === "week" ? "по часу" : range === "day" ? "по пять минут" : "по минуте, а CPU, RAM, сеть и диск — каждые 5 секунд";
-  return <LiveHostProvider>
-    <Checks checks={overview.checks} alerts={overview.alerts} now={now} />
-    {overview.host ? <LazyHostCards host={overview.host} fallback={overview.series} /> : null}
-    <LazyStorageCards storage={status?.storage ?? null} />
-    <Section title="Динамика" description={overview.sampledAt
-      ? `Ресурсы машины — вживую из памяти API, остальное — по снимку сервера раз в минуту (последний — ${ago(overview.sampledAt, now)}). Точки графика ${step}.`
-      : "Снимков ещё нет: таймер ops-sample пишет первый в течение минуты."}
-      action={<RangeSwitch label="Период" value={range} options={RANGES} href={(value) => `/manage?tab=system&range=${value}`} />}>
-      {overview.series.length || hourly ? <LazySystemCharts points={overview.series} range={range} /> : <p className="text-muted-foreground">Точек для графиков пока нет.</p>}
-    </Section>
-    <div className="grid gap-5 lg:grid-cols-2">
+  const collector = collectors?.selected?.server.id;
+  const href = (value: SystemRange, server = collector) => `/manage?tab=system&range=${value}${server ? `&collector=${encodeURIComponent(server)}` : ""}`;
+  const step = range === "week" ? "по часу" : range === "day" ? "по пять минут" : "по минуте";
+  const running = overview.tasks.filter((task) => task.active === "activating" || task.active === "failed").length;
+  return <>
+    <Checks checks={overview.checks} alerts={overview.alerts} server={overview.server} now={now} />
+    <div className="mb-5 grid gap-5 lg:grid-cols-2">
       <Pipeline overview={overview} now={now} />
-      <Collection overview={overview} now={now} />
+      <Section title="Задачи основного сервера" className="mb-0" data-testid="main-tasks"
+        description="Службы приёма, анализа и сайта и задания по расписанию — из минутного отчёта агента: что идёт сейчас, когда и с каким итогом был последний запуск, когда следующий."
+        action={running ? <Pill className="text-chart-2">{running} {plural(running, "требует", "требуют", "требуют")} взгляда</Pill> : undefined}>
+        <TaskList tasks={overview.tasks} now={now} />
+      </Section>
     </div>
+    <Section title="Сборщики" data-testid="collectors"
+      description="Собственная работа серверов-сборщиков, не нагрузка машины: циклы опроса по площадкам из журнала циклов, пропуски сбора, отправка пачек на основной сервер и службы узла. Ресурсы сборщика — на вкладке «Серверы»."
+      action={<RangeSwitch label="Период" value={range} options={RANGES} href={(value) => href(value)} />}>
+      <CollectorProcesses overview={collectors} now={now} href={(id) => href(range, id)} />
+    </Section>
+    <div className="mb-5 grid gap-5 lg:grid-cols-2">
+      <Collection overview={overview} now={now} />
+      <Section title="Пропуски снимков" className="mb-0" data-testid="system-gaps" action={<GapSummary gaps={overview.gaps} />}
+        description="Минуты, за которые у основного сервера нет снимка: таймер не работал или запись не удалась. Снимок, не записанный при выкатке, дописывается следующим запуском, поэтому здесь остаются только настоящие простои.">
+        <GapList gaps={overview.gaps.items} what="снимков" />
+      </Section>
+    </div>
+    <Section title="Ответы людям и конвейер" description={overview.sampledAt
+      ? `Трафик сайта и ответы 5xx людям, скорость страниц, очередь анализа и сбор — по снимку сервера раз в минуту (последний — ${ago(overview.sampledAt, now)}). Точки графика ${step}.`
+      : "Снимков ещё нет: таймер ops-sample пишет первый в течение минуты."}
+      action={<RangeSwitch label="Период" value={range} options={RANGES} href={(value) => href(value)} />}>
+      {overview.series.length ? <LazySystemCharts points={overview.series} range={range} /> : <p className="text-muted-foreground">Точек для графиков пока нет.</p>}
+    </Section>
     <Backups backups={overview.backups} now={now} csrf={csrf} canRefresh={canRefreshBackup} outcome={backupOutcome} />
-  </LiveHostProvider>;
+  </>;
 }

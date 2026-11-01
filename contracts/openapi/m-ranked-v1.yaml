@@ -1377,6 +1377,146 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/servers:
+    get:
+      tags:
+      - Admin
+      operationId: getAdminServers
+      summary: getAdminServers
+      description: 'Requires VIEWER, EDITOR or ADMIN. Connected servers for the switcher and the panel of the selected
+        one (the first, main, by default): state (working, updating, restarted, failed service, offline), resources
+        now and over the period, measurement gaps with their cause, services and scheduled jobs. The main server is
+        measured by ops-sample snapshots, others by one-minute points of their node agent. Cached for 15 seconds per
+        API process.'
+      security:
+      - adminSession: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 1h
+          - 3h
+          - day
+          - week
+          default: day
+      - name: server
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 40
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminServers'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/servers/{server}/live:
+    get:
+      tags:
+      - Admin
+      operationId: getAdminServerLive
+      summary: getAdminServerLive
+      description: 'Requires VIEWER, EDITOR or ADMIN. Live points of one server after since: the in-memory buffer
+        of the API for the main server (a few seconds apart), one-minute points of the node agent for the others (three
+        hours, cached for 10 seconds).'
+      security:
+      - adminSession: []
+      parameters:
+      - name: server
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSystemLive'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/collectors:
+    get:
+      tags:
+      - Admin
+      operationId: getAdminCollectors
+      summary: getAdminCollectors
+      description: 'Requires VIEWER, EDITOR or ADMIN. Processes of one collector server: collection cycles per platform
+        from the run journal (ingest.collection_run) with collection gaps, the transfer sender and its batch queue,
+        services and scheduled jobs of the node. Cached for 15 seconds per API process.'
+      security:
+      - adminSession: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 1h
+          - 3h
+          - day
+          - week
+          default: day
+      - name: server
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 40
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCollectors'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/storage:
     get:
       tags:
@@ -3762,6 +3902,544 @@ components:
           type:
           - number
           - 'null'
+    AdminHost:
+      type: object
+      additionalProperties: false
+      required:
+      - cpuPercent
+      - cores
+      - load
+      - memoryTotalBytes
+      - memoryUsedBytes
+      - swapUsedBytes
+      - diskTotalBytes
+      - diskFreeBytes
+      - unitsActive
+      - unitsTotal
+      - failedUnits
+      properties:
+        cpuPercent:
+          type:
+          - number
+          - 'null'
+        cores:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        load:
+          type: array
+          items:
+            type: number
+        memoryTotalBytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        memoryUsedBytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        swapUsedBytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        diskTotalBytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        diskFreeBytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        unitsActive:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        unitsTotal:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        failedUnits:
+          type: array
+          items:
+            type: string
+    AdminServerStatus:
+      type: object
+      additionalProperties: false
+      required:
+      - state
+      - label
+      - detail
+      - since
+      - release
+      - seenAt
+      - failed
+      properties:
+        state:
+          type: string
+          enum:
+          - ok
+          - updating
+          - restarted
+          - degraded
+          - offline
+        label:
+          type: string
+        detail:
+          type: string
+        since:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        release:
+          type:
+          - string
+          - 'null'
+        seenAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        failed:
+          type: array
+          items:
+            type: string
+    AdminServerItem:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - displayName
+      - role
+      - state
+      - platforms
+      - status
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+          enum:
+          - main
+          - collector
+          - storage
+        state:
+          type: string
+          enum:
+          - active
+          - pending
+          - draining
+          - disabled
+        platforms:
+          type: array
+          items:
+            type: string
+            enum:
+            - telegram
+            - vk
+            - max
+            - rutube
+        status:
+          $ref: '#/components/schemas/AdminServerStatus'
+    AdminServerTask:
+      type: object
+      additionalProperties: false
+      required:
+      - unit
+      - scheduled
+      - active
+      - sub
+      - result
+      - since
+      - startedAt
+      - exitedAt
+      - restarts
+      - lastAt
+      - nextAt
+      properties:
+        unit:
+          type: string
+        scheduled:
+          type: boolean
+        active:
+          type: string
+        sub:
+          type: string
+        result:
+          type:
+          - string
+          - 'null'
+        since:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        startedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        exitedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        restarts:
+          type:
+          - number
+          - 'null'
+        lastAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        nextAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    AdminMeasurementGap:
+      type: object
+      additionalProperties: false
+      required:
+      - from
+      - to
+      - seconds
+      - cause
+      properties:
+        from:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        seconds:
+          type: integer
+          minimum: 0
+        cause:
+          type:
+          - string
+          - 'null'
+    AdminMeasurementGaps:
+      type: object
+      additionalProperties: false
+      required:
+      - stepSeconds
+      - count
+      - seconds
+      - items
+      properties:
+        stepSeconds:
+          type: integer
+        count:
+          type: integer
+          minimum: 0
+        seconds:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          description: Newest first, at most 50.
+          items:
+            $ref: '#/components/schemas/AdminMeasurementGap'
+    AdminServerPoint:
+      type: object
+      additionalProperties: false
+      required:
+      - at
+      - cpu
+      - memory
+      - load
+      - netRxBytesPerSecond
+      - netTxBytesPerSecond
+      - diskReadBytesPerSecond
+      - diskWriteBytesPerSecond
+      properties:
+        at:
+          type: string
+          format: date-time
+        cpu:
+          type:
+          - number
+          - 'null'
+        memory:
+          type:
+          - number
+          - 'null'
+        load:
+          type:
+          - number
+          - 'null'
+        netRxBytesPerSecond:
+          type:
+          - number
+          - 'null'
+        netTxBytesPerSecond:
+          type:
+          - number
+          - 'null'
+        diskReadBytesPerSecond:
+          type:
+          - number
+          - 'null'
+        diskWriteBytesPerSecond:
+          type:
+          - number
+          - 'null'
+    AdminServers:
+      type: object
+      additionalProperties: false
+      required:
+      - range
+      - servers
+      - selected
+      properties:
+        range:
+          type: string
+          enum:
+          - 1h
+          - 3h
+          - day
+          - week
+        servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminServerItem'
+        selected:
+          oneOf:
+          - type: object
+            additionalProperties: false
+            required:
+            - id
+            - displayName
+            - role
+            - state
+            - platforms
+            - status
+            - host
+            - liveSeconds
+            - series
+            - gaps
+            - tasks
+            properties:
+              id:
+                type: string
+              displayName:
+                type: string
+              role:
+                type: string
+                enum:
+                - main
+                - collector
+                - storage
+              state:
+                type: string
+                enum:
+                - active
+                - pending
+                - draining
+                - disabled
+              platforms:
+                type: array
+                items:
+                  type: string
+                  enum:
+                  - telegram
+                  - vk
+                  - max
+                  - rutube
+              status:
+                $ref: '#/components/schemas/AdminServerStatus'
+              host:
+                oneOf:
+                - $ref: '#/components/schemas/AdminHost'
+                - type: 'null'
+              liveSeconds:
+                type:
+                - number
+                - 'null'
+              series:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminServerPoint'
+              gaps:
+                $ref: '#/components/schemas/AdminMeasurementGaps'
+              tasks:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminServerTask'
+          - type: 'null'
+    AdminCollectorCycle:
+      type: object
+      additionalProperties: false
+      required:
+      - platform
+      - runs
+      - succeeded
+      - partial
+      - failed
+      - accounts
+      - errors
+      - lastStartedAt
+      - lastCompletedAt
+      - runningSince
+      - medianSeconds
+      - lastSuccessAt
+      - cycleSeconds
+      - scheduleLagSeconds
+      - freshnessSeconds
+      - gaps
+      properties:
+        platform:
+          type: string
+          enum:
+          - telegram
+          - vk
+          - max
+          - rutube
+        runs:
+          type: integer
+          minimum: 0
+        succeeded:
+          type: integer
+          minimum: 0
+        partial:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        accounts:
+          type: integer
+          minimum: 0
+        errors:
+          type: integer
+          minimum: 0
+        lastStartedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        lastCompletedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        runningSince:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        medianSeconds:
+          type:
+          - number
+          - 'null'
+        lastSuccessAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        cycleSeconds:
+          type:
+          - number
+          - 'null'
+        scheduleLagSeconds:
+          type:
+          - number
+          - 'null'
+        freshnessSeconds:
+          type: integer
+        gaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminMeasurementGap'
+    AdminCollector:
+      type: object
+      additionalProperties: false
+      required:
+      - server
+      - cycles
+      - transfer
+      - tasks
+      properties:
+        server:
+          $ref: '#/components/schemas/AdminServerItem'
+        cycles:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminCollectorCycle'
+        transfer:
+          type: object
+          additionalProperties: false
+          required:
+          - backlog
+          - delivered
+          - failures
+          - lastAcceptedAt
+          - queueDelaySeconds
+          properties:
+            backlog:
+              type:
+              - number
+              - 'null'
+            delivered:
+              type:
+              - number
+              - 'null'
+            failures:
+              type:
+              - number
+              - 'null'
+            lastAcceptedAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            queueDelaySeconds:
+              type:
+              - number
+              - 'null'
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminServerTask'
+    AdminCollectors:
+      type: object
+      additionalProperties: false
+      required:
+      - range
+      - collectors
+      - selected
+      properties:
+        range:
+          type: string
+          enum:
+          - 1h
+          - 3h
+          - day
+          - week
+        collectors:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminServerItem'
+        selected:
+          oneOf:
+          - $ref: '#/components/schemas/AdminCollector'
+          - type: 'null'
     AdminSystemLive:
       type: object
       additionalProperties: false
@@ -3804,6 +4482,9 @@ components:
       additionalProperties: false
       required:
       - range
+      - server
+      - tasks
+      - gaps
       - sampledAt
       - checks
       - alerts
@@ -3821,6 +4502,17 @@ components:
           - 3h
           - day
           - week
+        server:
+          oneOf:
+          - $ref: '#/components/schemas/AdminServerStatus'
+          - type: 'null'
+        tasks:
+          type: array
+          description: Services and scheduled jobs of the main server from its agent report.
+          items:
+            $ref: '#/components/schemas/AdminServerTask'
+        gaps:
+          $ref: '#/components/schemas/AdminMeasurementGaps'
         sampledAt:
           type:
           - string
@@ -3836,75 +4528,9 @@ components:
           - $ref: '#/components/schemas/AdminSystemAlerts'
           - type: 'null'
         host:
-          type:
-          - object
-          - 'null'
-          additionalProperties: false
-          required:
-          - cpuPercent
-          - cores
-          - load
-          - memoryTotalBytes
-          - memoryUsedBytes
-          - swapUsedBytes
-          - diskTotalBytes
-          - diskFreeBytes
-          - unitsActive
-          - unitsTotal
-          - failedUnits
-          properties:
-            cpuPercent:
-              type:
-              - number
-              - 'null'
-            cores:
-              type:
-              - integer
-              - 'null'
-              format: int64
-            load:
-              type: array
-              items:
-                type: number
-            memoryTotalBytes:
-              type:
-              - integer
-              - 'null'
-              format: int64
-            memoryUsedBytes:
-              type:
-              - integer
-              - 'null'
-              format: int64
-            swapUsedBytes:
-              type:
-              - integer
-              - 'null'
-              format: int64
-            diskTotalBytes:
-              type:
-              - integer
-              - 'null'
-              format: int64
-            diskFreeBytes:
-              type:
-              - integer
-              - 'null'
-              format: int64
-            unitsActive:
-              type:
-              - integer
-              - 'null'
-              format: int64
-            unitsTotal:
-              type:
-              - integer
-              - 'null'
-              format: int64
-            failedUnits:
-              type: array
-              items:
-                type: string
+          oneOf:
+          - $ref: '#/components/schemas/AdminHost'
+          - type: 'null'
         pipeline:
           type:
           - object

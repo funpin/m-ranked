@@ -1,13 +1,16 @@
 """Текст /status: главные проверки из тех же снимков и той же арифметики, что
 панель администратора (api/system_overview.status_summary).
 
-Вердикт первой строкой, проблемы сверху, потом сбор по площадкам и сервер.
-Картинки нет: ответ должен приходить мгновенно и копироваться текстом."""
+Вердикт первой строкой, проблемы сверху, потом сбор по площадкам, сервер и
+пропуски его снимков. Под сообщением — кнопки серверов: по нажатию — состояние
+выбранного (telegram_bot/servers.py). Картинки нет: ответ должен приходить
+мгновенно и копироваться текстом."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from api.server_monitor import gaps
 from api.system_overview import PROFILE_B_FRESHNESS, status_summary
 
 from .emoji import banner, icon
@@ -58,7 +61,10 @@ def _verdict(states: list[str]) -> str:
     return "🟢 <b>Всё в порядке</b>"
 
 
-def render_status(rows: list[dict], now: float, tz: str = "Europe/Moscow") -> Message:
+def render_status(rows: list[dict], now: float, tz: str = "Europe/Moscow",
+                  servers: list[list[dict]] | None = None) -> Message:
+    """servers — кнопки серверов (servers.server_buttons) над «Обновить»."""
+    keyboard = [*(servers or []), *REFRESH_KEYBOARD]
     summary = status_summary(rows, now, lambda platform: PROFILE_B_FRESHNESS[platform],
                              span=COLLECTION_SPAN_SECONDS)
     checks = summary["checks"]
@@ -68,7 +74,7 @@ def render_status(rows: list[dict], now: float, tz: str = "Europe/Moscow") -> Me
     head += f"снимок {snapshot}" if snapshot else "снимков нет"
     if summary["sampledAt"] is None:
         # Без снимков остальные строки только вводят в заблуждение: один вердикт.
-        return Message("\n".join([head, "🔴 <b>Снимков сервера нет</b>"]), REFRESH_KEYBOARD)
+        return Message("\n".join([head, "🔴 <b>Снимков сервера нет</b>"]), keyboard)
 
     lines = [head, _verdict([check["state"] for check in checks])]
     if by_key.get("sample", {}).get("state") == "fail":
@@ -94,4 +100,11 @@ def render_status(rows: list[dict], now: float, tz: str = "Europe/Moscow") -> Me
         lines += ["", banner("СЕРВЕР 2") or "<b>СЕРВЕР 2</b>"]
         lines += [f"{_light(check['state'])} {esc(check['label'])} · {esc(check['detail'])}"
                   for check in server]
-    return Message("\n".join(lines), REFRESH_KEYBOARD)
+        # Пропуски снимков за 3 ч: таймер мог молчать, пока проверки уже зелёные.
+        found = gaps([(row["observed_at"].timestamp(), row["sample"].get("rel")) for row in rows],
+                     now, now - COLLECTION_SPAN_SECONDS, step=60)
+        detail = "нет" if not found["count"] else f"{found['count']}, всего {found['seconds'] // 60} мин"
+        cause = next((item["cause"] for item in found["items"] if item.get("cause")), None)
+        lines.append(f"{'🟡' if found['count'] else '🟢'} Пропуски снимков за 3 ч · {detail}"
+                     + (f" · {esc(cause)}" if cause else ""))
+    return Message("\n".join(lines), keyboard)
