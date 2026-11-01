@@ -145,7 +145,8 @@ test("admin tabs show visitors and system state and the table scrolls inside its
   await page.getByRole("link",{name:"Система"}).click();
   await expect(page.getByRole("heading",{name:"Состояние системы"})).toBeVisible();
   await expect(page.getByTestId("live-refresh")).toBeVisible();
-  await expect(page.getByTestId("system-checks").locator("li")).toHaveCount(11);
+  await expect(page.getByTestId("system-checks").locator("li")).toHaveCount(12);
+  await expect(page.getByTestId("system-alert-events").locator("li")).toHaveCount(2);
   await expect(page.getByText("1 требует внимания")).toBeVisible();
   // Ресурсы — кольца и живые спарклайны из буфера API, хранилище — сразу под ними.
   const host=page.getByTestId("host-cards");

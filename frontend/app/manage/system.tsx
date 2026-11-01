@@ -22,10 +22,42 @@ const TONES = {
   unknown: { dot: "bg-muted-foreground/40", text: "text-muted-foreground", label: "нет данных" },
 } as const;
 
-function Checks({ checks }: { checks: SystemOverview["checks"] }) {
+const MOSCOW_TIME = new Intl.DateTimeFormat("ru-RU", {
+  timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+});
+const SHOWN_EVENTS = 12;
+
+// Открытия и закрытия тревог за период: тревога могла открыться и закрыться
+// ночью, и к утру проверки уже снова зелёные — лента показывает, что было.
+function AlertEvents({ events, now }: { events: NonNullable<SystemOverview["alerts"]>["events"]; now: number }) {
+  if (!events.length) return null;
+  const hidden = events.length - SHOWN_EVENTS;
+  return (
+    <div className="mt-4 border-t pt-4">
+      <p className="mb-2 text-sm font-medium">Тревоги за период</p>
+      <ul data-testid="system-alert-events" className="grid gap-1.5">
+        {events.slice(0, SHOWN_EVENTS).map((event, index) => {
+          const tone = event.kind === "resolve" ? TONES.ok : event.urgent ? TONES.fail : TONES.warn;
+          return (
+            <li key={`${event.key}-${event.at}-${index}`} className="flex min-w-0 items-start gap-3 text-xs">
+              <span className={cn("mt-1 size-2 shrink-0 rounded-full", tone.dot)} aria-hidden="true" />
+              <span className="text-muted-foreground shrink-0 tabular-nums" title={ago(event.at, now)}>
+                {event.at ? MOSCOW_TIME.format(new Date(event.at)) : "—"}
+              </span>
+              <span className="min-w-0">{event.kind === "resolve" ? "Прошло: " : ""}{event.text}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {hidden > 0 ? <p className="text-muted-foreground mt-2 text-xs">и ещё {number.format(hidden)}</p> : null}
+    </div>
+  );
+}
+
+function Checks({ checks, alerts, now }: { checks: SystemOverview["checks"]; alerts: SystemOverview["alerts"]; now: number }) {
   const problems = checks.filter((check) => check.state === "warn" || check.state === "fail").length;
   return (
-    <Section title="Проверки" description="Те же пороги, что у тревог в Telegram: сбор по площадкам, приём с Сервера 1, анализ, службы, ресурсы и резервные копии."
+    <Section title="Проверки" description="Те же пороги, что у тревог в Telegram: сбор по площадкам, приём с Сервера 1, анализ, службы, ресурсы и резервные копии; «Тревоги» — всё, что сейчас открыто в Telegram."
       action={<Pill className={problems ? "text-warning" : "text-success"}>{problems ? `${problems} ${plural(problems, "требует", "требуют", "требуют")} внимания` : "Всё в порядке"}</Pill>}>
       <ul data-testid="system-checks" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {checks.map((check) => {
@@ -41,6 +73,7 @@ function Checks({ checks }: { checks: SystemOverview["checks"] }) {
           );
         })}
       </ul>
+      {alerts ? <AlertEvents events={alerts.events} now={now} /> : null}
     </Section>
   );
 }
@@ -209,7 +242,7 @@ export function SystemTab({ overview, status, range, now, csrf, canRefreshBackup
   const hourly = range === "1h" || range === "3h";
   const step = range === "week" ? "по часу" : range === "day" ? "по пять минут" : "по минуте, а CPU, RAM, сеть и диск — каждые 5 секунд";
   return <LiveHostProvider>
-    <Checks checks={overview.checks} />
+    <Checks checks={overview.checks} alerts={overview.alerts} now={now} />
     {overview.host ? <LazyHostCards host={overview.host} fallback={overview.series} /> : null}
     <LazyStorageCards storage={status?.storage ?? null} />
     <Section title="Динамика" description={overview.sampledAt

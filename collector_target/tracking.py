@@ -93,15 +93,20 @@ def plan_refresh(
                 if account.platform == Platform.RUTUBE else None
             ),
         )
-        latest = (
-            publication.latest_observed_at.isoformat()
-            if publication.latest_observed_at is not None else None
-        )
+        latest = publication.latest_observed_at
+        bucket = publication.latest_sampling_bucket
+        polled = publication.last_polled_at
+        # Снимок пишется только при изменении значений, поэтому у поста без
+        # изменений он отстаёт на часы; срок отсчитывается от начала цикла
+        # последнего успешного опроса. Бакет снимка к этой отметке не
+        # относится.
+        if polled is not None and (latest is None or polled > latest):
+            latest, bucket = polled, None
         if not snapshot_is_due(
-            latest,
+            latest.isoformat() if latest is not None else None,
             context.scheduled_at,
             interval_minutes,
-            last_measurement_bucket=publication.latest_sampling_bucket,
+            last_measurement_bucket=bucket,
         ):
             continue
         selected.append(publication)

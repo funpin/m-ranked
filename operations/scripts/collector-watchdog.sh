@@ -63,11 +63,17 @@ progress_age_minutes() {
       SET lock_timeout='1s';
       SET default_transaction_read_only=on;
       WITH progress AS (
+        -- Results only of runs still open: a finished run's results are never
+        -- later than its own completed_at, which the next branch already
+        -- reads. Without this the planner scanned the whole results table
+        -- (325 MB, 3.3 s) for every platform every ten minutes and pushed the
+        -- collectors' working set out of the database's 512 MB of memory.
         SELECT result.completed_at AS happened_at
           FROM ingest.collection_account_result AS result
           JOIN ingest.collection_run AS run
             ON run.id=result.collection_run_id
          WHERE run.platform=:'platform'::catalog.platform_code
+           AND run.completed_at IS NULL
            AND result.completed_at IS NOT NULL
         UNION ALL
         SELECT completed_at

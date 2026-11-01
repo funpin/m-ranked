@@ -190,7 +190,7 @@ def test_system_route_computes_period_rows_once(monkeypatch) -> None:
     period = original(rows, now, span)
     expected = {
         "range": "3h", "sampledAt": summary["sampledAt"], "checks": summary["checks"],
-        "host": overview.host(rows[-1]["sample"], rows[-2]["sample"]),
+        "alerts": summary["alerts"], "host": overview.host(rows[-1]["sample"], rows[-2]["sample"]),
         "pipeline": overview.pipeline(rows[-1]["sample"]),
         "restarts": overview.restarts(period), "collection": summary["collection"],
         "series": overview.series(period, bucket, since=now - span),
@@ -199,3 +199,29 @@ def test_system_route_computes_period_rows_once(monkeypatch) -> None:
     from fastapi.responses import JSONResponse
     assert response.body == JSONResponse(expected).body   # байт в байт
     assert json.loads(response.body)["restarts"] is not None
+
+
+def test_open_alerts_are_a_check_and_events_of_the_period_are_listed():
+    """01.11.2026 панель писала «всё в порядке», а тревога эталона MAX висела с 22.10."""
+    def row(minute, alerts):
+        sample = {"v": 1, "pipeline": {}, "units": {"failed": []}, "alerts": alerts}
+        return {"observed_at": datetime.fromtimestamp(T0 - (60 - minute) * 60, timezone.utc), "sample": sample}
+    opened = {"key": "bots", "kind": "open", "urgent": True, "text": "роботы", "since": T0 - 1800, "at": T0 - 1800}
+    closed = {**opened, "kind": "resolve", "at": T0 - 600}
+    rows = [row(0, {"at": T0 - 3600, "active": [], "events": []}),
+            row(30, {"at": T0 - 1800, "active": [opened], "events": [opened]}),
+            row(50, {"at": T0 - 600, "active": [], "events": [closed]}),
+            row(59, {"at": T0 - 60, "active": [{"key": "analysis_reference", "text": "эталон MAX",
+                                                 "urgent": False, "since": T0 - 9 * 86400}], "events": []})]
+    summary = overview.status_summary(rows, T0, lambda platform: 2700, span=3600)
+    check = next(item for item in summary["checks"] if item["key"] == "alerts")
+    assert (check["state"], check["detail"]) == ("warn", "эталон MAX")
+    assert [(item["key"], item["kind"]) for item in summary["alerts"]["events"]] == [("bots", "resolve"),
+                                                                                   ("bots", "open")]
+    assert summary["alerts"]["active"][0]["text"] == "эталон MAX"
+    # Сводка не читается — «нет данных»; профиль без тревог — проверки нет вовсе.
+    rows[-1]["sample"]["alerts"] = None
+    assert next(item for item in overview.status_summary(rows, T0, lambda platform: 2700)["checks"]
+                if item["key"] == "alerts")["state"] == "unknown"
+    del rows[-1]["sample"]["alerts"]
+    assert all(item["key"] != "alerts" for item in overview.status_summary(rows, T0, lambda platform: 2700)["checks"])

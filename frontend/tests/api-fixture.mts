@@ -370,8 +370,10 @@ const server = createServer(async (request, response) => {
       ["collection.max","Сбор · MAX","warn","последний аккаунт 52 мин назад"],["collection.rutube","Сбор · Rutube","ok","последний аккаунт 31 мин назад"],
       ["ingest","Приём с Сервера 1","ok","последний пакет 1 мин назад"],["analysis","Очередь анализа","ok","отставание 6 мин, в очереди 12"],
       ["units","Службы","ok","все службы работают"],["disk","Диск","ok","свободно 14.4 ГБ (27%)"],["memory","Память","ok","занято 61%"],
-      ["backup","Резервная копия","ok","последняя 9.2 ч назад"],["errors","Ошибки для людей","ok","0 ответов 5xx за час"]].map(([key,label,state,detail])=>({key,label,state,detail}));
+      ["backup","Резервная копия","ok","последняя 9.2 ч назад"],["errors","Ошибки для людей","ok","0 ответов 5xx за час"],["alerts","Тревоги","ok","открытых тревог нет"]].map(([key,label,state,detail])=>({key,label,state,detail}));
+    const opened={key:"bots",text:"Роботам рендерится 20+ холодных страниц в минуту уже 10 мин (сейчас 61)",urgent:true,since:asOf};
     return json({range,sampledAt:asOf,checks,
+      alerts:{active:[],events:[{...opened,kind:"resolve",at:asOf},{...opened,kind:"open",at:asOf}]},
       host:{cpuPercent:23.5,cores:2,load:[0.42,0.51,0.48],memoryTotalBytes:4*1024**3,memoryUsedBytes:2.5*1024**3,swapUsedBytes:0,diskTotalBytes:49*1024**3,diskFreeBytes:13.4*1024**3,unitsActive:24,unitsTotal:27,failedUnits:[]},
       pipeline:{ingestAcceptedAt:asOf,analysisLagSeconds:360,analysisBacklog:12,analysisCompletedAt:asOf,normsRunAt:asOf,tailRunAt:asOf,backupAt:asOf},
       restarts:{"m-ranked-target-web.service":1},

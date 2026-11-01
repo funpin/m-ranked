@@ -39,6 +39,8 @@ def test_every_workflow_action_is_pinned_to_a_commit() -> None:
             stripped = line.strip().removeprefix("- ")
             if stripped.startswith("uses:"):
                 reference = stripped.split("uses:", 1)[1].split("#", 1)[0].strip()
+                if reference.startswith("./.github/workflows/"):
+                    continue  # свой переиспользуемый workflow из того же коммита
                 _, _, version = reference.partition("@")
                 if not re.fullmatch(r"[0-9a-f]{40}", version):
                     unpinned.append(f"{workflow.name}: {reference}")
@@ -46,18 +48,28 @@ def test_every_workflow_action_is_pinned_to_a_commit() -> None:
 
 
 def test_security_gates_stay_in_the_pipeline() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    # Ворота выпуска — обязательная проверка main (release-gate), ворота
+    # develop — обязательная проверка develop (develop-gate).
+    release = (ROOT / ".github/workflows/release-gates.yml").read_text(encoding="utf-8")
     for tool in ("pip-audit", "pnpm audit", "semgrep", "gitleaks", "trivy config",
                  "trivy image", "cyclonedx-py", "cdxgen", "attest-build-provenance",
                  "--require-hashes"):
-        assert tool in workflow, tool
-    # Скачанные бинарники проверяются по контрольной сумме, а не «как есть».
-    assert workflow.count("sha256sum --check --strict") == 3
+        assert tool in release, tool
     # Сканер секретов сначала обязан найти заведомый ключ.
-    assert "канарейку" in workflow
-    # Ни один шаг не оставляет в рабочем дереве токен GitHub.
-    assert workflow.count("persist-credentials: false") == workflow.count("uses: actions/checkout@")
-    assert "npx --yes" not in workflow
+    assert "канарейку" in release
+    develop = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "gitleaks git" in develop
+    workflows = [path.read_text(encoding="utf-8")
+                 for path in (ROOT / ".github/workflows").glob("*.yml")]
+    for workflow in workflows:
+        # Каждый скачанный бинарник сверяется по контрольной сумме, а не «как есть».
+        downloads = workflow.count("--output trivy.tar.gz") + workflow.count("--output gitleaks.tar.gz")
+        assert workflow.count("sha256sum --check --strict") >= downloads
+        # Ни один шаг не оставляет в рабочем дереве токен GitHub.
+        assert workflow.count("persist-credentials: false") == workflow.count("uses: actions/checkout@")
+        assert "npx --yes" not in workflow
+    # Выкатка берёт только архив, собранный этим репозиторием.
+    assert "gh attestation verify" in (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
 
 
 def test_production_dependencies_are_hash_locked() -> None:

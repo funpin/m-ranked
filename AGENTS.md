@@ -8,6 +8,43 @@ a tracked file. A previous revision recorded them here and the history had to be
 rewritten; gitleaks does not catch an address, so nothing but this rule stands
 between the next such note and another public disclosure.
 
+Deployment credentials live only in the GitHub `production` environment
+secrets and on the servers. Workflows read them through `secrets.*`; examples
+and docs use placeholders such as `<сервер>` and `<порт>`.
+
+## Branches, pull requests and releases
+
+`main` is what runs in production; `develop` is the integration branch. Both
+are protected: nobody pushes to them directly, every change arrives by PR.
+The full process and its reasons are in [CONTRIBUTING.md](CONTRIBUTING.md);
+server-side deployment in [operations/deploy/README.md](operations/deploy/README.md).
+
+For a task:
+
+1. Branch from fresh `develop` as `<type>/<short-name>`, where type is one of
+   `feat fix perf refactor docs test ci build chore deps data revert`.
+2. Keep the branch to one concern; commit messages explain why.
+3. Open the PR into `develop` with a Conventional Commits title,
+   `type(scope): what and why`. The `branch-policy` check enforces both names.
+4. Done when `develop-gate` is green and review threads are resolved; the PR
+   is squash-merged and the branch deleted.
+
+For a release (only when the owner asks for one):
+
+1. Open a PR from `develop` into `main` titled `release: vYYYY.M.N` — the
+   next version after the latest `v*` tag, N counting from 0 within the month.
+2. It needs `develop-gate`, `release-gate` and one approval; merge it with a
+   merge commit.
+3. The merge builds, tags and publishes the release, then the `Deploy`
+   workflow waits for approval in the `production` environment. A release that
+   brings migrations or server configuration changes stops before switching
+   and names them; re-run `Deploy` with the matching flag once they are
+   reviewed. Rollback is `Deploy` of the previous version.
+
+Production changes outside this flow (a hotfix by hand, a manual migration)
+are recorded in `/opt/m-ranked/deployments/` and then brought into `develop`
+by a normal task PR, so the repository stays the source of truth.
+
 ## No regressions in speed or functionality
 
 Every change and every new feature must keep page response times, system

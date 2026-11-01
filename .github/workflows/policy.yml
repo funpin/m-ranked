@@ -1,0 +1,36 @@
+name: Branch policy
+# Правила потока веток, которых нет в настройках GitHub: ruleset умеет
+# требовать PR и проверки, но не умеет ограничить, ИЗ какой ветки PR открыт.
+# Это задание — обязательная проверка обеих защищённых веток (см. AGENTS.md).
+#
+# Обычный pull_request, а не pull_request_target: тот с 08.12.2025 берёт
+# workflow из ветки по умолчанию, а в публичных репозиториях с 02.12.2026
+# по умолчанию отключён. Чтобы PR не мог ослабить проверку, которой его
+# судят, .github/ закреплён в CODEOWNERS, а правила веток требуют одобрения
+# владельца кода для таких изменений.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  branch-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      # Имена веток и заголовок приходят из PR — только через окружение,
+      # никогда подстановкой ${{ }} в текст скрипта.
+      - name: Source branch, target branch and title follow the flow
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: bash .github/scripts/branch-policy.sh

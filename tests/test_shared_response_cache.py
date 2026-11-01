@@ -348,6 +348,20 @@ def test_warmup_config_rejects_private_or_secret_bearing_targets(monkeypatch) ->
             Settings()
 
 
+def test_catalog_warmup_rebuilds_before_the_entry_expires() -> None:
+    # Прогрев держит записи профиля B живыми: истёкшую до следующей
+    # пересборки посетитель ждал бы целиком. TTL задаёт API, возраст — прогрев.
+    env_dir = Path(__file__).resolve().parents[1] / "operations" / "env"
+
+    def values(name: str) -> dict[str, str]:
+        lines = (env_dir / name).read_text(encoding="utf-8").splitlines()
+        return dict(line.split("=", 1) for line in lines if line and not line.startswith("#"))
+
+    ttl = int(values("api-profile-b.env.example")["API_CACHE_TTL_SECONDS"])
+    for name in ("api-profile-b.env.example", "cache-warmup.env.example"):
+        assert int(values(name)["API_CACHE_WARMUP_MAX_AGE_SECONDS"]) < ttl, name
+
+
 def test_cache_metrics_are_published_atomically(tmp_path) -> None:
     target = tmp_path / "cache.prom"
     cache = ResponseCache(8, 60)
