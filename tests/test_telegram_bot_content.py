@@ -22,6 +22,7 @@ from telegram_bot.source import SourceUnavailable
 from telegram_bot.store import OUR_INSTITUTION, Recipient
 
 MSK = ZoneInfo("Europe/Moscow")
+PID = "0f9c2a5e-3b1d-4c7a-9e8f-1a2b3c4d5e6f"
 JOBS = ("spikes", "anomalies", "week_snapshot", "digest")
 
 
@@ -141,6 +142,21 @@ def test_due_every_15_minutes():
     assert "alerts" in content.due(now, {"spikes": stamp, "anomalies": stamp})
 
 
+def test_due_quiet_hours_hold_spikes_and_anomalies():
+    # 22:00–08:00 по Москве проверок нет; в 08:00 первая же проверка дошлёт ночное.
+    evening = at(14, 21, 45).timestamp()
+    for now in (at(14, 22), at(14, 23, 59), at(15, 0, 30), at(15, 7, 59)):
+        names = content.due(now, {"spikes": evening, "anomalies": evening})
+        assert "spikes" not in names and "anomalies" not in names
+        assert "alerts" in names  # тревоги серверов живут по своим правилам
+    assert {"spikes", "anomalies"} <= set(content.due(at(15, 8), {"spikes": evening,
+                                                                    "anomalies": evening}))
+    assert {"spikes", "anomalies"} <= set(content.due(at(14, 21, 59), {}))
+    # 19:30 UTC = 22:30 MSK: тишина считается по Москве.
+    utc_evening = datetime(2026, 10, 14, 19, 30, tzinfo=ZoneInfo("UTC")).astimezone(MSK)
+    assert "spikes" not in content.due(utc_evening, {})
+
+
 def test_due_daily_jobs():
     now = at(14, 12)
     done = now.timestamp() - 60
@@ -189,17 +205,38 @@ def test_spike_skips_flagged_posts():
 def test_spike_text():
     bot, telegram, source, store = make()
     seeded(store, "spike")
-    source.spikes = [post("a", index=8.44, age=20.0, promotion=True, views=9200,
-                          url="https://example.org/p?a=1&b=2")]
+    source.spikes = [{**post(PID, index=8.44, age=20.0, promotion=True, views=9200,
+                             url="https://example.org/p?a=1&b=2"),
+                      "reactions": 412, "comments": 1, "shares": 22}]
     run(content.check_spikes(bot))
     text = group_texts(telegram)[0]
     assert text == (f"{icon('spike')} <b>Наш пост выстрелил</b>\n"
                     f'{icon("telegram")} <a href="https://example.org/p?a=1&amp;b=2">фото</a>'
-                    f" · ×8,4 · 9,2 тыс. просм. · 20 ч назад · {icon('promo')} продвижение")
+                    f" · ×8,4 · 20 ч назад · {icon('promo')} продвижение\n"
+                    "412 реакций · 1 комментарий · 22 репоста · 9,2 тыс. просм.\n"
+                    f'{icon("logo")} <a href="https://m.funpin.ru/publications/{PID}">Разбор на сайте</a>')
     assert "Telegram" not in text  # площадка — нашим значком, не подписью
     source.spikes = [post("b")]
     run(content.check_spikes(bot))
     assert "продвижение" not in group_texts(telegram)[-1]
+
+
+def test_spike_engagement_follows_platform_capabilities():
+    # Чего площадка не отдаёт, того нет; ноль — честный ноль; после «тыс.» — «реакций».
+    item = {**post(PID, views=None), "reactions": 1201, "comments": 0, "shares": None,
+            "capabilities": {"reactions": True, "comments": True, "shares": False}}
+    lines = content.spike_message(item).text.split("\n")
+    assert lines[2] == "1,2 тыс. реакций · 0 комментариев"
+    bare = content.spike_message(post("a", views=None)).text.split("\n")
+    assert len(bare) == 2  # ни цифр, ни uuid — ни строки цифр, ни ссылки на сайт
+
+
+def test_site_link_only_for_publication_uuid():
+    assert content.spike_message(post("a")).text.count("m.funpin.ru") == 0
+    assert content.spike_message(post(PID.upper())).text.count("m.funpin.ru") == 0
+    anomaly = content.anomaly_message({**flagged(PID, 3)}, 3).text
+    assert anomaly.endswith(
+        f'\n{icon("logo")} <a href="https://m.funpin.ru/publications/{PID}">Разбор на сайте</a>')
 
 
 def test_notification_icons_come_from_slots(monkeypatch):
@@ -213,7 +250,7 @@ def test_notification_icons_come_from_slots(monkeypatch):
     spike = content.spike_message(item).text
     assert spike.startswith(f'<tg-emoji emoji-id="{fake}">🚀</tg-emoji> <b>Наш пост выстрелил</b>\n'
                             f'<tg-emoji emoji-id="{fake}">✈️</tg-emoji> <a ')
-    assert spike.endswith(f'<tg-emoji emoji-id="{fake}">📣</tg-emoji> продвижение')
+    assert spike.endswith(f'<tg-emoji emoji-id="{fake}">📣</tg-emoji> продвижение\n9,2 тыс. просм.')
     assert content.anomaly_message(flagged("x", 3), 3).text.startswith(
         f'<tg-emoji emoji-id="{fake}">⚠️</tg-emoji> <b>Накрутка на нашем посте</b>\n'
         f'<tg-emoji emoji-id="{fake}">🔵</tg-emoji> <a ')
