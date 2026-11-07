@@ -751,3 +751,43 @@ def test_comparison_format_buckets_match_findings():
     listed = re.search(r"publication_type IN \(([^)]*)\)", compare._TYPE_BUCKET).group(1)
     assert tuple(item.strip(" '") for item in listed.split(",")) == MAIN_TYPES
     assert "'unknown'" not in compare.DASHBOARD
+
+
+def test_account_stats_periods_match_the_contract():
+    # Медианы аккаунта за 7д / 30д / БД: «БД» дублирует поля верхнего уровня,
+    # пустой период — нули и пустые медианы, а не отсутствующий ключ.
+    import datetime
+    import json
+
+    from api import dto
+
+    contract = yaml.safe_load(CONTRACT.read_text(encoding="utf-8"))
+    as_of = datetime.datetime(2026, 11, 7, 12, tzinfo=datetime.timezone.utc)
+    medians = {"reactions": {"value": 18, "sampleSize": 827, "coverage": 0.98, "quality": "unknown"},
+               "views": {"value": 3620, "sampleSize": 827, "coverage": 0.98, "quality": "rounded"}}
+    row = {"retention_days": 100, "monitored": 376, "rating_rank": None, "rating_period": None,
+           "subscriber_count": 27200, "last_error": None, "last_checked_at": as_of,
+           "previous_monitored": 370, "previous_rating_rank": None, "previous_rating_period": None,
+           "periods": {"db": {"postCount": 838, "previousPostCount": 830, "medians": medians,
+                              "previousMedians": {"reactions": 19, "views": 3490, "comments": None}},
+                       "30d": {"postCount": 371, "previousPostCount": 363,
+                               "medians": {"reactions": {**medians["reactions"], "value": 17}},
+                               "previousMedians": {"reactions": 17}},
+                       "7d": {"postCount": 0, "previousPostCount": 0, "medians": {},
+                              "previousMedians": {}}}}
+    body = dto.account_stats(row, 5, as_of)
+    registry = Registry().with_resource("urn:contract", Resource.from_contents(contract, default_specification=DRAFT202012))
+    errors = list(Draft202012Validator({"$ref": "urn:contract#/components/schemas/AccountStats"},
+                                       registry=registry).iter_errors(json.loads(json.dumps(body, default=str))))
+    assert not errors, [f"{list(error.path)}: {error.message}" for error in errors]
+    db = body["periods"]["db"]
+    assert db["days"] == 100 and body["periods"]["30d"]["days"] == 30 and body["periods"]["7d"]["days"] == 7
+    assert (body["postCount"], body["medianReactions"], body["medianViews"]) == (
+        db["postCount"], db["medianReactions"], db["medianViews"])
+    assert body["previous"]["postCount"] == 830 and body["previous"]["medianReactions"] == 19
+    assert body["previous"]["monitored"] == 370
+    assert body["periods"]["30d"]["medianReactions"]["value"] == 17
+    assert body["periods"]["30d"]["medianViews"]["value"] is None
+    empty = body["periods"]["7d"]
+    assert empty["postCount"] == 0 and empty["medianReactions"]["value"] is None
+    assert empty["medianReactions"]["sampleSize"] == 0
