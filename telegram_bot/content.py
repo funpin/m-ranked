@@ -19,11 +19,13 @@ from zoneinfo import ZoneInfo
 from .emoji import icon
 from .render import (
     Message,
+    engagement_line,
     format_count,
     format_index,
     our_week_stats,
     post_head,
     render_digest,
+    site_line,
     text_only,
     week_label,
 )
@@ -44,6 +46,10 @@ DIGEST_WEEKDAY = 0  # понедельник
 DIGEST_HOUR = 10
 SNAPSHOT_HOUR = 9
 MORNING_HOUR = 8
+# Тихие часы «выстрелил» и «накрутки» по Москве: ночью проверки не идут, всё
+# накопившееся приходит первой проверкой в 08:00 (посту ещё нет 48 часов).
+QUIET_FROM_HOUR = 22
+QUIET_TO_HOUR = 8
 
 PERIOD = "7d"
 SPIKE = "spike"
@@ -79,6 +85,10 @@ def _daily_due(now: datetime, last: float | None, hour: int) -> bool:
     return now.hour >= hour and (last is None or _local_day(last, now) < now.date())
 
 
+def is_quiet(now: datetime) -> bool:
+    return now.hour >= QUIET_FROM_HOUR or now.hour < QUIET_TO_HOUR
+
+
 def due(now: datetime, last: Mapping[str, float | None]) -> list[str]:
     """Какие задачи пора запускать. `now` — с часовым поясом Москвы,
     `last` — имя задачи → время последнего запуска (epoch) или None.
@@ -87,10 +97,11 @@ def due(now: datetime, last: Mapping[str, float | None]) -> list[str]:
     if now.tzinfo is None:
         raise ValueError("due(): now должен быть с часовым поясом (Europe/Moscow)")
     names = ["alerts"]
-    for name in ("spikes", "anomalies"):
-        previous = last.get(name)
-        if previous is None or now.timestamp() - previous >= CHECK_EVERY_SECONDS:
-            names.append(name)
+    if not is_quiet(now):
+        for name in ("spikes", "anomalies"):
+            previous = last.get(name)
+            if previous is None or now.timestamp() - previous >= CHECK_EVERY_SECONDS:
+                names.append(name)
     if _daily_due(now, last.get("week_snapshot"), SNAPSHOT_HOUR):
         names.append("week_snapshot")
     if _digest_due(now, last.get("digest")):
@@ -150,14 +161,15 @@ def _is_spike(item: dict[str, Any]) -> bool:
 
 
 def spike_message(item: dict[str, Any]) -> Message:
-    """Заголовок, ниже строка поста: площадка нашим значком, ссылка на типе поста, цифры."""
-    parts = [post_head(item), format_index(item["interactionIndex"])]
-    if item.get("views") is not None:
-        parts.append(f"{format_count(int(item['views']))} просм.")
-    parts.append(f"{round(item['ageHours'])} ч назад")
+    """Заголовок; строка поста: площадка нашим значком, ссылка на типе поста, индекс,
+    возраст; реакции, комментарии, репосты и просмотры; ссылка на разбор у нас."""
+    parts = [post_head(item), format_index(item["interactionIndex"]),
+             f"{round(item['ageHours'])} ч назад"]
     if item.get("promotion"):
         parts.append(f"{icon('promo')} продвижение")
-    return Message(f"{icon('spike')} <b>Наш пост выстрелил</b>\n" + " · ".join(parts))
+    lines = [f"{icon('spike')} <b>Наш пост выстрелил</b>", " · ".join(parts),
+             engagement_line(item), site_line(item)]
+    return Message("\n".join(line for line in lines if line))
 
 
 async def _announce(bot: Bot, kind: str, publication: str, level: int, message: Message) -> bool:
@@ -205,7 +217,8 @@ def anomaly_message(item: dict[str, Any], level: int) -> Message:
     parts = [post_head(item)]
     if item.get("views") is not None:
         parts.append(f"{format_count(int(item['views']))} просм.")
-    return Message(f"{icon('anomaly')} <b>{title}</b>\n" + " · ".join(parts))
+    lines = [f"{icon('anomaly')} <b>{title}</b>", " · ".join(parts), site_line(item)]
+    return Message("\n".join(line for line in lines if line))
 
 
 async def check_anomalies(bot: Bot) -> int:
