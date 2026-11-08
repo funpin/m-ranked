@@ -1,6 +1,6 @@
 import {
   ArrowDownToLine, ChartNoAxesColumnDecreasing, ChartNoAxesCombined, TrendingUp, ArrowDownUp, ArrowUpToLine, ChevronsUp,
-  CircleAlert, Ellipsis, FastForward, History, Layers, Moon, MoveUpRight, Package,
+  Boxes, CircleAlert, Ellipsis, FastForward, History, Hourglass, Layers, Moon, MoveUpRight, Package,
   Percent, SmilePlus, Unlink, Zap, type LucideIcon, type LucideProps,
 } from "lucide-react";
 
@@ -13,7 +13,7 @@ const PATTERN_ICONS: Readonly<Record<number, LucideIcon>> = {
   1: MoveUpRight, 2: Zap, 4: Ellipsis, 5: FastForward, 6: ArrowDownUp,
   7: ChevronsUp, 8: Layers, 9: ArrowUpToLine, 10: Percent, 11: ChartNoAxesCombined, 12: TrendingUp,
   13: History, 14: Package, 15: ArrowDownToLine, 16: ChartNoAxesColumnDecreasing, 17: SmilePlus,
-  18: Moon, 19: Unlink,
+  18: Moon, 19: Unlink, 20: Boxes, 21: Hourglass,
 };
 
 export function PatternIcon({ pattern, ...props }: { pattern: number } & LucideProps) {

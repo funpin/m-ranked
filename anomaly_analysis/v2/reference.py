@@ -450,6 +450,17 @@ def cases() -> tuple[Case, ...]:
              "(пакеты просмотров КБГУ и МИРЭА, октябрь 2026).",
              Post("vk", _at(18, 11), (_vk(5000),), 4 * DAY, {V: (Ramp(30 * HOUR, 31 * HOUR, 6000),)}),
              Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (19,)),
+        Case("p20_view_packet_vk", "synthetic",
+             "Пост ВК на третьем часу получает 4 000 просмотров за час без реакций и затем почти ничего "
+             "(ступени и обрыв, октябрь 2026).",
+             Post("vk", _at(19, 11), (_vk(2500),), 4 * DAY, {V: (Ramp(2 * HOUR, 3 * HOUR, 4000),)}),
+             Level.ARTIFICIAL_ACTIVITY_SIGNS, Level.ARTIFICIAL_ACTIVITY_SIGNS, (20,)),
+        Case("p21_view_late_start_vk", "synthetic",
+             "Пост ВК первые сутки почти без просмотров, через сутки приходит основной приток в обычной "
+             "пропорции реакций: так выглядит и продвижение записи.",
+             Post("vk", _at(20, 11), (Wave(0, 150, 3 * HOUR, 0.6),), 4 * DAY,
+                  {V: (Hump(30 * HOUR, 54 * HOUR, 6000),), R: (Hump(30 * HOUR, 54 * HOUR, 90),)}),
+             Level.WEAK_SIGNAL, Level.ARTIFICIAL_ACTIVITY_SIGNS, (21,)),
         Case("honest_organic_telegram", "synthetic",
              "Telegram: органическое степенное затухание, 30 суток, шаг сбора по возрасту.",
              Post("telegram", _at(17, 9), (_tg(5200),), 30 * DAY), **HONEST),

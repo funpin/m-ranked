@@ -32,6 +32,7 @@ from .detectors import engagement_regime
 from .detectors.engagement_regime import CONFIRMED_MODE as CONFIRMED_EPISODE_MODE
 from .detectors.late_engagement import MEASUREMENT_MODE as LATE_ENGAGEMENT_MODE
 from .detectors.linear_feed import STEADY_STOP_MODE
+from .detectors.view_packet import CONFIRMED_MODE as CONFIRMED_PACKET_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
@@ -59,8 +60,8 @@ GAP_PATTERN = 4
 # Признаки одного события, разделённые не больше чем этим, — одно событие:
 # детектор рывка доказывает соседние пятиминутки по отдельности.
 SAME_EVENT_GAP = timedelta(minutes=10)
-VIEW_BURST_PATTERN = 19
-VIEW_BURST_SHAPES = frozenset({1, 2, 9})
+VIEW_BURST_PATTERNS = frozenset({19, 20})
+VIEW_BURST_SHAPES = frozenset({1, 2, 9, 21})
 # RuTube: форма прихода просмотров — не признак. Видео внутри площадки почти
 # не находят, смотрят по ссылке из соцсети или с сайта: волна за час-два и
 # тишина. По журналу циклов (квитанции подтвердили 49 из 52 мест роста) так
@@ -77,7 +78,7 @@ RUTUBE_VIEW_SHAPES = frozenset({2, 9})
 RUTUBE_WAVE_SCALE = timedelta(minutes=30)
 
 SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻",
-           14: "⊓", 15: "↧", 16: "⌐", 17: "❖", 18: "☾", 19: "⊘"}
+           14: "⊓", 15: "↧", 16: "⌐", 17: "❖", 18: "☾", 19: "⊘", 20: "⧈", 21: "⧖"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -97,6 +98,8 @@ TITLES = {
     17: "Поток одной реакции",
     18: "Реакции сквозь ночь",
     19: "Всплеск просмотров без отклика",
+    20: "Пакет просмотров после второго часа",
+    21: "Поздний старт охвата",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
@@ -385,10 +388,10 @@ def _same_events(signs: Sequence[Sign]) -> list[Sign]:
     unique: list[Sign] = []
     others: dict[int, list[str]] = {}
     patterns: dict[int, set[int]] = {}
-    bursts = [sign for sign in signs if sign.pattern == VIEW_BURST_PATTERN]
+    bursts = [sign for sign in signs if sign.pattern in VIEW_BURST_PATTERNS]
 
     def event(sign: Sign) -> tuple[Any, ...]:
-        return ("view_burst",) if sign.pattern == VIEW_BURST_PATTERN or _in_view_burst(sign, bursts) else _event(sign)
+        return ("view_burst",) if sign.pattern in VIEW_BURST_PATTERNS or _in_view_burst(sign, bursts) else _event(sign)
 
     for sign in sorted(signs, key=lambda item: (not _confirmed_plateau(item), -item.strength, item.pattern)):
         for index, item in enumerate(unique):
@@ -416,6 +419,8 @@ def _confirmed_plateau(sign: Sign) -> bool:
         return sign.strength >= .9 and sign.render.get("plateauEvidence") == STEADY_STOP_MODE
     if sign.pattern == 14:
         return sign.strength >= .9 and sign.render.get("plateauEvidence") == CONFIRMED_EPISODE_MODE
+    if sign.pattern == 20:
+        return sign.strength >= .9 and sign.render.get("plateauEvidence") == CONFIRMED_PACKET_MODE
     return (sign.pattern == 9 and sign.family is Family.SHAPE and sign.strength >= .9
             and (sign.metric, sign.render.get("measurementMode"), sign.render.get("plateauEvidence")) in {
                 (Metric.REACTIONS, BOUNDED_REACTION_MODE, CONFIRMED_PLATEAU_MODE),

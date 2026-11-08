@@ -142,6 +142,7 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
         {signal.render.kind === "bounded_burst" ? <p className="text-muted-foreground text-xs" data-testid="bounded-burst-explanation">{signal.formula}</p> : null}
         {signal.render.kind === "regime" || signal.render.kind === "write_off" || signal.render.kind === "cliff"
           || signal.render.kind === "stream" || signal.render.kind === "night_stream" || signal.render.kind === "view_burst"
+          || signal.render.kind === "view_packet" || signal.render.kind === "late_start"
           ? <p className="text-muted-foreground text-xs" data-testid="signal-formula">{signal.formula}</p> : null}
         {signal.render.measurementMode === "telegram_counter_order_v1" ? <p className="text-muted-foreground text-xs">{signal.formula}</p> : null}
         <MiniChart chart={miniChart(signal, rows, publishedAt)} label={title} />
