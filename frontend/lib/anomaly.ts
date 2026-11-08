@@ -31,6 +31,7 @@ export const SIGNAL_LEGEND = [
   { pattern: 16, title: "одновременный обрыв просмотров и реакций" },
   { pattern: 17, title: "поток одной реакции" },
   { pattern: 18, title: "реакции сквозь ночь" },
+  { pattern: 19, title: "всплеск просмотров без отклика" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;
@@ -202,6 +203,17 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
     return { type: "bars", percent: true, bars: [
       { label: "в эпизоде", value: share("episodeReactions", "episodeViews"), highlight: true },
       { label: window, value: share("windowReactions", "windowViews"), highlight: false },
+    ] };
+  }
+  if (render.kind === "view_burst") {
+    // Реакций на тысячу новых просмотров: в часы всплеска и у поста вне них.
+    const perThousand = (reactions: string, views: string) => {
+      const v = numberAt(render, views) ?? 0;
+      return v > 0 ? (1000 * (numberAt(render, reactions) ?? 0)) / v : 0;
+    };
+    return { type: "bars", percent: false, bars: [
+      { label: "внутри всплеска", value: perThousand("reactions", "views"), highlight: true },
+      { label: "вне всплеска", value: perThousand("outsideReactions", "outsideViews"), highlight: false },
     ] };
   }
   if (render.kind === "write_off") {

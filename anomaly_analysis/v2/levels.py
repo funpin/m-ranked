@@ -59,6 +59,8 @@ GAP_PATTERN = 4
 # Признаки одного события, разделённые не больше чем этим, — одно событие:
 # детектор рывка доказывает соседние пятиминутки по отдельности.
 SAME_EVENT_GAP = timedelta(minutes=10)
+VIEW_BURST_PATTERN = 19
+VIEW_BURST_SHAPES = frozenset({1, 2, 9})
 # RuTube: форма прихода просмотров — не признак. Видео внутри площадки почти
 # не находят, смотрят по ссылке из соцсети или с сайта: волна за час-два и
 # тишина. По журналу циклов (квитанции подтвердили 49 из 52 мест роста) так
@@ -75,7 +77,7 @@ RUTUBE_VIEW_SHAPES = frozenset({2, 9})
 RUTUBE_WAVE_SCALE = timedelta(minutes=30)
 
 SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻",
-           14: "⊓", 15: "↧", 16: "⌐", 17: "❖", 18: "☾"}
+           14: "⊓", 15: "↧", 16: "⌐", 17: "❖", 18: "☾", 19: "⊘"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -94,6 +96,7 @@ TITLES = {
     16: "Одновременный обрыв просмотров и реакций",
     17: "Поток одной реакции",
     18: "Реакции сквозь ночь",
+    19: "Всплеск просмотров без отклика",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
@@ -366,6 +369,13 @@ def _event(sign: Sign) -> tuple[Any, ...]:
     return (sign.pattern, sign.metric, sign.family)
 
 
+def _in_view_burst(sign: Sign, bursts: Sequence[Sign]) -> bool:
+    """Форма просмотров (1, 2, 9) на участке всплеска без отклика — тот же пакет."""
+    return (sign.pattern in VIEW_BURST_SHAPES and sign.metric is Metric.VIEWS
+            and any(sign.interval.start <= item.interval.end + SAME_EVENT_GAP
+                    and item.interval.start <= sign.interval.end + SAME_EVENT_GAP for item in bursts))
+
+
 def _same_events(signs: Sequence[Sign]) -> list[Sign]:
     """Признаки одного события — один признак: сильнейший, на весь участок события.
 
@@ -375,9 +385,14 @@ def _same_events(signs: Sequence[Sign]) -> list[Sign]:
     unique: list[Sign] = []
     others: dict[int, list[str]] = {}
     patterns: dict[int, set[int]] = {}
+    bursts = [sign for sign in signs if sign.pattern == VIEW_BURST_PATTERN]
+
+    def event(sign: Sign) -> tuple[Any, ...]:
+        return ("view_burst",) if sign.pattern == VIEW_BURST_PATTERN or _in_view_burst(sign, bursts) else _event(sign)
+
     for sign in sorted(signs, key=lambda item: (not _confirmed_plateau(item), -item.strength, item.pattern)):
         for index, item in enumerate(unique):
-            if (_event(sign) == _event(item) and sign.interval.start <= item.interval.end + SAME_EVENT_GAP
+            if (event(sign) == event(item) and sign.interval.start <= item.interval.end + SAME_EVENT_GAP
                     and item.interval.start <= sign.interval.end + SAME_EVENT_GAP):
                 unique[index] = replace(item, interval=Interval(min(item.interval.start, sign.interval.start),
                                                                 max(item.interval.end, sign.interval.end)))
