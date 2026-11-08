@@ -165,6 +165,14 @@ function buildRows(findings: FindingsLoad, tail: TailProfileLoad, platform: stri
       details: <TailDetails tail={tail} />,
     });
   }
+  const rhythmWarning = tail?.metrics?.rhythm?.warning;
+  if (rhythmWarning) {
+    rows.push({
+      key: "audience_rhythm", title: "Суточный ритм просмотров", status: "часовой пояс не определён",
+      strong: false, finding: false, notable: false, headline: rhythmWarning, inline: null, chart: null,
+      details: null,
+    });
+  }
   return rows;
 }
 

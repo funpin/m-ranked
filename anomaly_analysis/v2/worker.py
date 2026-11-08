@@ -143,6 +143,7 @@ class Worker:
         self.norms: dict[str, NormSet] = {}
         self._activity = _AccountCache(config.account_cache_seconds)
         self._subscribers = _AccountCache(config.account_cache_seconds)
+        self._audience_offsets = _AccountCache(config.account_cache_seconds)
 
     def run_once(self) -> int:
         started = time.monotonic()
@@ -215,7 +216,7 @@ class Worker:
                     cadence=self.cadence, norm_version=self.norm_version,
                     activity=self._activity.get(subject.account_id), reference=self.reference,
                     carried=_carried(row, detectable_from, row.publication_id not in kinds_for),
-                    synchrony_from=detectable_from)
+                    synchrony_from=detectable_from, audience_offset=self._audience_offsets.get(subject.account_id))
                 writes.append(StateWrite(
                     row.publication_id, row.published_at, now, decision.next_due_at, verdict=verdict,
                     analyzed_points=len(subject.observed_at), last_point_observed_at=subject.observed_at[-1],
@@ -295,6 +296,9 @@ class Worker:
         if missing:
             self._activity.put(self.store.read_activity(missing, window_start, now, published_since),
                                missing, clock, None)
+        missing = self._audience_offsets.missing(accounts, clock)
+        if missing:
+            self._audience_offsets.put(self.store.read_audience_offsets(missing), missing, clock, 0)
         missing = self._subscribers.missing(accounts, clock)
         if missing:
             self._subscribers.put(self.store.read_subscribers(missing, published_since, now),

@@ -19,6 +19,7 @@ from typing import Any, Sequence
 from uuid import UUID
 
 from .account_findings import WINDOW_DAYS, AccountFinding, LedgerPost, _halves_by_time
+from .audience_rhythm import account_rhythm, rhythm_from_hours, summed_views
 from .tail_ledger import MOSCOW
 
 REACH_KINDS = ("view_packs", "view_waves", "level3_share", "flat_daily_views", "promotion", "early_response")
@@ -63,12 +64,11 @@ WAVE_LATEST_SHARE = 0.8
 WAVE_RESPONSE = 1 / 3
 WAVE_PLATFORM_SHARE = 0.5
 WAVE_STRONG_VIEW_SHARE = 0.2
-# Суточный ритм: самое тихое окно четырёх часов к самому активному. У живой
-# аудитории ночью просмотров мало (аудит: обычно ~0,2, у всех кроме одного
-# аккаунта ≤ 0,37); мера не зависит от часового пояса.
+# Суточный ритм: самое тихое окно четырёх часов к самому активному выше p90
+# площадки и пик вне дневных часов аудитории. Одна глубина окна не годится: у
+# крупных федеральных вузов и сибирских аккаунтов она выше p90 при обычном вечернем пике.
 FLAT_MIN_VIEWS = 20_000
-FLAT_AMPLITUDE = 0.5
-FLAT_COHORT_FACTOR = 1.5
+FLAT_STEADY_FACTOR = 1.0
 FLAT_WINDOW = 4
 
 
@@ -102,6 +102,10 @@ PROMOTION_STRONG_VIEWS = 5_000
 # суммарный отклик серии — 0,03–0,57 нормы аккаунта того же возраста.
 PROMOTION_RESPONSE = 0.6
 PROMOTION_NIGHT_SHARE = 0.17
+# Сводка хранит просмотры 00–06 МСК, а у восточной аудитории это утро: порог
+# растёт вместе с долей этих часов у самого аккаунта против обычной (медиана ВК 0,08).
+PROMOTION_MSK_NIGHT_TYPICAL = 0.08
+MSK_NIGHT_UTC_HOURS = (21, 22, 23, 0, 1, 2)
 # Не меньше 300 просмотров в сутки: при 100 в кандидаты шли посты БРУ
 # со 100–250 просмотрами в сутки, которые владелец счёл спорными или не
 # продвижением; пять постов МФТИ набирали в сутки кампании от 600.
@@ -295,19 +299,29 @@ def _promotion_days(items: Sequence[LedgerPost], start: date,
     base = {k: sorted(values)[len(values) // 2] for k, values in views_by_k.items()
             if len(values) >= PROMOTION_MIN_BASE_POSTS}
     response = {k: pair[1] / pair[0] for k, pair in totals.items() if pair[0] > 0}
+    night_limit = _promotion_night_limit(items)
     found: dict[UUID, list[tuple[int, str, int, int, float, float]]] = {}
     for post in items:
         days = []
         for day, views, reactions, night in post.ledger.days:
             k = _post_day_index(post, day)
             if (k not in base or views < PROMOTION_MIN_VIEWS or not start <= date.fromisoformat(day) < computed_for
-                    or views < PROMOTION_EXCESS * max(base[k], 1) or night > PROMOTION_NIGHT_SHARE * views):
+                    or views < PROMOTION_EXCESS * max(base[k], 1) or night > night_limit * views):
                 continue
             # Ожидаемые реакции на эти просмотры при отклике аккаунта того же возраста.
             days.append((k, day, views, reactions, views / max(base[k], 1), response.get(k, 0.0) * views))
         if days:
             found[post.publication_id] = days
     return found
+
+
+def _promotion_night_limit(items: Sequence[LedgerPost]) -> float:
+    views = summed_views(post.ledger for post in items)
+    rhythm = rhythm_from_hours(views)
+    if rhythm is None or rhythm.offset_hours <= 1:
+        return PROMOTION_NIGHT_SHARE
+    share = sum(views[hour] for hour in MSK_NIGHT_UTC_HOURS) / sum(views)
+    return PROMOTION_NIGHT_SHARE * max(1.0, share / PROMOTION_MSK_NIGHT_TYPICAL)
 
 
 def _longest_run(days: list[tuple[int, str, int, int, float, float]]) -> list[tuple[int, str, int, int, float, float]]:
@@ -418,37 +432,26 @@ def early_response_findings(posts: Sequence[LedgerPost], computed_for: date) -> 
     return result
 
 
-def _amplitude(items: Sequence[LedgerPost]) -> tuple[float, int] | None:
-    """Самое тихое окно четырёх часов к самому активному и начало тихого (час UTC)."""
-    views = [0] * 24
-    for post in items:
-        if post.ledger.hours is not None:
-            for hour in range(24):
-                views[hour] += post.ledger.hours[0][hour]
-    if sum(views) < FLAT_MIN_VIEWS:
-        return None
-    windows = [sum(views[(begin + offset) % 24] for offset in range(FLAT_WINDOW)) for begin in range(24)]
-    quiet = min(range(24), key=lambda begin: (windows[begin], begin))
-    return windows[quiet] / max(max(windows), 1), quiet
+def _amplitude(items: Sequence[LedgerPost]):
+    return account_rhythm(post.ledger for post in items)
 
 
 def flat_day_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[AccountFinding]:
-    """Поздние просмотры постов идут круглые сутки, без ночного провала аудитории."""
+    """Поздние просмотры без ночного провала и с пиком вне дневных часов аудитории."""
     start = computed_for - timedelta(days=WINDOW_DAYS)
     by_account = _own(posts, computed_for)
-    measured = {account: _amplitude(items) for account, items in by_account.items()}
-    values = {account: item[0] for account, item in measured.items() if item is not None}
-    platform_of = {account: items[0].platform for account, items in by_account.items()}
+    measured = {account: rhythm for account, items in by_account.items()
+                if (rhythm := _amplitude(items)) is not None and rhythm.views >= FLAT_MIN_VIEWS}
+    values = {account: item.quiet_over_peak for account, item in measured.items()}
+    platform_of = {account: by_account[account][0].platform for account in measured}
     result = []
     for account, item in measured.items():
-        if item is None:
-            continue
-        amplitude, quiet = item
         cohort = _p90_without(values, platform_of, account)
-        if amplitude < max(FLAT_AMPLITUDE, FLAT_COHORT_FACTOR * cohort):
+        if item.quiet_over_peak <= cohort or item.peak_in_daytime:
             continue
         parts = [_amplitude(half) for half in _halves_by_time(by_account[account], start, computed_for)]
-        steady = all(part is not None and part[0] >= FLAT_AMPLITUDE for part in parts)
+        steady = all(part is not None and part.quiet_over_peak >= FLAT_STEADY_FACTOR * cohort for part in parts)
+        quiet = (item.quiet_start_msk - 3) % 24
         members = []
         for post in by_account[account]:
             if post.ledger.hours is None:
@@ -457,7 +460,8 @@ def flat_day_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[A
             windows = [sum(own[(begin + offset) % 24] for offset in range(FLAT_WINDOW)) for begin in range(24)]
             if max(windows) and 2 * windows[quiet] >= max(windows):
                 members.append(post.publication_id)
-        metrics = {"amplitude": round(amplitude, 3), "quietStartUtc": quiet, "cohortP90": round(cohort, 3),
+        metrics = {"amplitude": round(item.quiet_over_peak, 3), "quietStartUtc": quiet, "cohortP90": round(cohort, 3),
+                   "offsetHours": item.offset_hours, "peakStartMsk": item.peak_start_msk,
                    "posts": len(by_account[account])}
         result.append(AccountFinding(account, platform_of[account], "flat_daily_views", 2 if steady else 1,
                                      start, computed_for, metrics, tuple(members)))

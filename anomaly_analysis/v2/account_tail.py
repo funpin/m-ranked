@@ -33,6 +33,7 @@ from uuid import UUID
 
 import numpy as np
 
+from .audience_rhythm import account_rhythm
 from .tail_ledger import MOSCOW, TailLedger
 
 METHOD_VERSION = "account-tail-v1"
@@ -143,6 +144,7 @@ def profiles(posts: Iterable[PostLedger], accounts: Mapping[UUID, str],
         if item.account_id in grouped and posts_from < item.published_at <= posts_until:
             grouped[item.account_id].append(item)
     measured = {account: _measure(items, split, days) for account, items in grouped.items()}
+    rhythms = {account: account_rhythm(item.ledger for item in items) for account, items in grouped.items()}
     supported: dict[str, dict[UUID, float]] = {}
     for account, platform in accounts.items():
         if measured[account]["abstain"] is None:
@@ -172,11 +174,23 @@ def profiles(posts: Iterable[PostLedger], accounts: Mapping[UUID, str],
             if reason is None:
                 cohort["rank"] = round(float((values < data["whole"].ratio).mean()), 4)
         metrics["cohort"] = cohort
+        metrics["rhythm"] = _rhythm_payload(account, platform, rhythms, accounts)
         status = None if reason is not None else _status(data, cohort)
         if reason is not None:
             metrics["abstainText"] = ABSTAIN_TEXTS[reason]
         result.append(AccountTailProfile(account, platform, computed_for, status, reason, metrics))
     return result
+
+
+def _rhythm_payload(account: UUID, platform: str, rhythms: Mapping[UUID, Any],
+                    accounts: Mapping[UUID, str]) -> dict[str, Any] | None:
+    rhythm = rhythms[account]
+    if rhythm is None:
+        return None
+    others = [item.quiet_over_peak for other, item in rhythms.items()
+              if item is not None and other != account and accounts[other] == platform]
+    p90 = float(np.quantile(others, COHORT_QUANTILE)) if len(others) >= MIN_COHORT - 1 else None
+    return {**rhythm.payload(), "cohortP90": None if p90 is None else round(p90, 4)}
 
 
 def _status(data: Mapping[str, Any], cohort: Mapping[str, Any]) -> int:

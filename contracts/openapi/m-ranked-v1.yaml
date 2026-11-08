@@ -6872,6 +6872,21 @@ components:
         earlyRate: { type: number, minimum: 0 }
         lateRate: { type: number, minimum: 0 }
         ratio: { type: [number, 'null'], minimum: 0 }
+    AccountAudienceRhythm:
+      type: object
+      additionalProperties: false
+      required: [views, quietStartMsk, peakStartMsk, offsetHours, quietOverPeak, clockKnown, peakInDaytime,
+                 warning, cohortP90]
+      properties:
+        views: { type: integer, minimum: 0 }
+        quietStartMsk: { type: integer, minimum: 0, maximum: 23 }
+        peakStartMsk: { type: integer, minimum: 0, maximum: 23 }
+        offsetHours: { type: integer, minimum: -12, maximum: 12 }
+        quietOverPeak: { type: number, minimum: 0 }
+        clockKnown: { type: boolean }
+        peakInDaytime: { type: boolean }
+        warning: { type: [string, 'null'] }
+        cohortP90: { type: [number, 'null'], minimum: 0 }
     AccountTailMetrics:
       type: object
       additionalProperties: false
@@ -6879,6 +6894,10 @@ components:
                  lateReactions, earlyRate, lateRate, ratio, halves, days, activeDays, activeWeeks, wideDays,
                  breadth, roundedPosts, cohort]
       properties:
+        rhythm:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/AccountAudienceRhythm'
         methodVersion: { type: string }
         windowStart: { type: string, format: date }
         windowEnd: { type: string, format: date }

@@ -30,6 +30,7 @@ export function tailSummary(profile: AccountTailProfile) {
   return {
     level: profile.level, label, metrics, window, sentence,
     abstainText: metrics.abstainText ?? null,
+    rhythmWarning: metrics.rhythm?.warning ?? null,
     earlyRate: percent(metrics.earlyRate), lateRate: percent(metrics.lateRate), ratio: times(metrics.ratio),
     cohortText: cohort && cohort.rank !== undefined
       ? `поздняя доля к ранней · выше, чем у ${Math.round(cohort.rank * 100)} % аккаунтов` : null,

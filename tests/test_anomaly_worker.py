@@ -74,6 +74,9 @@ class FakeStore:
         return {}
 
 
+    def read_audience_offsets(self, accounts):
+        return {}
+
     def read_subscribers(self, accounts, since, until):
         return {}
 

@@ -129,8 +129,11 @@ def test_wave_with_ordinary_response_is_not_a_finding():
     assert not of(wave_findings(items + [p for a in range(2, 12) for p in wall(a)], TODAY))
 
 
-def flat(account, night_share, count=40, platform="max"):
+def flat(account, night_share, count=40, platform="max", peak_utc=12):
+    """Тихое окно с 20 UTC; по умолчанию пик вечером аудитории, через 16 ч после его начала."""
     hours_views = [100] * 24
+    for hour in range(peak_utc, peak_utc + 4):
+        hours_views[hour % 24] = 130
     for hour in range(20, 24):
         hours_views[hour] = int(100 * night_share)
     ledger = TailLedger(Point(86400, 500, 10), None, None, hours=(tuple(hours_views), (0,) * 24))
@@ -140,8 +143,13 @@ def flat(account, night_share, count=40, platform="max"):
 
 def test_views_without_a_night_trough_are_a_finding():
     others = [p for a in range(2, 12) for p in flat(a, 0.15)]
-    (finding,) = of(flat_day_findings(others + flat(1, 0.9), TODAY))
+    (finding,) = of(flat_day_findings(others + flat(1, 0.9, peak_utc=16), TODAY))
     assert finding.kind == "flat_daily_views" and finding.metrics["amplitude"] >= 0.5 and finding.status == 2
+
+
+def test_shallow_night_with_an_evening_peak_is_not_a_finding():
+    others = [p for a in range(2, 12) for p in flat(a, 0.15)]
+    assert not of(flat_day_findings(others + flat(1, 0.9), TODAY))
 
 
 def test_ordinary_night_trough_is_not_a_finding():
@@ -151,7 +159,7 @@ def test_ordinary_night_trough_is_not_a_finding():
 
 def test_small_audience_gives_no_rhythm_finding():
     others = [p for a in range(2, 12) for p in flat(a, 0.15)]
-    assert not of(flat_day_findings(others + flat(1, 0.9, count=5), TODAY))
+    assert not of(flat_day_findings(others + flat(1, 0.9, count=5, peak_utc=16), TODAY))
 
 
 def campaign(account, count=40, promoted=(), platform="vk", response=0.0, night=0.1, excess=30.0):
@@ -223,7 +231,7 @@ def test_every_reach_kind_has_words_for_the_api():
     found = (of(wave_findings(wall(1, waves=WAVES) + others, TODAY))
              + of(level3_findings(cohort() + spread(1, 80, 40, level3=True), TODAY))
              + of(view_pack_findings(cohort() + spread(1, 80, 25, packs=True), TODAY))
-             + of(flat_day_findings([p for a in range(2, 12) for p in flat(a, 0.15)] + flat(1, 0.9), TODAY))
+             + of(flat_day_findings([p for a in range(2, 12) for p in flat(a, 0.15)] + flat(1, 0.9, peak_utc=16), TODAY))
              + of(promotion_findings(campaign(1, promoted={5, 6}) + [p for a in range(2, 12) for p in campaign(a)],
                                      TODAY))
              + of(early_response_findings(early(1, quick=set(range(0, 20, 2)))
