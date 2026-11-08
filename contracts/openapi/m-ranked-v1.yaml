@@ -7544,6 +7544,39 @@ components:
         ratingPeriod:
           type: [string, 'null']
       required: [postCount, monitored, medianReactions, medianViews, medianComments, ratingRank, ratingPeriod]
+    AccountStatsPeriod:
+      type: object
+      additionalProperties: false
+      properties:
+        days:
+          type: integer
+          minimum: 1
+        postCount:
+          type: integer
+          format: int64
+          minimum: 0
+        medianReactions:
+          $ref: '#/components/schemas/AggregateMetric'
+        medianViews:
+          $ref: '#/components/schemas/AggregateMetric'
+        medianComments:
+          $ref: '#/components/schemas/AggregateMetric'
+        previous:
+          type: object
+          additionalProperties: false
+          description: Те же величины на начало сегодняшних суток по Москве.
+          properties:
+            postCount:
+              type: [integer, 'null']
+              format: int64
+            medianReactions:
+              type: [number, 'null']
+            medianViews:
+              type: [number, 'null']
+            medianComments:
+              type: [number, 'null']
+          required: [postCount, medianReactions, medianViews, medianComments]
+      required: [days, postCount, medianReactions, medianViews, medianComments, previous]
     AccountStats:
       type: object
       additionalProperties: false
@@ -7598,9 +7631,25 @@ components:
             медианами. Тридцать дней — getAccountDailySeries.
           items:
             $ref: '#/components/schemas/AccountDailyPoint'
+        periods:
+          type: object
+          additionalProperties: false
+          description: >-
+            Число публикаций и медианы за 7 и 30 дней и за всё окно хранения
+            (db — то же, что поля верхнего уровня). Значение поста — его
+            последний замер; период сужает выборку по дате выхода.
+          properties:
+            7d:
+              $ref: '#/components/schemas/AccountStatsPeriod'
+            30d:
+              $ref: '#/components/schemas/AccountStatsPeriod'
+            db:
+              $ref: '#/components/schemas/AccountStatsPeriod'
+          required: [7d, 30d, db]
         previous:
           $ref: '#/components/schemas/AccountStatsPrevious'
       required:
+      - periods
       - retentionDays
       - postCount
       - monitored

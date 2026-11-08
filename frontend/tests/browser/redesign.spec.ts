@@ -285,6 +285,31 @@ test("плашка изменения показывается рядом с ч�
   await expect(rating.getByTitle(/место против периода/)).toContainText("+3");
 });
 
+test("период у медиан аккаунта: по умолчанию БД, 7 д и 30 д сужают выборку", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const summary = page.getByRole("region", { name: "Сводка вуза" });
+  const periods = summary.getByRole("group", { name: "Период публикаций для медиан" });
+  const value = (label: string | RegExp) => summary.getByText(label).locator("xpath=ancestor::dl[1]")
+    .locator('[data-slot="account-summary-value"]');
+  // «БД» — как было до переключателя: все публикации окна хранения.
+  await expect(periods.getByRole("button", { name: "БД" })).toHaveAttribute("aria-pressed", "true");
+  await expect(value("публикаций в базе")).toHaveText("2");
+  await expect(value("медиана реакций")).toHaveText("5");
+  await expect(value("медиана просмотров")).toHaveText("50");
+  await periods.getByRole("button", { name: "7 д" }).click();
+  await expect(value("публикаций за 7 дней")).toHaveText("1");
+  await expect(value("медиана реакций")).toHaveText("3");
+  await expect(value("медиана просмотров")).toHaveText("31");
+  // Вчера за 7 дней публикаций не было — сравнивать медиану не с чем, плашка молчит.
+  await expect(summary.getByTitle(/^медиана реакций/)).toHaveCount(0);
+  await periods.getByRole("button", { name: "30 д" }).click();
+  await expect(value("публикаций за 30 дней")).toHaveText("2");
+  await expect(value("медиана просмотров")).toHaveText("42");
+  // Плитки без периода не меняются.
+  await expect(value("с полной историей")).toHaveText("1");
+  await expect(value(/М‑Рейтинг/)).toHaveText("№2");
+});
+
 test("переключатель у графика меняет ряд, а столбцы публикаций остаются", async ({ page }) => {
   await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
   const trend = page.getByRole("region", { name: "Динамика за неделю" });

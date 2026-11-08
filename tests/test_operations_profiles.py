@@ -148,7 +148,7 @@ def test_anomaly_units_keep_the_server_two_budget() -> None:
     # ряды всех аккаунтов площадки и на реальных данных упёрлось в 384.
     for name, memory in (("m-ranked-target-anomaly-analysis.service", "MemoryMax=384M"),
                          ("m-ranked-target-anomaly-norms.service", "MemoryMax=768M"),
-                         ("m-ranked-target-anomaly-tail.service", "MemoryMax=256M")):
+                         ("m-ranked-target-anomaly-tail.service", "MemoryMax=512M")):
         unit = text(name)
         for directive in ("CPUQuota=50%", memory, "Nice=10"):
             assert directive in unit, (name, directive)

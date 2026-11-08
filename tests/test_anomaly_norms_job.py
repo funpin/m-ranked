@@ -7,7 +7,7 @@ from uuid import UUID
 
 from anomaly_analysis.norms_job import NormJob, absolutely_clean, is_clean, load_reference
 from anomaly_analysis.v2.domain import Level
-from anomaly_analysis.v2.norms import NormStatus
+from anomaly_analysis.v2.norms import NormStatus, raw_account_norm
 from anomaly_analysis.v2.series import CollectionCadence, prepare
 from anomaly_analysis.v2.reference import background
 from anomaly_reference.mature_norms import synthetic_cases
@@ -119,3 +119,32 @@ def test_sharp_shift_keeps_that_platform_on_its_accepted_norm_and_accepts_the_re
     assert written["norms"]["telegram"] is not previous.written[0]["norms"]["telegram"]
     assert "carried" not in written["drift"]["telegram"]
     assert first.written[0]["status"] is NormStatus.ACCEPTED
+
+
+def test_series_reach_the_norm_batch_by_batch_and_are_not_kept_for_the_whole_account(monkeypatch):
+    # 25.10 задание держало все подготовленные ряды крупного аккаунта разом,
+    # упёрлось в MemoryMax и перестало укладываться в таймаут. Норма должна
+    # получать ряды по мере чтения: к первому ряду прочитана одна пачка.
+    monkeypatch.setattr("anomaly_analysis.norms_job.SERIES_BATCH", 4)
+    posts = [item for items in background("vk", accounts=1, posts=12).values() for item in items]
+    store = FakeStore(posts)
+    reads = []
+    original = store.read_series
+    store.read_series = lambda targets, kinds_for=None: reads.append(len(targets)) or original(targets, kinds_for)
+    seen = []
+    real = raw_account_norm
+
+    def recording(platform, account, items, **kwargs):
+        def watched():
+            for item in items:
+                seen.append(len(reads))
+                yield item
+        return real(platform, account, watched(), **kwargs)
+
+    monkeypatch.setattr("anomaly_analysis.norms_job.raw_account_norm", recording)
+    NormJob(store, CADENCE, [], clock=lambda: NOW).run()
+    assert reads == [4, 4, 4]
+    assert seen and seen[0] == 1 and seen[-1] == 3
+    # Тот же набор рядов списком даёт ту же норму: поток меняет только память.
+    assert real("vk", posts[0].account_id, (prepare(item, item.observed_at[-1], CADENCE) for item in posts)) == \
+        real("vk", posts[0].account_id, [prepare(item, item.observed_at[-1], CADENCE) for item in posts])
