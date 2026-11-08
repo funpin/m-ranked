@@ -136,7 +136,10 @@ def _backfill(monkeypatch, *flags) -> list:
     monkeypatch.setattr(backfill.os, "statvfs", lambda path: type("Fs", (), {"f_files": 100, "f_favail": 90})())
     monkeypatch.setattr(backfill, "PostgresAnomalyStore", Store)
     monkeypatch.setenv("ANOMALY_DATABASE_URL", "postgresql://example.invalid/x")
-    monkeypatch.setattr(sys, "argv", ["backfill", "--days", "35", *flags])
+    # Момент закреплён: окно считается от него, а от настоящего «сейчас»
+    # признак 4 октября выпал из окна 8 ноября 2026, и тест стал падать.
+    as_of = WINDOW_START + timedelta(hours=HOURS)
+    monkeypatch.setattr(sys, "argv", ["backfill", "--days", "35", "--as-of", as_of.isoformat(), *flags])
     backfill.main()
     (write,) = written
     return [sign for sign in write.verdict.signs if sign.pattern == synchronous_rise.PATTERN]
