@@ -1,10 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { PLATFORM_LABELS, PLATFORM_LONG_LABELS } from "@/lib/format";
-import { metricEvidence } from "@/lib/metric-evidence";
 import type { AccountView, PublicationListItem } from "@/lib/types";
 import { ChannelSwitch } from "@/components/channel-switch";
-import { DeltaBadge, type DeltaTone } from "@/components/delta-badge";
 import { WeeklyTrend } from "@/components/weekly-trend";
 import { NavigationBoundary } from "@/components/navigation-boundary";
 import { AccountSkeleton } from "@/components/skeletons";
@@ -19,29 +17,12 @@ import { AccountAnalysis } from "@/components/account-analysis-lazy";
 import { InstitutionFacts } from "@/components/institution-facts";
 import { AccountRibbon } from "@/components/account-ribbon";
 import { AccountStanding, AccountTiming } from "@/components/account-compare-lazy";
-import { SummaryTile } from "@/components/summary-tile";
-import { FileText, History, Heart, MessageCircle, Eye, Trophy } from "lucide-react";
-import { Suspense, type ReactNode } from "react";
+import { Tile, change } from "@/components/account-tile";
+import { AccountPeriodTiles } from "@/components/account-period-tiles";
+import { Eye, FileText, Heart, History, MessageCircle, Trophy } from "lucide-react";
+import { Suspense } from "react";
 import { PageTitle } from "@/components/page-title";
 
-
-function Tile({ value, label, icon, note, delta, tone, deltaLabel, footer }: {
-  value: string; label: string; icon: ReactNode; note?: string;
-  delta?: number | null; tone?: DeltaTone; deltaLabel?: string; footer?: ReactNode;
-}) {
-  return (
-    <SummaryTile value={value} label={label} icon={icon} note={note} footer={footer}
-      trailing={<DeltaBadge value={delta} tone={tone} label={deltaLabel ?? label} />} />
-  );
-}
-
-/** Разница, когда обе величины известны. Иначе сравнивать не с чем. */
-function change(current: number | null | undefined,
-                previous: number | null | undefined): number | null {
-  if (current === null || current === undefined) return null;
-  if (previous === null || previous === undefined) return null;
-  return current - previous;
-}
 
 export function AccountDetail({ account, posts, nextCursor = null, siblings = [], selectedDay, selectedTrend, anomalyLevels = null, tailProfile = null, findings = null }: { account: AccountView; posts: PublicationListItem[]; nextCursor?: string | null; siblings?: readonly AccountView[]; selectedDay?: string; selectedTrend?: "median" | "total"; anomalyLevels?: Promise<AccountLevelsLoad> | null; tailProfile?: Promise<TailProfileLoad> | null; findings?: Promise<FindingsLoad> | null }) {
   const name = account.title || account.institutionShortName || account.institutionName;
@@ -70,31 +51,24 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
         <section aria-label="Сводка вуза" className="bg-card grid h-full min-w-0 grid-cols-2 content-start gap-2.5 rounded-xl border p-3 text-sm">
           {stats ? null : <p className="col-span-2 text-xs leading-relaxed text-muted-foreground">Сводка публикаций ещё не рассчитана.</p>}
           {stats ? <>
-          <Tile value={String(stats.postCount)} label="публикаций в базе" icon={<FileText />}
-            note={`Публикации ${PLATFORM_LONG_LABELS[account.platform]} в базе за последние ${stats.retentionDays} дней.${telegram ? "" : " Метрики, которые площадка не отдаёт, показаны прочерком."}`}
-            delta={change(stats.postCount, previous.postCount)} deltaLabel="публикаций за сутки" />
-          <Tile value={String(stats.monitored)} label="с полной историей" icon={<History />}
-            note="Публикации, для которых в базе отмечена полная история наблюдений. Показатель относится к аккаунту на выбранной площадке."
-            delta={change(stats.monitored, previous.monitored)} deltaLabel="с полной историей за сутки" />
-          <Tile value={stats.medianReactions.value === null ? "—" : String(Math.trunc(stats.medianReactions.value))}
-            label={`медиана ${primary}`} icon={<Heart />} note={metricEvidence(stats.medianReactions)}
-            delta={change(stats.medianReactions.value, previous.medianReactions)} />
-          <Tile value={stats.medianComments.value === null ? "—" : String(Math.trunc(stats.medianComments.value))}
-            label="медиана комментариев" icon={<MessageCircle />} note={metricEvidence(stats.medianComments)}
-            delta={change(stats.medianComments.value, previous.medianComments)} />
-          <Tile value={stats.medianViews.value === null ? "—" : String(Math.trunc(stats.medianViews.value))}
-            label="медиана просмотров" icon={<Eye />} note={metricEvidence(stats.medianViews)}
-            delta={change(stats.medianViews.value, previous.medianViews)} />
-          {/* Место в рейтинге сравнивается с прошлым опубликованным месяцем, а
-              не с прошлыми сутками: рейтинг выходит раз в месяц. И знак у него
-              читается наоборот — подняться значит уменьшить номер. */}
-          <Tile value={stats.ratingRank ? `№${stats.ratingRank}` : "—"}
-            icon={<Trophy />}
-            label={`М‑Рейтинг ${PLATFORM_LABELS[account.platform]}`}
-            footer={stats.ratingPeriod ?? undefined}
-            note={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[account.platform]}${stats.ratingPeriod ? ` за период «${stats.ratingPeriod}»` : ""}.`}
-            delta={change(stats.ratingRank, previous.ratingRank)} tone="rank"
-            deltaLabel={previous.ratingPeriod ? `место против периода «${previous.ratingPeriod}»` : "место в рейтинге"} />
+          <AccountPeriodTiles stats={stats} platformLabel={PLATFORM_LONG_LABELS[account.platform]}
+            telegram={telegram} primary={primary}
+            icons={{ posts: <FileText />, reactions: <Heart />, comments: <MessageCircle />, views: <Eye /> }}
+            monitored={<Tile value={String(stats.monitored)} label="с полной историей" icon={<History />}
+              note="Публикации, для которых в базе отмечена полная история наблюдений. Показатель относится к аккаунту на выбранной площадке."
+              delta={change(stats.monitored, previous.monitored)} deltaLabel="с полной историей за сутки" />}
+            rating={<>
+            {/* Место в рейтинге сравнивается с прошлым опубликованным месяцем, а
+                не с прошлыми сутками: рейтинг выходит раз в месяц. И знак у него
+                читается наоборот — подняться значит уменьшить номер. */}
+            <Tile value={stats.ratingRank ? `№${stats.ratingRank}` : "—"}
+              icon={<Trophy />}
+              label={`М‑Рейтинг ${PLATFORM_LABELS[account.platform]}`}
+              footer={stats.ratingPeriod ?? undefined}
+              note={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[account.platform]}${stats.ratingPeriod ? ` за период «${stats.ratingPeriod}»` : ""}.`}
+              delta={change(stats.ratingRank, previous.ratingRank)} tone="rank"
+              deltaLabel={previous.ratingPeriod ? `место против периода «${previous.ratingPeriod}»` : "место в рейтинге"} />
+            </>} />
           </> : null}
           <InstitutionFacts profile={account.institutionProfile} />
         </section> },

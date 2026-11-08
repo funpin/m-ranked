@@ -128,6 +128,13 @@ function account(id:number,legacyType:"channels"|"platform_accounts"="channels")
   return {accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id),legacyId:id,legacyType,channelLegacyId:platform === "telegram" ? id : null,platformAccountLegacyId:id,institutionId:uuid(9,id),institutionLegacyId:id,institutionName:names[0]!,institutionShortName:null,platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Канал ${id}`,url:`https://example.test/account/${id}`,archiveUrl:platform === "max" ? "https://maxstat.ru/channel/-70908719079458/post" : null,accessMode:"public",enabled:true,publicationCount:2,subscriberCount:id === 3 ? null : id === 2 ? 12_480 : 5_243,latestObservedAt:asOf,datasetRevision:revision,asOf,
     institutionProfile:id === 2 ? undefined : {trackingStartedAt:"2026-07-01T22:30:00Z",students:{value:8202,referenceYear:2026,referenceDate:"2026-09-30",approximate:false,sourceUrl:"https://mipt.ru/vikon/sveden/files/eiw/Svedeniya_o_chislennosti_obuchayuschixsya_ot_30.09.2026%281%29.pdf",sourceLabel:"МФТИ · ведомость от 30.09.2026",scope:"Бакалавриат, специалитет и магистратура, все формы обучения. Без филиалов, СПО и аспирантуры.",verifiedAt:"2026-10-02"}},
     stats:{retentionDays:70,postCount:2,monitored:1,medianReactions:aggregate(5),medianViews:aggregate(50),medianComments:aggregate(0),ratingRank:2,ratingPeriod:"2026-Q2",subscriberCount:100,lastError:null,lastCheckedAt:asOf,dailySeries:weekly(),
+      periods:{
+        "7d":{days:7,postCount:1,medianReactions:aggregate(3),medianViews:aggregate(31),medianComments:aggregate(0),
+              previous:{postCount:0,medianReactions:null,medianViews:null,medianComments:null}},
+        "30d":{days:30,postCount:2,medianReactions:aggregate(4),medianViews:aggregate(42),medianComments:aggregate(0),
+               previous:{postCount:1,medianReactions:4,medianViews:40,medianComments:0}},
+        db:{days:70,postCount:2,medianReactions:aggregate(5),medianViews:aggregate(50),medianComments:aggregate(0),
+            previous:{postCount:1,medianReactions:4,medianViews:44,medianComments:0}}},
       previous:{postCount:1,monitored:1,medianReactions:4,medianViews:44,medianComments:0,
                 ratingRank:5,ratingPeriod:"2026-Q1"}}};
 }

@@ -150,14 +150,20 @@ SELECT account.id AS account_id, canonical.legacy_id, canonical.entity_type,
 
 
 ACCOUNT_STATS = """
-WITH publications AS (
+WITH periods(period,days) AS (
+    -- Периоды плиток медиан: 7 и 30 дней и всё окно хранения («БД»). Посты
+    -- окна читаются один раз, короткие периоды — его подмножества по дате выхода.
+    VALUES ('7d',least(7,%(days)s)),('30d',least(30,%(days)s)),('db',%(days)s)
+), publications AS (
     SELECT publication.id, publication.history_completeness, publication.published_at
       FROM ingest.visible_publication publication
      WHERE publication.primary_account_id=%(account_id)s::uuid
        AND publication.published_at>=%(as_of)s::timestamptz-make_interval(days=>%(days)s)
        AND publication.published_at<=%(as_of)s::timestamptz
-), latest AS (
-    SELECT publication.history_completeness,
+), latest AS MATERIALIZED (
+    -- MATERIALIZED: последний замер каждого поста читается один раз, а не на
+    -- каждый период, в который пост попадает.
+    SELECT publication.published_at,
            CASE WHEN value.metric_quality IN ('invalid','suspected_reset') THEN NULL
                 ELSE value.metric_value END AS metric_value,
            value.metric_key, value.metric_quality
@@ -170,14 +176,41 @@ WITH publications AS (
         ('reactions',snapshot.reactions_count,snapshot.reactions_quality),
         ('comments',snapshot.comments_count,snapshot.comments_quality)
      ) value(metric_key,metric_value,metric_quality)
-), metric AS (
-    SELECT metric_key,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY metric_value)
-                 FILTER(WHERE metric_value IS NOT NULL)::numeric,0) AS median_value,
-           count(metric_value)::integer AS sample_size,
-           max(analytics.observation_quality_rank(metric_quality))
-             FILTER(WHERE metric_value IS NOT NULL) AS quality_rank
-      FROM latest GROUP BY metric_key
+), measured AS (
+    SELECT periods.period,latest.metric_key,
+           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY latest.metric_value)
+                 FILTER(WHERE latest.metric_value IS NOT NULL)::numeric,0) AS median_value,
+           count(latest.metric_value)::integer AS sample_size
+      FROM periods
+      JOIN latest ON latest.published_at>=%(as_of)s::timestamptz-make_interval(days=>periods.days)
+     GROUP BY periods.period,latest.metric_key
+), quality AS (
+    -- Худшее качество значений периода. Ранг считается по различным парам
+    -- «метрика, качество», а не по каждой строке: функция ранга не встраивается
+    -- (у неё свой search_path), и на тысячах строк её вызовы заметны.
+    SELECT periods.period,seen.metric_key,
+           max(analytics.observation_quality_rank(seen.metric_quality)) AS quality_rank
+      FROM (SELECT metric_key,metric_quality,max(published_at) AS newest
+              FROM latest WHERE metric_value IS NOT NULL
+             GROUP BY metric_key,metric_quality) seen
+      JOIN periods ON seen.newest>=%(as_of)s::timestamptz-make_interval(days=>periods.days)
+     GROUP BY periods.period,seen.metric_key
+), metric AS MATERIALIZED (
+    -- MATERIALIZED: ниже медианы читаются по каждому периоду, без этого
+    -- агрегат пересчитывался бы на каждый период заново.
+    SELECT measured.*,quality.quality_rank
+      FROM measured LEFT JOIN quality USING (period,metric_key)
+), period_count AS (
+    -- Публикации периода сейчас и вышедшие до начала сегодняшних суток по
+    -- Москве — для плашки «за сутки» у плитки «публикаций в базе».
+    SELECT periods.period,count(publication.id)::bigint AS post_count,
+           count(publication.id) FILTER(WHERE publication.published_at
+               < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+                  AT TIME ZONE 'Europe/Moscow'))::bigint AS previous_post_count
+      FROM periods
+      LEFT JOIN publications publication
+        ON publication.published_at>=%(as_of)s::timestamptz-make_interval(days=>periods.days)
+     GROUP BY periods.period
 ), subscriber AS (
     SELECT snapshot.subscriber_count
       FROM ingest.account_metric_snapshot_active snapshot
@@ -235,11 +268,14 @@ WITH publications AS (
       ) snapshot
      WHERE snapshot.quality<>'invalid'
      ORDER BY snapshot.publication_id, snapshot.observed_at DESC, snapshot.id DESC
-), yesterday_metric AS (
-    SELECT value.metric_key,
+), yesterday_metric AS MATERIALIZED (
+    SELECT periods.period,value.metric_key,
            round(percentile_cont(0.5) WITHIN GROUP(ORDER BY value.metric_value)
                  FILTER(WHERE value.metric_value IS NOT NULL)::numeric,0) AS median_value
       FROM yesterday_edge edge
+      JOIN publications publication ON publication.id=edge.id
+      JOIN periods
+        ON publication.published_at>=%(as_of)s::timestamptz-make_interval(days=>periods.days)
      CROSS JOIN LATERAL (VALUES
         ('views',CASE WHEN edge.views_quality IN ('invalid','suspected_reset')
                       THEN NULL ELSE edge.views_count END),
@@ -248,7 +284,7 @@ WITH publications AS (
         ('comments',CASE WHEN edge.comments_quality IN ('invalid','suspected_reset')
                          THEN NULL ELSE edge.comments_count END)
      ) value(metric_key,metric_value)
-     GROUP BY value.metric_key
+     GROUP BY periods.period,value.metric_key
 ), official_rating AS (
     SELECT observation.rank,observation.period
       FROM rating.official_institution_rating_observation observation
@@ -284,28 +320,30 @@ WITH publications AS (
               observation.fetched_at DESC, observation.id DESC LIMIT 1
 )
 SELECT %(days)s::integer AS retention_days,
-       (SELECT count(*) FROM publications)::bigint AS post_count,
        (SELECT count(*) FROM publications WHERE history_completeness='complete')::bigint AS monitored,
-       coalesce((SELECT jsonb_object_agg(metric_key,jsonb_build_object(
-           'value',median_value,'sampleSize',sample_size,
-           'coverage',CASE WHEN (SELECT count(*) FROM publications)=0 THEN NULL
-                           ELSE sample_size::numeric/(SELECT count(*) FROM publications) END,
-           'quality',analytics.observation_quality_from_rank(quality_rank)::text)) FROM metric),'{}'::jsonb) AS medians,
+       -- По периоду: число публикаций, медианы с выборкой и качеством и те же
+       -- величины на начало сегодняшних суток (плашки «за сутки»).
+       (SELECT jsonb_object_agg(counted.period,jsonb_build_object(
+           'postCount',counted.post_count,
+           'previousPostCount',counted.previous_post_count,
+           'medians',coalesce((SELECT jsonb_object_agg(metric.metric_key,jsonb_build_object(
+               'value',metric.median_value,'sampleSize',metric.sample_size,
+               'coverage',CASE WHEN counted.post_count=0 THEN NULL
+                               ELSE metric.sample_size::numeric/counted.post_count END,
+               'quality',analytics.observation_quality_from_rank(metric.quality_rank)::text))
+             FROM metric WHERE metric.period=counted.period),'{}'::jsonb),
+           'previousMedians',coalesce((SELECT jsonb_object_agg(yesterday.metric_key,yesterday.median_value)
+             FROM yesterday_metric yesterday WHERE yesterday.period=counted.period),'{}'::jsonb)))
+          FROM period_count counted) AS periods,
        official_rating.rank AS rating_rank, official_rating.period AS rating_period,
        previous_rating.rank AS previous_rating_rank,
        previous_rating.period AS previous_rating_period,
        -- Вчерашние значения тех же плиток: по ним рисуется плашка «за сутки».
        (SELECT count(*) FROM publications publication
-         WHERE publication.published_at
-               < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
-                  AT TIME ZONE 'Europe/Moscow'))::bigint AS previous_post_count,
-       (SELECT count(*) FROM publications publication
          WHERE publication.history_completeness='complete'
            AND publication.published_at
                < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
                   AT TIME ZONE 'Europe/Moscow'))::bigint AS previous_monitored,
-       coalesce((SELECT jsonb_object_agg(metric_key,median_value)
-                   FROM yesterday_metric),'{}'::jsonb) AS previous_medians,
        subscriber.subscriber_count,
        CASE WHEN collection.status IN ('failed','partial')
             THEN coalesce(collection.sanitized_error_code,'collection_failed') END AS last_error,

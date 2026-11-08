@@ -237,11 +237,14 @@ def account_daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     } for row in rows]
 
 
+ACCOUNT_STATS_PERIODS = ("7d", "30d", "db")
+
+
 def account_stats(row: dict[str, Any], revision: int, as_of: Any,
                   daily: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    medians = row["medians"] or {}
+    periods = row["periods"] or {}
 
-    def median(name: str) -> dict[str, Any]:
+    def median(medians: dict[str, Any], name: str) -> dict[str, Any]:
         data = medians.get(name, {})
         return {
             "value": number(data.get("value")),
@@ -252,30 +255,52 @@ def account_stats(row: dict[str, Any], revision: int, as_of: Any,
             "quality": data.get("quality", "unknown"),
         }
 
-    previous = row.get("previous_medians") or {}
+    def period(name: str) -> dict[str, Any]:
+        data = periods.get(name) or {}
+        medians, previous = data.get("medians") or {}, data.get("previousMedians") or {}
+        return {
+            "days": {"7d": 7, "30d": 30}.get(name, row["retention_days"]),
+            "postCount": int(data.get("postCount", 0)),
+            "medianReactions": median(medians, "reactions"),
+            "medianViews": median(medians, "views"),
+            "medianComments": median(medians, "comments"),
+            # Те же величины на начало сегодняшних суток: плашки «за сутки».
+            "previous": {
+                "postCount": data.get("previousPostCount"),
+                "medianReactions": number(previous.get("reactions")),
+                "medianViews": number(previous.get("views")),
+                "medianComments": number(previous.get("comments")),
+            },
+        }
+
+    by_period = {name: period(name) for name in ACCOUNT_STATS_PERIODS}
+    stored = by_period["db"]
 
     return {
         "retentionDays": row["retention_days"],
-        "postCount": row["post_count"],
+        "postCount": stored["postCount"],
         "monitored": row["monitored"],
-        "medianReactions": median("reactions"),
-        "medianViews": median("views"),
-        "medianComments": median("comments"),
+        "medianReactions": stored["medianReactions"],
+        "medianViews": stored["medianViews"],
+        "medianComments": stored["medianComments"],
         "ratingRank": row["rating_rank"],
         "ratingPeriod": row["rating_period"],
         "subscriberCount": row["subscriber_count"],
         "lastError": row["last_error"],
         "lastCheckedAt": iso(row["last_checked_at"]),
         "dailySeries": daily or [],
+        # Медианы и число публикаций за 7 и 30 дней и за всё окно хранения
+        # («db» — то же, что поля выше): переключатель периода у плиток.
+        "periods": by_period,
         # Вчерашние значения тех же плиток: по ним рисуется плашка «за сутки».
         # Место в рейтинге сравнивается с прошлым месяцем, а не с прошлыми
         # сутками: рейтинг выходит раз в месяц.
         "previous": {
-            "postCount": row.get("previous_post_count"),
+            "postCount": stored["previous"]["postCount"],
             "monitored": row.get("previous_monitored"),
-            "medianReactions": number(previous.get("reactions")),
-            "medianViews": number(previous.get("views")),
-            "medianComments": number(previous.get("comments")),
+            "medianReactions": stored["previous"]["medianReactions"],
+            "medianViews": stored["previous"]["medianViews"],
+            "medianComments": stored["previous"]["medianComments"],
             "ratingRank": row.get("previous_rating_rank"),
             "ratingPeriod": row.get("previous_rating_period"),
         },
