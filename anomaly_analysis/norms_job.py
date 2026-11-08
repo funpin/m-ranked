@@ -22,7 +22,7 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Iterator, Mapping, Sequence
 from uuid import UUID
 
 from .metrics import write_textfile
@@ -35,7 +35,7 @@ from .v2.norms import (
     check_reference, combine, drift, raw_account_norm,
 )
 from .v2.reference import synthetic_reference
-from .v2.series import DAY, CollectionCadence, prepare
+from .v2.series import DAY, CollectionCadence, PreparedSeries, prepare
 from .v2.store import SERIES_BATCH, PostgresAnomalyStore, SeriesTarget
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
@@ -46,6 +46,7 @@ NORM_RELATIVE_PATTERNS = frozenset({2, 4, 5, 10})
 DEFAULT_WINDOW_DAYS = 60
 FINAL_AGE = 30 * DAY
 DEFAULT_REFERENCE_DIRS = ""
+CANDIDATE_KEYS = ("publication_id", "published_at", "account_id", "platform")
 
 log = logging.getLogger("anomaly_analysis.norms_job")
 
@@ -123,17 +124,24 @@ class NormJob:
     def run(self) -> tuple[int, NormStatus]:
         now = self.clock()
         reference_ids = {case.subject.publication_id for case in self.reference}
-        candidates = self.store.norm_candidates(now - timedelta(days=self.window_days), now)
+        # Отбор чистых — сразу при чтении: вывод постов (signals) окна весит
+        # около сотни мегабайт и иначе лежал бы в памяти весь прогон.
+        candidates = [{key: row[key] for key in CANDIDATE_KEYS}
+                      for row in self.store.norm_candidates(now - timedelta(days=self.window_days), now)
+                      if row["publication_id"] not in reference_ids
+                      and is_clean(int(row["level"]), row["signals"] or ())]
         norm_sets = {platform: combine(platform, {}) for platform in PLATFORMS}
         for platform, rows in groupby(candidates, key=lambda row: row["platform"]):
             raw = {}
             for account, items in groupby(rows, key=lambda row: row["account_id"]):
-                clean = [row for row in items if row["publication_id"] not in reference_ids
-                         and is_clean(int(row["level"]), row["signals"] or ())]
-                posts = self._clean_series(clean)
-                if posts:
-                    # Ряды аккаунта отпускаются сразу: в памяти только его маленькая норма.
-                    raw[account] = raw_account_norm(platform, account, posts, final_age=FINAL_AGE)
+                clean = list(items)
+                # Ряды идут в норму пачками по мере чтения и сразу отпускаются:
+                # в памяти одна пачка и маленькая норма, а не все ряды аккаунта.
+                # Списком рядов крупного аккаунта 25.10 задание упёрлось в
+                # MemoryMax, ушло в своп и перестало укладываться в таймаут.
+                norm = raw_account_norm(platform, account, self._clean_series(clean), final_age=FINAL_AGE)
+                if norm.posts:
+                    raw[account] = norm
             norm_sets[platform] = combine(platform, raw)
         previous = self.store.latest_accepted_norm_version()
         assessor = reference_assessor(self.cadence)
@@ -168,19 +176,18 @@ class NormJob:
         log.info("norm version %s: %s (%s)", version, status.value, ", ".join(failures) or "reference passed")
         return version, status
 
-    def _clean_series(self, rows: Sequence[Mapping[str, Any]]):
-        posts = []
+    def _clean_series(self, rows: Sequence[Mapping[str, Any]]) -> Iterator[PreparedSeries]:
         for start in range(0, len(rows), SERIES_BATCH):
             batch = rows[start:start + SERIES_BATCH]
             series = self.store.read_series([SeriesTarget(row["publication_id"], row["published_at"])
                                              for row in batch])
-            for item in series.values():
+            for key in list(series):
+                item = series.pop(key)
                 if not item.observed_at:
                     continue
                 prepared = prepare(item, item.observed_at[-1], self.cadence)
                 if absolutely_clean(prepared):
-                    posts.append(prepared)
-        return posts
+                    yield prepared
 
 
 def main() -> None:
