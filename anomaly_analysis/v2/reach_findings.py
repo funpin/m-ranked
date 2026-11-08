@@ -19,7 +19,7 @@ from typing import Any, Sequence
 from uuid import UUID
 
 from .account_findings import WINDOW_DAYS, AccountFinding, LedgerPost, _halves_by_time
-from .audience_rhythm import account_rhythm, rhythm_from_hours, summed_views
+from .audience_rhythm import account_rhythm, summed_views
 from .tail_ledger import MOSCOW
 
 REACH_KINDS = ("view_packs", "view_waves", "level3_share", "flat_daily_views", "promotion", "early_response")
@@ -317,7 +317,7 @@ def _promotion_days(items: Sequence[LedgerPost], start: date,
 
 def _promotion_night_limit(items: Sequence[LedgerPost]) -> float:
     views = summed_views(post.ledger for post in items)
-    rhythm = rhythm_from_hours(views)
+    rhythm = account_rhythm(post.ledger for post in items)
     if rhythm is None or rhythm.offset_hours <= 1:
         return PROMOTION_NIGHT_SHARE
     share = sum(views[hour] for hour in MSK_NIGHT_UTC_HOURS) / sum(views)

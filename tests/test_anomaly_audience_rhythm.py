@@ -172,3 +172,32 @@ def test_promotion_night_share_allows_for_an_eastern_audience():
     # 25 % суток в 00–06 МСК: у московского аккаунта не ночной провал, у сибирского — его утро.
     assert not promotion_findings(_promoted(1, 1250, scaled(profile(3))), TODAY)
     assert promotion_findings(_promoted(1, 1250, scaled(profile(23), 2)), TODAY)
+
+
+def _ledger(hours: list[int]) -> TailLedger:
+    return TailLedger(None, None, None, hours=(tuple(hours), tuple([0] * 24)))
+
+
+def _packed_account(pack_utc: range, posts: int = 40, packed: int = 6) -> list[TailLedger]:
+    """Московская аудитория; у части постов — крупные регулярные пакеты в часы `pack_utc`."""
+    usual = profile(3)
+    pack = [10_000 if hour in pack_utc else 0 for hour in range(24)]
+    return [_ledger(usual) for _ in range(posts - packed)] + [_ledger(pack) for _ in range(packed)]
+
+
+def test_regular_daytime_packs_do_not_move_the_audience_clock():
+    # Просмотры идут только с 03 до 13 UTC: по сумме самые тихие часы оказались бы вечером.
+    rhythm = account_rhythm(_packed_account(range(3, 14)))
+    assert (rhythm.quiet_start_msk, rhythm.offset_hours, rhythm.clock_known) == (3, 0, True)
+
+
+def test_regular_night_packs_stay_visible_against_the_audience_clock():
+    clean = account_rhythm([_ledger(profile(3)) for _ in range(40)])
+    packed = account_rhythm(_packed_account(range(0, 4)))
+    assert packed.offset_hours == 0
+    assert packed.quiet_over_peak > 10 * clean.quiet_over_peak
+    assert not packed.peak_in_daytime
+
+
+def test_too_few_posts_give_no_account_rhythm():
+    assert account_rhythm([_ledger(scaled(profile(3), 100)) for _ in range(7)]) is None
