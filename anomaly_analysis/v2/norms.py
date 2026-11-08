@@ -205,7 +205,7 @@ class _Samples:
     contributors: dict[tuple[str, int], set[int]] = field(default_factory=dict)
 
 
-def _collect(posts: Sequence[PreparedSeries], excluded: frozenset[UUID], final_age: float) -> _Samples:
+def _collect(posts: Iterable[PreparedSeries], excluded: frozenset[UUID], final_age: float) -> _Samples:
     samples = _Samples()
     ends = AGE_BAND_EDGES[1:]
     for index, prepared in enumerate(posts):
@@ -359,9 +359,13 @@ def _anchor_robust(value: Robust | None, base: Robust | None) -> Robust | None:
     return Robust(float(np.clip(value.median, base.median - reach, base.median + reach)), value.mad)
 
 
-def raw_account_norm(platform: str, account_id: UUID, posts: Sequence[PreparedSeries], *,
+def raw_account_norm(platform: str, account_id: UUID, posts: Iterable[PreparedSeries], *,
                      excluded: frozenset[UUID] = frozenset(), final_age: float = 30 * DAY) -> Norm:
-    """Норма одного аккаунта до якоря. Маленькая: ряды аккаунта можно сразу отпустить."""
+    """Норма одного аккаунта до якоря. Маленькая: ряды аккаунта можно сразу отпустить.
+
+    `posts` проходится один раз и может быть генератором: каждый ряд нужен
+    только на своём шаге, и весь аккаунт в памяти одновременно не держится.
+    """
     return _account_norm(platform, account_id, _collect(posts, excluded, final_age))
 
 
