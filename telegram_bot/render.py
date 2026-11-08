@@ -39,6 +39,9 @@ PLATFORM_NAMES = {"telegram": "Telegram", "vk": "ВКонтакте", "max": "MA
 # с короткими подписями, «все площадки» — когда отмечены все четыре.
 PLATFORM_BUTTONS = (("telegram", "ТГ"), ("vk", "ВК"), ("max", "MAX"), ("rutube", "Рутуб"))
 PUBLICATION_TYPES = {"text": "текст", "photo": "фото", "album": "альбом", "video": "видео"}
+# Страница поста на нашем сайте: /publications/<uuid публикации>.
+SITE_ORIGIN = "https://m.funpin.ru"
+_PUBLICATION_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 PERIOD_BUTTONS = (("1d", "Сутки"), ("7d", "Неделя"), ("30d", "Месяц"))
 MONTHS = ("янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек")
 
@@ -208,6 +211,36 @@ def _post_link(item: dict[str, Any]) -> str:
 def post_head(item: dict[str, Any]) -> str:
     """Площадка нашим значком и ссылка на слове типа поста: «🔵 фото»."""
     return f"{_platform_icon(item.get('platform'))} {_post_link(item)}"
+
+
+def site_line(item: dict[str, Any]) -> str | None:
+    """Отдельная строка со ссылкой на разбор поста у нас; без uuid строки нет."""
+    publication = item.get("publicationId")
+    if not isinstance(publication, str) or not _PUBLICATION_UUID.fullmatch(publication):
+        return None
+    return f'{icon("logo")} <a href="{SITE_ORIGIN}/publications/{publication}">Разбор на сайте</a>'
+
+
+ENGAGEMENT = (("reactions", ("реакция", "реакции", "реакций")),
+              ("comments", ("комментарий", "комментария", "комментариев")),
+              ("shares", ("репост", "репоста", "репостов")))
+
+
+def engagement_line(item: dict[str, Any]) -> str | None:
+    """«412 реакций · 37 комментариев · 25 репостов · 9,2 тыс. просм.»: из чего
+    сложился индекс, и просмотры. Чего площадка не отдаёт, того в строке нет."""
+    supported = item.get("capabilities") or {}
+    parts = []
+    for key, forms in ENGAGEMENT:
+        value = item.get(key)
+        if supported.get(key) is False or not isinstance(value, int) or isinstance(value, bool):
+            continue
+        # «1,2 тыс. реакций»: после «тыс.» и «млн» — всегда родительный множественного.
+        word = forms[2] if value >= 1000 else plural(value, *forms)
+        parts.append(f"{format_count(value)} {word}")
+    if item.get("views") is not None:
+        parts.append(f"{format_count(int(item['views']))} просм.")
+    return " · ".join(parts) or None
 
 
 def _numbers(item: dict[str, Any], views: bool) -> list[str]:
