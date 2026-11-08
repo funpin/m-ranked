@@ -53,9 +53,10 @@ RuntimeDirectory=m-ranked-anomaly-tail
 RuntimeDirectoryMode=0700
 UMask=0077
 # Те же лимиты процессора, что у работника. В памяти — сводки постов шести
-# недель: единицы мегабайт.
+# недель: 08.11.2026 при 33,5 тыс. сводок пик 425 МБ, при 256M служба упала
+# по oom-kill.
 CPUQuota=50%
 Nice=10
-MemoryMax=256M
+MemoryMax=512M
 LimitNOFILE=4096
 TasksMax=32
