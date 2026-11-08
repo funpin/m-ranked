@@ -182,6 +182,9 @@ def test_backfill_finds_old_synchrony_with_whole_window_activity(monkeypatch):
         def read_activity(self, accounts, since, until, published_since):
             return {subject.account_id: activity}
 
+        def read_audience_offsets(self, accounts):
+            return {}
+
         def read_subscribers(self, accounts, since, until):
             return {}
 

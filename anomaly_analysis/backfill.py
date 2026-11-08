@@ -99,6 +99,7 @@ def main() -> None:
         activity = store.read_activity([account], since - timedelta(days=1), now,
                                        since - timedelta(days=1)).get(account)
         subscribers = store.read_subscribers([account], since - timedelta(days=1), now).get(account) or ()
+        audience_offset = store.read_audience_offsets([account]).get(account, 0)
         for start in range(0, len(rows), SERIES_BATCH):
             require_space()
             chunk = rows[start:start + SERIES_BATCH]
@@ -122,7 +123,8 @@ def main() -> None:
                     verdict = assess(subject, norms=norms.get(subject.platform), subscribers=subscribers,
                                      analyzed_at=moment, cadence=cadence, norm_version=version,
                                      activity=activity, reference=reference,
-                                     carried=_carried(row, since if arguments.redetect_synchrony else moment))
+                                     carried=_carried(row, since if arguments.redetect_synchrony else moment),
+                                     audience_offset=audience_offset)
                 except Exception:  # закончить аккаунт, но не продвигать курсор при ошибках
                     account_failed += 1
                     log.exception("backfill post failed publication=%s", row.publication_id)

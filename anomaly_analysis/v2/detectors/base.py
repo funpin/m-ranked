@@ -176,6 +176,9 @@ class DetectorContext:
     # агрегатов суточная база обрезана, а признаки оттуда переносятся из
     # прежнего вывода. None — граница не задана (агрегаты на всё окно).
     synchrony_from: float | None = None
+    # Сдвиг времени аудитории от МСК (audience_rhythm), часы на восток; None —
+    # пояс неизвестен, признаки ночи не считаются. По умолчанию — московская аудитория.
+    audience_offset: int | None = 0
     _fits: dict = field(default_factory=dict)
 
     @property

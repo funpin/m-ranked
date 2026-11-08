@@ -929,6 +929,24 @@ class PostgresAnomalyStore:
                 (row["observed_at"], int(row["subscriber_count"])))
         return result
 
+    def read_audience_offsets(self, accounts: Sequence[UUID]) -> dict[UUID, int | None]:
+        """Сдвиг времени аудитории от МСК из последнего профиля; None — пояс неизвестен.
+
+        Аккаунта нет в ответе, пока его профиль не посчитан с ритмом: тогда
+        вызывающий считает аудиторию московской, как до появления профиля.
+        """
+        if not accounts:
+            return {}
+        with self._factory() as connection:
+            rows = connection.execute(
+                """SELECT DISTINCT ON (account_id) account_id, metrics -> 'rhythm' AS rhythm
+                     FROM analytics.account_tail_profile
+                    WHERE account_id = ANY(%s::uuid[]) AND computed_for >= current_date - 3
+                      AND metrics ? 'rhythm'
+                    ORDER BY account_id, computed_for DESC""", (list(accounts),)).fetchall()
+        return {row["account_id"]: row["rhythm"]["offsetHours"] if row["rhythm"] and row["rhythm"]["clockKnown"] else None
+                for row in rows}
+
     def schedule_norm_recheck(self, version_id: int, now: datetime, window_seconds: int) -> int:
         """Перепроверить незамороженные посты под новой нормой, растянув по окну.
 
