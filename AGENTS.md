@@ -33,8 +33,8 @@ For a release (only when the owner asks for one):
 
 1. Open a PR from `develop` into `main` titled `release: vYYYY.M.N` — the
    next version after the latest `v*` tag, N counting from 0 within the month.
-2. It needs `develop-gate`, `release-gate` and one approval; merge it with a
-   merge commit.
+2. It needs `develop-gate` and `release-gate`; no approval is required unless
+   it changes code-owned paths. Merge it with a merge commit.
 3. The merge builds, tags and publishes the release, then the `Deploy`
    workflow waits for approval in the `production` environment. A release that
    brings migrations or server configuration changes stops before switching
