@@ -1,12 +1,11 @@
 """Пакет просмотров после второго часа: час с приростом от 15 % итога.
 
-Сам по себе такой час бывает и у живого поста (репост крупным пабликом), поэтому
-пакет — слабый сигнал, а реакции внутри него решают дальше. Сцепленные реакции —
-приток живых людей: признака нет, уровень вирусного поста не растёт. Дневной обрыв —
+Такой час бывает и у живого поста, поэтому решают реакции внутри него (ADR-019). Если
+реакции пришли хотя бы частично, это приток живых людей: продвижение, рекомендации или
+репост крупным пабликом, признака нет, и уровень такого поста не растёт. Дневной обрыв —
 следующие три часа не больше пятой части темпа пакета в 09–21 по времени аудитории.
-Обрыв вместе с расцеплением — выраженный признак; обрыв при промежуточной доле реакций
-остаётся слабым сигналом: на эталоне так выглядел пост с продвижением. Отсутствие реакций
-при значимости от 12 — уровень 3 одним составным признаком, как рывок с плато у реакций.
+Обрыв вместе с расцеплением — выраженный признак. Отсутствие реакций при значимости от 12 —
+уровень 3 одним составным признаком, как рывок с плато у реакций.
 
 Пост сравнивается с самим собой, норма аккаунта не участвует.
 """
@@ -42,10 +41,10 @@ CONFIRMED_STRENGTH = 0.95
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     response = burst_response(prepared, view_share=VIEW_SHARE)
-    if response is None or response.outcome == "coupled":
+    if response is None or response.outcome != "decoupled":
         return ()
     cliff = _daytime_cliff(prepared, response, context.audience_offset)
-    decoupled = response.outcome == "decoupled" and response.surprise >= MIN_SURPRISE
+    decoupled = response.surprise >= MIN_SURPRISE
     render = {"kind": "view_packet", "outcome": response.outcome, "cliff": cliff, "views": round(response.views),
               "reactions": round(response.reactions), "outsideViews": round(response.outside_views),
               "outsideReactions": round(response.outside_reactions), "responseShare": round(response.share, 3),

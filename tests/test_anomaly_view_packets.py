@@ -58,14 +58,12 @@ def test_a_packet_with_a_daytime_cliff_is_pronounced():
     assert STRONG <= sign.strength < 0.9
 
 
-def test_a_cliff_with_a_partial_response_stays_a_weak_signal():
-    (sign,) = packet(series(burst_reactions=20))
-    assert sign.render["outcome"] == "intermediate" and sign.render["cliff"] is True
-    assert sign.strength < STRONG
+def test_a_cliff_with_a_partial_response_is_not_a_sign():
+    assert not packet(series(burst_reactions=20))
 
 
-def test_a_packet_alone_is_a_weak_signal():
-    (sign,) = packet(series(burst_hour=12, burst_reactions=20))  # обрыв приходится на полночь МСК
+def test_a_decoupled_packet_without_a_cliff_is_a_weak_signal():
+    (sign,) = packet(series(burst_hour=12, rate=0.004))  # обрыв приходится на полночь МСК
     assert sign.render["cliff"] is False and sign.strength < STRONG
 
 
@@ -75,15 +73,15 @@ def test_a_viral_packet_with_coupled_reactions_is_not_a_sign():
 
 def test_the_cliff_hour_follows_the_audience_clock():
     # Обрыв в 00:00 МСК у аудитории с +9… вне границ; с +6 это 06:00 — тоже не день; с +4 в 13 МСК — 17:00.
-    item = series(burst_hour=12, burst_reactions=20)
+    item = series(burst_hour=12, rate=0.004)
     assert packet(item, offset=0)[0].render["cliff"] is False
-    daytime = series(burst_reactions=20)
+    daytime = series(rate=0.004)
     assert packet(daytime, offset=4)[0].render["cliff"] is True
     assert packet(daytime, offset=None)[0].render["cliff"] is False
 
 
 def test_a_slow_decline_after_the_packet_is_not_a_cliff():
-    (sign,) = packet(series(burst_reactions=20, after_rate=900))
+    (sign,) = packet(series(rate=0.004, after_rate=900))
     assert sign.render["cliff"] is False
 
 
@@ -92,15 +90,14 @@ def test_only_vk_is_judged():
     assert not late(series(platform="max", burst_hour=30, base_views=2))
 
 
-def test_late_start_alone_is_weak():
-    (sign,) = late(series(burst_hour=30, burst_reactions=60, base_views=2, rate=0.02))
-    assert sign.pattern == 21 and sign.strength == 0.45
+def test_late_start_with_live_reactions_is_not_a_sign():
+    assert not late(series(burst_hour=30, burst_reactions=60, base_views=2, rate=0.02))
 
 
 def test_late_start_with_a_decoupled_burst_is_pronounced_and_covers_the_burst():
     item = series(burst_hour=30, base_views=4, rate=0.05)
     (sign,) = late(item)
-    assert sign.strength >= STRONG
+    assert sign.pattern == 21 and sign.strength >= STRONG
     assert sign.render["endAge"] >= 31 * 3600
 
 

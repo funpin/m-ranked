@@ -1,8 +1,8 @@
 """Поздний старт охвата: к шестому часу меньше 5 % просмотров, набранных к трём суткам.
 
-Одинаково встречается у платного продвижения записи и у пакетов просмотров, поэтому
-сам по себе — слабый сигнал. Выраженным его делает всплеск без отклика: реакции в нём
-почти не приходят. Сравнивается только форма самого поста.
+Одинаково встречается у платного продвижения записи, рекомендаций ВК и пакетов просмотров.
+Признаком становится только вместе со всплеском без отклика (ADR-019): с живыми реакциями
+это причина для находки о продвижении, а не уровень поста. Сравнивается только форма самого поста.
 """
 from __future__ import annotations
 
@@ -27,8 +27,7 @@ EARLY_SHARE = 0.05
 MIN_VIEWS = 2_000
 # Значение к шестому часу известно, только если рядом есть настоящие замеры.
 MAX_EARLY_DISTANCE = 2 * HOUR
-WEAK_STRENGTH = 0.45
-STRONG_STRENGTH = 0.75
+STRENGTH = 0.75
 SCALE = timedelta(hours=6)
 
 
@@ -43,12 +42,11 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     if total < MIN_VIEWS or early >= EARLY_SHARE * total:
         return ()
     response = burst_response(prepared)
-    decoupled = response is not None and response.outcome == "decoupled" and response.surprise >= MIN_SURPRISE
-    end_age = response.end_age if decoupled else EARLY_AGE
-    formula = (f"к 6 ч {number(early)} просмотров — {early / total:.1%} от {number(total)} к 72 ч"
-               + ("; основной приток пришёл почти без реакций" if decoupled else ""))
-    return (make_sign(PATTERN, FAMILY, prepared, Metric.VIEWS, STRONG_STRENGTH if decoupled else WEAK_STRENGTH, 0.0,
-                      end_age, SCALE, formula,
+    if response is None or response.outcome != "decoupled" or response.surprise < MIN_SURPRISE:
+        return ()
+    formula = (f"к 6 ч {number(early)} просмотров — {early / total:.1%} от {number(total)} к 72 ч; "
+               "основной приток пришёл почти без реакций")
+    return (make_sign(PATTERN, FAMILY, prepared, Metric.VIEWS, STRENGTH, 0.0, response.end_age, SCALE, formula,
                       {"kind": "late_start", "earlyViews": round(early), "totalViews": round(total),
-                       "earlyShare": round(early / total, 4), "decoupled": decoupled},
+                       "earlyShare": round(early / total, 4)},
                       ("paid_promotion", "recommendation_wave", "news_event", "site_embed")),)
