@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import {
-  ArrowUpFromLine, ChevronRight, CircleCheck, Eye, History, Layers, Megaphone, Moon, Package, ScanLine, Timer, TrendingUp, TriangleAlert, Waves,
+  ArrowUpFromLine, ChevronRight, CircleCheck, Eye, History, Layers, Megaphone, Moon, Package, ScanLine, Timer, TrendingUp, TriangleAlert, Waves, Unlink, UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -30,7 +30,7 @@ const VISIBLE_ROWS = 3;
 const ICONS: Record<string, LucideIcon> = {
   early_pack: Package, regular_reactions: ScanLine, late_growth: TrendingUp, late_engagement: History,
   synchronous_waves: Layers, engagement_shift: ArrowUpFromLine, night_reactions: Moon,
-  view_packs: Eye, view_waves: Waves, level3_share: TriangleAlert, promotion: Megaphone, early_response: Timer,
+  view_packs: Eye, view_waves: Waves, level3_share: TriangleAlert, promotion: Megaphone, early_response: Timer, organized_response: UsersRound, reaction_view_link: Unlink,
 };
 
 type Figure = NonNullable<AccountAnomalyFinding["figure"]>;

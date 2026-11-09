@@ -11,6 +11,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPill } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
+import { PromotionMark } from "@/components/findings/account-findings-flag";
 import { NeighborContextTimeline } from "@/components/neighbor-context-timeline";
 import { LevelIcon, PatternIcon } from "@/components/anomaly-icons";
 import { legacyDate } from "@/lib/format";
@@ -243,6 +244,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
                 <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <span className="font-heading font-semibold">Анализ динамики</span>
                   <Summary analysis={analysis} />
+                  <PromotionMark promoted={Boolean(analysis.accountFindings?.some((item) => item.kind === "promotion"))} />
                 </span>
                 {summary.count || summary.analyzedAt ? <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums">
                   {summary.count ? <span>{summary.count}</span> : null}

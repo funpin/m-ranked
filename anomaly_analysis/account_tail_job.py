@@ -63,6 +63,8 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
     synchrony = [SynchronyEvent(row["account_id"], row["platform"], row["publication_id"], row["hour"])
                  for row in store.read_synchrony_events(start, end)]
     result = [with_texts(item) for item in findings(posts, computed_for, late, tail_status, synchrony)]
+    vk_accounts = sorted({post.account_id for post in posts if post.platform in reach_findings.PROMOTION_PLATFORMS}, key=str)
+    subscribers = store.read_latest_subscribers(vk_accounts, start)
     # Находки по охватам: уровни и признаки постов окна плюс те же сводки.
     levels = [reach_findings.PostLevel(row["publication_id"], row["account_id"], row["platform"],
                                        row["published_at"], int(row["level"]), frozenset(row["patterns"] or ()),
@@ -71,8 +73,9 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
     reach = (reach_findings.view_pack_findings(levels, computed_for)
              + reach_findings.level3_findings(levels, computed_for)
              + reach_findings.wave_findings(posts, computed_for)
-             + reach_findings.promotion_findings(posts, computed_for)
-             + reach_findings.early_response_findings(posts, computed_for))
+             + reach_findings.promotion_findings(posts, computed_for, subscribers)
+             + reach_findings.early_response_findings(posts, computed_for)
+             + reach_findings.response_link_findings(posts, computed_for))
     # «Без суточного ритма» (flat_day_findings) не публикуется: на копии прода
     # 01.09–07.10 не подтвердилась (research/reach-audit-2026-10/VALIDATION.md).
     result += [with_texts(item) for item in reach]

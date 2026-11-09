@@ -183,7 +183,7 @@ def test_finding_kinds_cover_what_the_nightly_job_publishes(contract):
     """Виды аккаунтных находок в контракте — те, что пишет ночное задание (без «ритма»)."""
     published = {"early_pack", "regular_reactions", "late_growth", "late_engagement", "synchronous_waves",
                  "engagement_shift", "night_reactions", "view_packs", "view_waves", "level3_share", "promotion",
-                 "early_response"}
+                 "early_response", "organized_response", "reaction_view_link"}
     enums = []
 
     def walk(node):

@@ -105,11 +105,11 @@ def test_waves_over_the_latest_posts_on_two_weeks_are_persistent():
 
 
 def test_scattered_surges_are_not_a_wave():
-    # 12 постов в один час, но не последние подряд: каждый третий из старых.
+    # 12 постов в один час, но редко среди последних: каждый пятый из старых.
     hour = int((BASE + timedelta(days=20)).timestamp() // 3600)
     items = [LedgerPost(p.publication_id, p.account_id, p.platform, p.published_at, False,
                         TailLedger(p.ledger.early, p.ledger.start, p.ledger.end,
-                                   surges=((hour, 900, 0),) if k % 3 == 0 and k < 36 else ()))
+                                   surges=((hour, 900, 0),) if k % 5 == 0 and k < 55 else ()))
              for k, p in enumerate(wall(1))]
     assert not of(wave_findings(items, TODAY))
 
@@ -246,7 +246,7 @@ def test_every_reach_kind_has_words_for_the_api():
 
 def test_findings_method_version_is_bumped():
     from anomaly_analysis.v2.account_findings import METHOD_VERSION
-    assert METHOD_VERSION == "account-findings-v7"
+    assert METHOD_VERSION == "account-findings-v8"
 
 
 def early(account, count=20, quick=(), platform="vk", publication_type="photo", views=60):

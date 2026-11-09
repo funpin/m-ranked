@@ -32,6 +32,7 @@ from .detectors import engagement_regime
 from .detectors.engagement_regime import CONFIRMED_MODE as CONFIRMED_EPISODE_MODE
 from .detectors.late_engagement import MEASUREMENT_MODE as LATE_ENGAGEMENT_MODE
 from .detectors.linear_feed import STEADY_STOP_MODE
+from .detectors.view_burst_response import burst_response
 from .detectors.view_packet import CONFIRMED_MODE as CONFIRMED_PACKET_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
@@ -186,7 +187,11 @@ def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: N
         signs.extend(reference.detect(subject, moment))
         versions["mature_reference"] = REFERENCE_VERSION
         versions["mature_reference_model"] = reference.version_for(subject)
-    return verdict(prepared, context, [*signs, *carried], versions, norm_version)
+    result = verdict(prepared, context, [*signs, *carried], versions, norm_version)
+    burst = burst_response(prepared)
+    if burst is None:
+        return result
+    return replace(result, burst=(burst.outcome, round(burst.share, 3), round(burst.views), round(burst.surprise, 1)))
 
 
 def run_detectors(prepared: PreparedSeries, context: DetectorContext) -> tuple[list[Sign], dict[str, str]]:

@@ -222,7 +222,7 @@ class Worker:
                     analyzed_points=len(subject.observed_at), last_point_observed_at=subject.observed_at[-1],
                     norm_version_id=self.norm_version, frozen=decision.frozen,
                     lag_seconds=max(0, int((now - row.next_due_at).total_seconds())), reason=decision.reason,
-                    tail_ledger=build_ledger(subject, now).payload()))
+                    tail_ledger=build_ledger(subject, now, burst=verdict.burst).payload()))
                 self.metrics.outcomes["frozen" if decision.frozen else "analyzed"] += 1
                 self.metrics.levels[int(verdict.level)] += 1
                 for sign in verdict.signs:

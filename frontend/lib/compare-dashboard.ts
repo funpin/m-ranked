@@ -80,6 +80,8 @@ export const FINDING_TITLES: Record<InstitutionFinding["kind"], string> = {
   level3_share: "Много постов с признаками искусственной активности",
   promotion: "Похоже на продвижение записей",
   early_response: "Ранний отклик выше площадки",
+  organized_response: "Организованный отклик",
+  reaction_view_link: "Просмотры растут независимо от отклика",
 };
 
 export type InstitutionRow = {

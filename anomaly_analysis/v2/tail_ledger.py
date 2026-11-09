@@ -36,10 +36,11 @@ import numpy as np
 
 from .domain import Metric, PostSeries
 
-VERSION = 6
+VERSION = 7
 # Сводки третьей версии читаются: в них нет только почасовой раскладки;
-# четвёртой — часов притока (surges); пятой — суток ВК (days).
-READABLE_VERSIONS = (3, 4, 5, 6)
+# четвёртой — часов притока (surges); пятой — суток ВК (days); шестой —
+# комментариев к трём суткам и всплеска просмотров (comments72, burst).
+READABLE_VERSIONS = (3, 4, 5, 6, 7)
 MOSCOW = ZoneInfo("Europe/Moscow")
 HOUR = 3600
 # С этого значения Telegram показывает просмотры сокращённо («1,2K»).
@@ -117,6 +118,10 @@ class TailLedger:
     surges: tuple[tuple[int, int, int], ...] = ()
     # Сутки ВК: (дата МСК, просмотры, реакции, просмотры 00–06); пусто — не ВК или до v6.
     days: tuple[tuple[str, int, int, int], ...] = ()
+    # Комментарии к 72 ч; None — неизвестно или до v7.
+    comments72: int | None = None
+    # Самый крупный всплеск просмотров: (исход, доля реакций внутри к доле вне, просмотры, −log₁₀ p).
+    burst: tuple[str, float, int, float] | None = None
 
     @property
     def late(self) -> tuple[int, int] | None:
@@ -139,6 +144,8 @@ class TailLedger:
             **({"hours": [list(self.hours[0]), list(self.hours[1])]} if self.hours else {}),
             **({"surges": [list(item) for item in self.surges]} if self.surges else {}),
             **({"days": [list(item) for item in self.days]} if self.days else {}),
+            **({"c72": self.comments72} if self.comments72 is not None else {}),
+            **({"burst": list(self.burst)} if self.burst else {}),
         }
 
 
@@ -157,7 +164,9 @@ def ledger_from_payload(payload: Mapping[str, Any] | None) -> TailLedger | None:
                       _hours_from(payload.get("hours")),
                       tuple(tuple(int(value) for value in item) for item in payload.get("surges") or ()),
                       tuple((str(item[0]), int(item[1]), int(item[2]), int(item[3]))
-                            for item in payload.get("days") or ()))
+                            for item in payload.get("days") or ()),
+                      payload.get("c72"),
+                      (lambda burst: None if not burst else (str(burst[0]), float(burst[1]), int(burst[2]), float(burst[3])))(payload.get("burst")))
 
 
 def _hours_from(value) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
@@ -166,12 +175,14 @@ def _hours_from(value) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
     return tuple(int(item) for item in value[0]), tuple(int(item) for item in value[1])
 
 
-def build_ledger(series: PostSeries, analyzed_at: datetime | None = None, *, surges: bool = True) -> TailLedger:
+def build_ledger(series: PostSeries, analyzed_at: datetime | None = None, *, surges: bool = True,
+                 burst: tuple[str, float, int, float] | None = None) -> TailLedger:
     """Сводка позднего отклика по ряду поста на момент анализа.
 
     Репост получает только отметки: его просмотры собственные, но поздний
     отклик чужого содержания с профилем аккаунта не сравнивается (ADR-015).
-    `surges=False` — без часов притока (признаку поста они не нужны).
+    `surges=False` — без часов притока (признаку поста они не нужны). `burst` — исход
+    всплеска просмотров из вывода поста, повторно не считается.
     """
     limit = analyzed_at.timestamp() if analyzed_at is not None else float("inf")
     published = series.published_at.timestamp()
@@ -204,7 +215,8 @@ def build_ledger(series: PostSeries, analyzed_at: datetime | None = None, *, sur
     return TailLedger(early, start, end, covered, growth, rounded, marks,
                       _hours(joint, inexact, published),
                       _surges(series, joint, early, published) if surges else (),
-                      _post_days(joint, inexact, published) if surges and series.platform in DAYS_PLATFORMS else ())
+                      _post_days(joint, inexact, published) if surges and series.platform in DAYS_PLATFORMS else (),
+                      _comments72(series, published), burst)
 
 
 # Сутки поста ВК для находки «похоже на продвижение» (reach_findings): прирост
@@ -214,7 +226,17 @@ def build_ledger(series: PostSeries, analyzed_at: datetime | None = None, *, sur
 # он впервые наблюдался, сутки с разрывом замеров длиннее DAY_BRACKET — неизвестны.
 DAYS_PLATFORMS = frozenset({"vk"})
 DAYS_UNTIL = 14
+HORIZON_72 = 3 * DAY
 NIGHT_UNTIL_HOUR = 6
+
+
+def _comments72(series: PostSeries, published: float) -> int | None:
+    column = series.values.get(Metric.COMMENTS)
+    if not column:
+        return None
+    limit = published + HORIZON_72
+    known = [value for at, value in zip(series.observed_at, column) if value is not None and at.timestamp() <= limit]
+    return int(known[-1]) if known else None
 
 
 def _post_days(points: list[Point], inexact: set[float], published: float) -> tuple[tuple[str, int, int, int], ...]:

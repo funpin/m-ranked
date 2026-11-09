@@ -219,6 +219,8 @@ class PostVerdict:
     quality: DataQuality
     detector_versions: Mapping[str, str]
     norm_version: int | None = None
+    # Исход всплеска просмотров для сводки поста: (исход, доля, просмотры, −log₁₀ p).
+    burst: tuple[str, float, int, float] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "level", Level(self.level))
