@@ -13,12 +13,14 @@ from datetime import timedelta
 
 import numpy as np
 
+from ..audience_rhythm import QUIET_HOURS, REFERENCE_QUIET_START_MSK
 from ..domain import Family, Metric, Sign
 from ..series import HOUR, PointFlag, PreparedSeries, growth_bounds
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
+from .view_burst_response import burst_response
 
 ID = "linear_feed"
-VERSION = "2.7.0"
+VERSION = "2.8.0"
 PATTERN = 1
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -141,6 +143,23 @@ VIEW_SHORT_MAX_GAP_SHARE = 0.25
 # «ожидаемый шаг» первых суток — 5 минут, и общая сетка такие ячейки отбрасывает.
 VIEW_SHORT_MAX_SPACING = 45 * 60
 VIEW_SHORT_EXPLICIT, VIEW_SHORT_PRONOUNCED = 0.95, 0.75
+
+# ВК показывает пост в ленте днём, и ровный дневной участок — обычная форма
+# ленты и рекомендаций: на копии 07.11 у 808 таких участков медиана ступеньки
+# от фона самого поста — ×5, а у подачи МИФИ, МИСИС и Губкинского — десятки
+# и сотни. Сравнение с самим постом, а не с темпом аккаунта: у аккаунта с
+# регулярной подачей она уже вошла бы в его обычный темп. Участок остаётся
+# признаком, если прошёл через тихое окно аудитории без провала, оборвался
+# днём или поднялся над фоном не меньше чем в DAYTIME_STEP раз.
+AUDIENCE_CLOCK_PLATFORMS = frozenset({"vk"})
+DAYTIME_STEP = 30.0
+QUIET_AUDIENCE_HOURS = frozenset(range(REFERENCE_QUIET_START_MSK, REFERENCE_QUIET_START_MSK + QUIET_HOURS))
+# Половина тихого окна: участок, только задевший его краем, ночи не доказывает.
+QUIET_MIN_HOURS = 2
+# Темп в тихие часы не ниже половины темпа участка: иначе это обычный ночной провал.
+QUIET_KEEP = 0.5
+# Сцепленный всплеск — живой приток: не выше слабого сигнала. Расцепленный — выраженный признак.
+COUPLED_STRENGTH, DECOUPLED_STRENGTH = 0.45, 0.75
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
@@ -415,7 +434,7 @@ def _scan(prepared, context, metric, data, grid, bounded=None):
         while index + 1 < flat.size and flat[index + 1] and abs(means[index + 1] / level - 1) <= 0.3:
             index += 1
         begin, end = _refine(rates, valid, first, index + window)
-        sign = _judge(prepared, metric, data, grid, rates, observed, begin, end, bounded)
+        sign = _judge(prepared, context, metric, data, grid, rates, observed, begin, end, bounded)
         if sign is not None:
             signs.append(sign)
         index += 1
@@ -579,7 +598,28 @@ def _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, ste
     return delta, stepped_up, stepped_down
 
 
-def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None):
+def _through_quiet(prepared, offset, grid, rates, valid, begin, end, mean) -> bool:
+    """Участок прошёл через тихое окно аудитории и не просел в нём; пояс неизвестен — не доказано."""
+    if offset is None:
+        return False
+    published = prepared.series.published_at.timestamp()
+    quiet = [float(rates[cell]) for cell in range(begin, end) for hour in range(int(grid.scale.total_seconds() // HOUR))
+             if valid[cell] and (int((published + grid.edges[cell] + hour * HOUR + MSK_OFFSET) // HOUR) + offset) % 24
+             in QUIET_AUDIENCE_HOURS]
+    return len(quiet) >= QUIET_MIN_HOURS and sum(quiet) / len(quiet) >= QUIET_KEEP * mean
+
+
+def _with_burst(prepared, strength: float, start_age: float, end_age: float) -> float:
+    """Сила участка с учётом всплеска просмотров внутри него."""
+    response = burst_response(prepared)
+    if response is None or response.end_age <= start_age or end_age <= response.start_age:
+        return strength
+    if response.outcome == "coupled":
+        return min(strength, COUPLED_STRENGTH)
+    return max(strength, DECOUPLED_STRENGTH) if response.outcome == "decoupled" else strength
+
+
+def _judge(prepared, context, metric, data, grid, rates, valid, begin, end, bounded=None):
     width = grid.scale.total_seconds()
     start_age, end_age = float(grid.edges[begin]), float(grid.edges[end])
     duration = end_age - start_age
@@ -644,6 +684,11 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None)
         if not stepped_down:
             at_feed_limit = feed_limit is not None and feed_limit[0] <= end_age <= feed_limit[1]
             after, stepped_down = _stop(prepared, grid, rates, valid, edge_rates, edge_valid, end, mean, at_feed_limit)
+    audience_feed = metric is Metric.VIEWS and prepared.series.platform in AUDIENCE_CLOCK_PLATFORMS
+    if (audience_feed and not stepped_down
+            and not (background.size and mean >= DAYTIME_STEP * max(float(np.median(background)), 1.0))
+            and not _through_quiet(prepared, context.audience_offset, grid, rates, valid, begin, end, mean)):
+        return None
     hours = (grid.edges[begin:end + 1] - start_age) / HOUR
     slope, intercept = np.polyfit(hours, grid.cumulative[begin:end + 1], 1)
     fitted = slope * hours + intercept
@@ -651,6 +696,8 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None)
     total = float(np.sum((grid.cumulative[begin:end + 1] - grid.cumulative[begin:end + 1].mean()) ** 2))
     r_squared = 1 - residual / total if total > 0 else 1.0
     strength = 0.4 + 0.3 * (1 - cv / MAX_CV) + 0.3 * min(1.0, duration / (12 * HOUR))
+    if audience_feed:
+        strength = _with_burst(prepared, strength, start_age, end_age)
     formula = (f"Δ{NAMES[metric]} ≈ {number(slope)}·t (t в часах), R² = {r_squared:.3f}, "
                f"t ∈ [{age_text(start_age)}; {age_text(end_age)}], масштаб {scale_text(grid.scale)}"
                + (f"; затем обрыв до {number(float(after.mean()))}/ч" if stepped_down else ""))
@@ -662,4 +709,5 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None)
                                "afterRate": round(float(after.mean()), 3) if after.size else None,
                                "stepDown": bool(stepped_down),
                                **({"measurementMode": mode} if mode else {})},
-                     ("recommendation_feed", "smoothed_large_audience"))
+                     ("recommendation_feed", "paid_promotion", "smoothed_large_audience") if audience_feed
+                     else ("recommendation_feed", "smoothed_large_audience"))
