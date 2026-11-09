@@ -6818,13 +6818,17 @@ components:
     ComparisonDashboardStat:
       type: object
       additionalProperties: false
-      required: [institutionId, platform, posts, viewsTotal, reactionsTotal, commentsTotal, sharesTotal,
+      required: [institutionId, platform, posts, viewsTotal, viewsAdjusted, reactionsTotal, commentsTotal, sharesTotal,
         sample24, views24, reactions24, comments24, shares24, engagement24, analyzed, levels]
       properties:
         institutionId: { type: [string, 'null'], format: uuid }
         platform: { $ref: '#/components/schemas/PlatformValue' }
         posts: { type: integer, minimum: 0 }
         viewsTotal: { type: [integer, 'null'], format: int64 }
+        viewsAdjusted:
+          type: [integer, 'null']
+          format: int64
+          description: Сумма просмотров без часов волн по стене и всплесков без реакций.
         reactionsTotal: { type: [integer, 'null'], format: int64 }
         commentsTotal: { type: [integer, 'null'], format: int64 }
         sharesTotal: { type: [integer, 'null'], format: int64 }

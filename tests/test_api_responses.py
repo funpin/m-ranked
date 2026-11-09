@@ -615,7 +615,7 @@ def test_comparison_dashboard_body_matches_the_contract():
     contract = yaml.safe_load((pathlib.Path(__file__).resolve().parents[1]
                                / "contracts/openapi/m-ranked-v1.yaml").read_text(encoding="utf-8"))
     institution = uuid.uuid4()
-    stat = {"institution_id": str(institution), "platform": "vk", "posts": 12, "views_total": 9000,
+    stat = {"institution_id": str(institution), "platform": "vk", "posts": 12, "views_total": 9000, "views_adjusted": 8000,
             "reactions_total": 300, "comments_total": 20, "shares_total": None, "sample24": 10,
             "views24": 812.5, "reactions24": 30.0, "comments24": 2.0, "shares24": None,
             "engagement24": 4.12345, "analyzed": 11, "level0": 8, "level1": 1, "level2": 1, "level3": 1}
