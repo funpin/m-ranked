@@ -850,7 +850,7 @@ class PostgresAnomalyStore:
     def read_post_levels(self, published_after: datetime, published_until: datetime) -> list[dict[str, Any]]:
         """Выводы постов окна для находок по охватам (v2/reach_findings.py).
 
-        `patterns` — номера признаков у постов уровня 3; `view_pack` — признак 1
+        `patterns` — номера признаков у постов уровня 3; `view_pack` — признак 20 или признак 1
         режима «short_views» не слабее выраженной аномалии. Репосты не входят:
         у них чужое содержание.
         """
@@ -862,8 +862,9 @@ class PostgresAnomalyStore:
                               SELECT DISTINCT (signal->>'pattern')::int
                                 FROM jsonb_array_elements(state.signals) signal) ELSE '{}'::int[] END AS patterns,
                           EXISTS (SELECT 1 FROM jsonb_array_elements(state.signals) signal
-                                   WHERE (signal->>'pattern')::int = 1 AND signal->>'metric' = 'views'
-                                     AND signal->'render'->>'mode' = 'short_views'
+                                   WHERE ((signal->>'pattern')::int = 20
+                                          OR (signal->>'pattern')::int = 1 AND signal->>'metric' = 'views'
+                                             AND signal->'render'->>'mode' = 'short_views')
                                      AND (signal->>'strength')::numeric >= 0.7) AS view_pack
                      FROM analytics.post_anomaly_state state
                      JOIN ingest.visible_publication publication ON publication.id = state.publication_id
@@ -883,6 +884,16 @@ class PostgresAnomalyStore:
                    VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::uuid[],%s)""",
                 [(item.account_id, item.kind, item.platform, item.status, item.window_start, item.window_end,
                   _json(item.metrics), list(item.members), method_version) for item in findings])
+
+    def write_view_discounts(self, discounts: Mapping[UUID, int | None]) -> None:
+        """Просмотры вне суммы «без волн и всплесков»; пишутся только изменившиеся значения."""
+        with self._factory() as connection:
+            connection.execute(
+                """UPDATE analytics.post_anomaly_state state SET discounted_views = wanted.views
+                     FROM unnest(%s::uuid[], %s::integer[]) AS wanted(publication_id, views)
+                    WHERE state.publication_id = wanted.publication_id
+                      AND state.discounted_views IS DISTINCT FROM wanted.views""",
+                (list(discounts), list(discounts.values())))
 
     def read_activity(self, accounts: Sequence[UUID], since: datetime, until: datetime,
                       published_since: datetime) -> dict[UUID, SiblingActivity]:
@@ -928,6 +939,36 @@ class PostgresAnomalyStore:
             result.setdefault(row["platform_account_id"], []).append(
                 (row["observed_at"], int(row["subscriber_count"])))
         return result
+
+    def read_latest_subscribers(self, accounts: Sequence[UUID], since: datetime) -> dict[UUID, int]:
+        """Последнее число подписчиков аккаунтов с момента `since`."""
+        if not accounts:
+            return {}
+        with self._factory() as connection:
+            rows = connection.execute(
+                """SELECT DISTINCT ON (platform_account_id) platform_account_id, subscriber_count
+                     FROM ingest.account_metric_snapshot_active
+                    WHERE platform_account_id = ANY(%s::uuid[]) AND observed_at >= %s AND subscriber_count IS NOT NULL
+                    ORDER BY platform_account_id, observed_at DESC""", (list(accounts), since)).fetchall()
+        return {row["platform_account_id"]: int(row["subscriber_count"]) for row in rows}
+
+    def read_audience_offsets(self, accounts: Sequence[UUID]) -> dict[UUID, int | None]:
+        """Сдвиг времени аудитории от МСК из последнего профиля; None — пояс неизвестен.
+
+        Аккаунта нет в ответе, пока его профиль не посчитан с ритмом: тогда
+        вызывающий считает аудиторию московской, как до появления профиля.
+        """
+        if not accounts:
+            return {}
+        with self._factory() as connection:
+            rows = connection.execute(
+                """SELECT DISTINCT ON (account_id) account_id, metrics -> 'rhythm' AS rhythm
+                     FROM analytics.account_tail_profile
+                    WHERE account_id = ANY(%s::uuid[]) AND computed_for >= current_date - 3
+                      AND metrics ? 'rhythm'
+                    ORDER BY account_id, computed_for DESC""", (list(accounts),)).fetchall()
+        return {row["account_id"]: row["rhythm"]["offsetHours"] if row["rhythm"] and row["rhythm"]["clockKnown"] else None
+                for row in rows}
 
     def schedule_norm_recheck(self, version_id: int, now: datetime, window_seconds: int) -> int:
         """Перепроверить незамороженные посты под новой нормой, растянув по окну.

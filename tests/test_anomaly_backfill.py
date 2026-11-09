@@ -29,6 +29,9 @@ class Store:
     def read_activity(self, *args):
         return {}
 
+    def read_audience_offsets(self, accounts):
+        return {}
+
     def read_subscribers(self, *args):
         return {}
 

@@ -227,6 +227,7 @@ function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
     const analyzed = posts - 2;
     const level3 = seed % 9 === 0 ? 3 : 0, level2 = seed % 4 === 0 ? 2 : 0, level1 = seed % 3;
     return { institutionId, platform: platform as Schema["PlatformValue"], posts, viewsTotal: posts * (300 + seed * 11),
+      viewsAdjusted: seed % 5 === 0 ? posts * 300 : posts * (300 + seed * 11),
       reactionsTotal: posts * (10 + seed % 17), commentsTotal: posts, sharesTotal: platform === "vk" ? posts * 2 : null,
       sample24: posts - 4, views24: 150 + (seed * 37) % 900, reactions24: 5 + (seed * 13) % 60, comments24: seed % 4,
       shares24: platform === "vk" ? seed % 6 : null, engagement24: 1 + ((seed * 7) % 90) / 10, analyzed,

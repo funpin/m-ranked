@@ -11,6 +11,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPill } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
+import { PromotionMark } from "@/components/findings/account-findings-flag";
 import { NeighborContextTimeline } from "@/components/neighbor-context-timeline";
 import { LevelIcon, PatternIcon } from "@/components/anomaly-icons";
 import { legacyDate } from "@/lib/format";
@@ -141,7 +142,8 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
         {referenceExplanation(signal) ? <p className="text-muted-foreground text-xs" data-testid="reference-explanation">{referenceExplanation(signal)}</p> : null}
         {signal.render.kind === "bounded_burst" ? <p className="text-muted-foreground text-xs" data-testid="bounded-burst-explanation">{signal.formula}</p> : null}
         {signal.render.kind === "regime" || signal.render.kind === "write_off" || signal.render.kind === "cliff"
-          || signal.render.kind === "stream" || signal.render.kind === "night_stream"
+          || signal.render.kind === "stream" || signal.render.kind === "night_stream" || signal.render.kind === "view_burst"
+          || signal.render.kind === "view_packet" || signal.render.kind === "late_start"
           ? <p className="text-muted-foreground text-xs" data-testid="signal-formula">{signal.formula}</p> : null}
         {signal.render.measurementMode === "telegram_counter_order_v1" ? <p className="text-muted-foreground text-xs">{signal.formula}</p> : null}
         <MiniChart chart={miniChart(signal, rows, publishedAt)} label={title} />
@@ -242,6 +244,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
                 <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <span className="font-heading font-semibold">Анализ динамики</span>
                   <Summary analysis={analysis} />
+                  <PromotionMark promoted={Boolean(analysis.accountFindings?.some((item) => item.kind === "promotion"))} />
                 </span>
                 {summary.count || summary.analyzedAt ? <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums">
                   {summary.count ? <span>{summary.count}</span> : null}

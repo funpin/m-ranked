@@ -48,8 +48,9 @@ Commits should explain why a change exists and keep one coherent concern.
 ```
 
 - **`main`** — production. Accepts PRs only from `develop`, titled
-  `release: vYYYY.M.N`, with one approval and a merge commit, so `develop`
-  and `main` keep one history.
+  `release: vYYYY.M.N`, with a merge commit, so `develop` and `main` keep one
+  history. No approval is required: the author cannot approve their own PR,
+  and one person must be able to release; the release gates stay mandatory.
 - **`develop`** — integration, the default branch. Accepts PRs only from task
   branches `<type>/<name>` (`feat fix perf refactor docs test ci build chore
   deps data revert`, plus `dependabot/*`), squash-merged.

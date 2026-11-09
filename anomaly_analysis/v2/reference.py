@@ -445,6 +445,21 @@ def cases() -> tuple[Case, ...]:
              Post("vk", _at(17, 11), (_vk(800),), 2 * DAY, {R: (Ramp(9 * HOUR, 17 * HOUR, 400),)},
                   ratios={R: 0.0005, C: 0.0003, S: 0.0004}, publication_type="video"),
              Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (18,)),
+        Case("p19_view_burst_without_response_vk", "synthetic",
+             "Пост ВК через сутки получает 6 000 просмотров за час без единой реакции "
+             "(пакеты просмотров КБГУ и МИРЭА, октябрь 2026).",
+             Post("vk", _at(18, 11), (_vk(5000),), 4 * DAY, {V: (Ramp(30 * HOUR, 31 * HOUR, 6000),)}),
+             Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (19,)),
+        Case("p20_view_packet_vk", "synthetic",
+             "Пост ВК на третьем часу получает 4 000 просмотров за час без реакций и затем почти ничего "
+             "(ступени и обрыв, октябрь 2026).",
+             Post("vk", _at(19, 11), (_vk(2500),), 4 * DAY, {V: (Ramp(2 * HOUR, 3 * HOUR, 4000),)}),
+             Level.ARTIFICIAL_ACTIVITY_SIGNS, Level.ARTIFICIAL_ACTIVITY_SIGNS, (20,)),
+        Case("p21_view_late_start_vk", "synthetic",
+             "Пост ВК первые сутки почти без просмотров, затем за четыре часа приходит основной приток "
+             "без реакций (поздний старт с пакетом, КБГУ, октябрь 2026).",
+             Post("vk", _at(20, 11), (Wave(0, 150, 3 * HOUR, 0.6),), 4 * DAY, {V: (Ramp(26 * HOUR, 30 * HOUR, 6000),)}),
+             Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (21,)),
         Case("honest_organic_telegram", "synthetic",
              "Telegram: органическое степенное затухание, 30 суток, шаг сбора по возрасту.",
              Post("telegram", _at(17, 9), (_tg(5200),), 30 * DAY), **HONEST),

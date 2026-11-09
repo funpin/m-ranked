@@ -121,6 +121,9 @@ def _backfill(monkeypatch, *flags) -> list:
         def read_activity(self, accounts, since, until, published_since):
             return {}
 
+        def read_audience_offsets(self, accounts):
+            return {}
+
         def read_subscribers(self, accounts, since, until):
             return {}
 

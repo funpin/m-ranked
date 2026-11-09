@@ -5900,7 +5900,7 @@ components:
         additionalProperties: false
         required: [kind, status]
         properties:
-          kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response] }
+          kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response, organized_response, reaction_view_link] }
           status: { type: integer, enum: [1, 2] }
     AnomalousPost:
       type: object
@@ -6589,7 +6589,7 @@ components:
       required: [pattern, symbol, title, family, metric, strength, startAt, endAt, scaleSeconds,
         formula, render, alternatives, normConfidence]
       properties:
-        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] }
+        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21] }
         symbol: { type: string, maxLength: 4 }
         title: { type: string, maxLength: 120 }
         family: { type: string, enum: [velocity, shape, cross_metric, synchrony, composition] }
@@ -6604,7 +6604,7 @@ components:
           type: object
           required: [kind, startAge, endAge]
           properties:
-            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement, regime, write_off, cliff, stream, night_stream] }
+            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement, regime, write_off, cliff, stream, night_stream, view_burst, view_packet, late_start] }
             startAge: { type: integer }
             endAge: { type: integer }
           additionalProperties:
@@ -6734,7 +6734,7 @@ components:
                   required: [platform, kind, status]
                   properties:
                     platform: { $ref: '#/components/schemas/PlatformValue' }
-                    kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response] }
+                    kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response, organized_response, reaction_view_link] }
                     status: { type: integer, minimum: 1, maximum: 2 }
         stats:
           type: array
@@ -6818,13 +6818,17 @@ components:
     ComparisonDashboardStat:
       type: object
       additionalProperties: false
-      required: [institutionId, platform, posts, viewsTotal, reactionsTotal, commentsTotal, sharesTotal,
+      required: [institutionId, platform, posts, viewsTotal, viewsAdjusted, reactionsTotal, commentsTotal, sharesTotal,
         sample24, views24, reactions24, comments24, shares24, engagement24, analyzed, levels]
       properties:
         institutionId: { type: [string, 'null'], format: uuid }
         platform: { $ref: '#/components/schemas/PlatformValue' }
         posts: { type: integer, minimum: 0 }
         viewsTotal: { type: [integer, 'null'], format: int64 }
+        viewsAdjusted:
+          type: [integer, 'null']
+          format: int64
+          description: Сумма просмотров без часов волн по стене и всплесков без реакций.
         reactionsTotal: { type: [integer, 'null'], format: int64 }
         commentsTotal: { type: [integer, 'null'], format: int64 }
         sharesTotal: { type: [integer, 'null'], format: int64 }
@@ -6872,6 +6876,21 @@ components:
         earlyRate: { type: number, minimum: 0 }
         lateRate: { type: number, minimum: 0 }
         ratio: { type: [number, 'null'], minimum: 0 }
+    AccountAudienceRhythm:
+      type: object
+      additionalProperties: false
+      required: [views, quietStartMsk, peakStartMsk, offsetHours, quietOverPeak, clockKnown, peakInDaytime,
+                 warning, cohortP90]
+      properties:
+        views: { type: integer, minimum: 0 }
+        quietStartMsk: { type: integer, minimum: 0, maximum: 23 }
+        peakStartMsk: { type: integer, minimum: 0, maximum: 23 }
+        offsetHours: { type: integer, minimum: -12, maximum: 12 }
+        quietOverPeak: { type: number, minimum: 0 }
+        clockKnown: { type: boolean }
+        peakInDaytime: { type: boolean }
+        warning: { type: [string, 'null'] }
+        cohortP90: { type: [number, 'null'], minimum: 0 }
     AccountTailMetrics:
       type: object
       additionalProperties: false
@@ -6879,6 +6898,10 @@ components:
                  lateReactions, earlyRate, lateRate, ratio, halves, days, activeDays, activeWeeks, wideDays,
                  breadth, roundedPosts, cohort]
       properties:
+        rhythm:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/AccountAudienceRhythm'
         methodVersion: { type: string }
         windowStart: { type: string, format: date }
         windowEnd: { type: string, format: date }
@@ -6947,7 +6970,7 @@ components:
       properties:
         accountId: { type: string, format: uuid }
         accountUsername: { type: [string, 'null'] }
-        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response] }
+        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response, organized_response, reaction_view_link] }
         platform: { type: string, enum: [telegram, vk, max, rutube] }
         status: { type: integer, minimum: 1, maximum: 2 }
         statusLabel: { type: [string, 'null'] }

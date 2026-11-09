@@ -87,6 +87,8 @@ function Section({ id, title, description, icon: Icon, children }: {
   );
 }
 
+const VIEWS_ADJUSTED_HINT = "Сумма без просмотров в часах волн по стене и во всплесках без реакций. Необычно относительно площадки, причина по счётчикам неизвестна.";
+
 function Kpi({ icon: Icon, label, value, hint, note, tone }: {
   icon: typeof Eye; label: string; value: string; hint?: string; note?: string; tone?: "danger";
 }) {
@@ -258,7 +260,10 @@ function InstitutionTable({ rows, highlights, onToggle }: {
                 <TableCell className="text-right font-medium tabular-nums">{formatInteger(row.views24)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatInteger(row.reactions24)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatPercent(row.engagement24)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatCompact(row.viewsTotal || null)}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatCompact(row.viewsTotal || null)}
+                  {row.viewsAdjusted < row.viewsTotal ? <span className="text-muted-foreground block text-xs" title={VIEWS_ADJUSTED_HINT}>без волн {formatCompact(row.viewsAdjusted)}</span> : null}
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{formatInteger(row.analyzed)}</TableCell>
                 <TableCell className="text-right">
                   <span className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
@@ -499,7 +504,8 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <Kpi icon={University} label="Вузов с публикациями" value={formatInteger(summary.institutions)} hint={`из ${rows.length} с аккаунтами`} />
           <Kpi icon={Newspaper} label="Публикаций" value={formatInteger(summary.posts)} hint={`≈ ${formatValue(summary.postsPerDay, "postsPerDay")} в день`} />
-          <Kpi icon={Eye} label="Просмотров всего" value={formatCompact(summary.viewsTotal)} note={METRICS.viewsTotal.hint} />
+          <Kpi icon={Eye} label="Просмотров всего" value={formatCompact(summary.viewsTotal)} note={METRICS.viewsTotal.hint}
+            hint={summary.viewsAdjusted < summary.viewsTotal ? `без волн и всплесков: ${formatCompact(summary.viewsAdjusted)}` : undefined} />
           <Kpi icon={Sparkles} label="Типичный пост за 24 ч" value={formatInteger(summary.views24)} hint="просмотров, медиана" note={METRICS.views24.hint} />
           <Kpi icon={Heart} label="Вовлечённость" value={formatPercent(summary.engagement24)} hint="медиана на 24-м часу" note={METRICS.engagement24.hint} />
           <Kpi icon={ShieldAlert} label="Посты с аномалиями" value={formatPercent(summary.anomalyShare)} tone={(summary.anomalyShare ?? 0) >= 10 ? "danger" : undefined}

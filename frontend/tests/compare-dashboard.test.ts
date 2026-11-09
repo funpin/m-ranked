@@ -12,7 +12,7 @@ const A = "00000009-0000-4000-8000-000000000001";
 const B = "00000009-0000-4000-8000-000000000002";
 
 function stat(institutionId: string | null, platform: string, patch: Partial<DashboardStat> = {}): DashboardStat {
-  return { institutionId, platform: platform as DashboardStat["platform"], posts: 30, viewsTotal: 1000, reactionsTotal: 50,
+  return { institutionId, platform: platform as DashboardStat["platform"], posts: 30, viewsTotal: 1000, viewsAdjusted: 1000, reactionsTotal: 50,
     commentsTotal: 3, sharesTotal: null, sample24: 28, views24: 400, reactions24: 20, comments24: 1, shares24: null,
     engagement24: 5, analyzed: 20, levels: [16, 2, 1, 1], ...patch };
 }

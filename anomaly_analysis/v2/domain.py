@@ -45,7 +45,7 @@ class Level(IntEnum):
 
 # Паттерн 3 — свойство паттернов 1, 2 и 4 на другом масштабе, а не отдельный
 # признак: он виден в поле `scale`, собственного номера у признака нет.
-SIGN_PATTERNS = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18})
+SIGN_PATTERNS = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21})
 
 
 def _utc(value: datetime, name: str) -> datetime:
@@ -219,6 +219,8 @@ class PostVerdict:
     quality: DataQuality
     detector_versions: Mapping[str, str]
     norm_version: int | None = None
+    # Исход всплеска просмотров для сводки поста: (исход, доля, просмотры, −log₁₀ p).
+    burst: tuple[str, float, int, float] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "level", Level(self.level))

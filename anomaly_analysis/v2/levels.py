@@ -32,6 +32,8 @@ from .detectors import engagement_regime
 from .detectors.engagement_regime import CONFIRMED_MODE as CONFIRMED_EPISODE_MODE
 from .detectors.late_engagement import MEASUREMENT_MODE as LATE_ENGAGEMENT_MODE
 from .detectors.linear_feed import STEADY_STOP_MODE
+from .detectors.view_burst_response import burst_response
+from .detectors.view_packet import CONFIRMED_MODE as CONFIRMED_PACKET_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
@@ -59,6 +61,8 @@ GAP_PATTERN = 4
 # Признаки одного события, разделённые не больше чем этим, — одно событие:
 # детектор рывка доказывает соседние пятиминутки по отдельности.
 SAME_EVENT_GAP = timedelta(minutes=10)
+VIEW_BURST_PATTERNS = frozenset({19, 20})
+VIEW_BURST_SHAPES = frozenset({1, 2, 9, 21})
 # RuTube: форма прихода просмотров — не признак. Видео внутри площадки почти
 # не находят, смотрят по ссылке из соцсети или с сайта: волна за час-два и
 # тишина. По журналу циклов (квитанции подтвердили 49 из 52 мест роста) так
@@ -75,7 +79,7 @@ RUTUBE_VIEW_SHAPES = frozenset({2, 9})
 RUTUBE_WAVE_SCALE = timedelta(minutes=30)
 
 SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻",
-           14: "⊓", 15: "↧", 16: "⌐", 17: "❖", 18: "☾"}
+           14: "⊓", 15: "↧", 16: "⌐", 17: "❖", 18: "☾", 19: "⊘", 20: "⧈", 21: "⧖"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -94,6 +98,9 @@ TITLES = {
     16: "Одновременный обрыв просмотров и реакций",
     17: "Поток одной реакции",
     18: "Реакции сквозь ночь",
+    19: "Всплеск просмотров без отклика",
+    20: "Пакет просмотров после второго часа",
+    21: "Поздний старт охвата",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
@@ -158,7 +165,7 @@ def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: N
            cadence: CollectionCadence | None = None, norm_version: int | None = None,
            activity: SiblingActivity | None = None, carried: Sequence[Sign] = (),
            reference: MatureReference | ReferenceSet | None = None,
-           synchrony_from: datetime | None = None) -> PostVerdict:
+           synchrony_from: datetime | None = None, audience_offset: int | None = 0) -> PostVerdict:
     """Вывод по посту.
 
     `siblings` — другие посты того же аккаунта рядами; работник вместо них
@@ -166,19 +173,25 @@ def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: N
     прежнего вывода, чей участок уже вне окна агрегатов: синхронный подъём,
     найденный неделю назад, не исчезает оттого, что окно ушло вперёд.
     `synchrony_from` — та же граница переноса: раньше неё синхронность заново
-    не ищется, суточная база там обрезана началом окна.
+    не ищется, суточная база там обрезана началом окна. `audience_offset` —
+    сдвиг времени аудитории от МСК; None — пояс неизвестен.
     """
     moment = analyzed_at or (subject.observed_at[-1] if subject.observed_at else subject.published_at)
     prepared = prepare(subject, moment, cadence or CollectionCadence())
     context = _context(prepared, siblings, norms, subscribers, activity)
     if synchrony_from is not None:
         context.synchrony_from = synchrony_from.timestamp()
+    context.audience_offset = audience_offset
     signs, versions = run_detectors(prepared, context)
     if reference is not None:
         signs.extend(reference.detect(subject, moment))
         versions["mature_reference"] = REFERENCE_VERSION
         versions["mature_reference_model"] = reference.version_for(subject)
-    return verdict(prepared, context, [*signs, *carried], versions, norm_version)
+    result = verdict(prepared, context, [*signs, *carried], versions, norm_version)
+    burst = burst_response(prepared)
+    if burst is None:
+        return result
+    return replace(result, burst=(burst.outcome, round(burst.share, 3), round(burst.views), round(burst.surprise, 1)))
 
 
 def run_detectors(prepared: PreparedSeries, context: DetectorContext) -> tuple[list[Sign], dict[str, str]]:
@@ -364,6 +377,13 @@ def _event(sign: Sign) -> tuple[Any, ...]:
     return (sign.pattern, sign.metric, sign.family)
 
 
+def _in_view_burst(sign: Sign, bursts: Sequence[Sign]) -> bool:
+    """Форма просмотров (1, 2, 9) на участке всплеска без отклика — тот же пакет."""
+    return (sign.pattern in VIEW_BURST_SHAPES and sign.metric is Metric.VIEWS
+            and any(sign.interval.start <= item.interval.end + SAME_EVENT_GAP
+                    and item.interval.start <= sign.interval.end + SAME_EVENT_GAP for item in bursts))
+
+
 def _same_events(signs: Sequence[Sign]) -> list[Sign]:
     """Признаки одного события — один признак: сильнейший, на весь участок события.
 
@@ -373,9 +393,14 @@ def _same_events(signs: Sequence[Sign]) -> list[Sign]:
     unique: list[Sign] = []
     others: dict[int, list[str]] = {}
     patterns: dict[int, set[int]] = {}
+    bursts = [sign for sign in signs if sign.pattern in VIEW_BURST_PATTERNS]
+
+    def event(sign: Sign) -> tuple[Any, ...]:
+        return ("view_burst",) if sign.pattern in VIEW_BURST_PATTERNS or _in_view_burst(sign, bursts) else _event(sign)
+
     for sign in sorted(signs, key=lambda item: (not _confirmed_plateau(item), -item.strength, item.pattern)):
         for index, item in enumerate(unique):
-            if (_event(sign) == _event(item) and sign.interval.start <= item.interval.end + SAME_EVENT_GAP
+            if (event(sign) == event(item) and sign.interval.start <= item.interval.end + SAME_EVENT_GAP
                     and item.interval.start <= sign.interval.end + SAME_EVENT_GAP):
                 unique[index] = replace(item, interval=Interval(min(item.interval.start, sign.interval.start),
                                                                 max(item.interval.end, sign.interval.end)))
@@ -399,6 +424,8 @@ def _confirmed_plateau(sign: Sign) -> bool:
         return sign.strength >= .9 and sign.render.get("plateauEvidence") == STEADY_STOP_MODE
     if sign.pattern == 14:
         return sign.strength >= .9 and sign.render.get("plateauEvidence") == CONFIRMED_EPISODE_MODE
+    if sign.pattern == 20:
+        return sign.strength >= .9 and sign.render.get("plateauEvidence") == CONFIRMED_PACKET_MODE
     return (sign.pattern == 9 and sign.family is Family.SHAPE and sign.strength >= .9
             and (sign.metric, sign.render.get("measurementMode"), sign.render.get("plateauEvidence")) in {
                 (Metric.REACTIONS, BOUNDED_REACTION_MODE, CONFIRMED_PLATEAU_MODE),

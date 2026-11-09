@@ -1,4 +1,4 @@
-"""Реакции сквозь ночь: поток реакций видео ВК в 00–06 МСК, часто с обрывом в ноль.
+"""Реакции сквозь ночь: поток реакций видео ВК в 00–06 по времени аудитории, часто с обрывом в ноль.
 
 Просмотры записи на стене у клипа — не его аудитория (series.NOT_AUDIENCE_TYPES):
 клип смотрят в ленте клипов, и доля реакций на просмотр стены ничего не
@@ -32,7 +32,7 @@ from ..series import HOUR, PreparedSeries, views_not_audience_reason
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "night_reaction_stream"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 PATTERN = 18
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -59,7 +59,7 @@ STRONG_STRENGTH = 0.75
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
-    if views_not_audience_reason(prepared.series) != "vk_video_views":
+    if context.audience_offset is None or views_not_audience_reason(prepared.series) != "vk_video_views":
         return ()
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
     if reactions is None or views is None or reactions.ages.size < 3 or views.ages.size < 3:
@@ -87,7 +87,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     span = slice(first_hour, last_hour + 1)
     total = float(rate[span].sum())
     clock = ((published + edges[:-1] + MOSCOW_OFFSET) % 86400) // HOUR
-    night = float(rate[span][clock[span] < NIGHT_END_HOUR].sum())
+    night = float(rate[span][(clock[span] + context.audience_offset) % 24 < NIGHT_END_HOUR].sum())
     if total < MIN_REACTIONS or night < MIN_NIGHT_REACTIONS or night < NIGHT_SHARE * total:
         return ()
     cliff = _cliff(rate, growth, known, first_hour, last_hour)
@@ -95,7 +95,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     start_clock = int(clock[first_hour])
     end_clock = int((clock[last_hour] + 1) % 24)
     formula = (f"+{number(total)} реакций за t ∈ [{age_text(start_age)}; {age_text(end_age)}] "
-               f"({start_clock:02d}:00–{end_clock:02d}:00 МСК), из них {night / total:.0%} — с 00 до 06 МСК; "
+               f"({start_clock:02d}:00–{end_clock:02d}:00 МСК), из них {night / total:.0%} — с 00 до 06 {_clock_name(context.audience_offset)}; "
                f"просмотры записи за то же время +{number(float(growth[span].sum()))}")
     if cliff is not None:
         formula += (f"; затем {CLIFF_HOURS} ч без единой реакции после {number(cliff[0])} в час "
@@ -107,6 +107,10 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     return (make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, strength, start_age, end_age,
                       timedelta(hours=1), formula, render,
                       ("night_audience_abroad", "clip_feed_recommendation")),)
+
+
+def _clock_name(offset: int) -> str:
+    return "МСК" if offset == 0 else f"по времени аудитории (МСК{offset:+d})"
 
 
 def _on_edges(ages: np.ndarray, values: np.ndarray, edges: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

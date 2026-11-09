@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import {
-  ArrowUpFromLine, ChevronRight, CircleCheck, Eye, History, Layers, Megaphone, Moon, Package, ScanLine, Timer, TrendingUp, TriangleAlert, Waves,
+  ArrowUpFromLine, ChevronRight, CircleCheck, Eye, History, Layers, Megaphone, Moon, Package, ScanLine, Timer, TrendingUp, TriangleAlert, Waves, Unlink, UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -30,7 +30,7 @@ const VISIBLE_ROWS = 3;
 const ICONS: Record<string, LucideIcon> = {
   early_pack: Package, regular_reactions: ScanLine, late_growth: TrendingUp, late_engagement: History,
   synchronous_waves: Layers, engagement_shift: ArrowUpFromLine, night_reactions: Moon,
-  view_packs: Eye, view_waves: Waves, level3_share: TriangleAlert, promotion: Megaphone, early_response: Timer,
+  view_packs: Eye, view_waves: Waves, level3_share: TriangleAlert, promotion: Megaphone, early_response: Timer, organized_response: UsersRound, reaction_view_link: Unlink,
 };
 
 type Figure = NonNullable<AccountAnomalyFinding["figure"]>;
@@ -163,6 +163,14 @@ function buildRows(findings: FindingsLoad, tail: TailProfileLoad, platform: stri
       inline: figure ? <FigureBars figure={figure} platform={platform} accent={notable} showGap={notable} /> : null,
       chart: figure ? <FigureBars figure={figure} platform={platform} accent={notable} showGap={notable} axis /> : null,
       details: <TailDetails tail={tail} />,
+    });
+  }
+  const rhythmWarning = tail?.metrics?.rhythm?.warning;
+  if (rhythmWarning) {
+    rows.push({
+      key: "audience_rhythm", title: "Суточный ритм просмотров", status: "часовой пояс не определён",
+      strong: false, finding: false, notable: false, headline: rhythmWarning, inline: null, chart: null,
+      details: null,
     });
   }
   return rows;

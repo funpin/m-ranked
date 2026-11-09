@@ -57,9 +57,10 @@ from statistics import median
 from typing import Any, Iterable, Mapping, Sequence
 from uuid import UUID
 
+from .audience_rhythm import account_rhythm
 from .tail_ledger import MOSCOW, Point, TailLedger
 
-METHOD_VERSION = "account-findings-v7"
+METHOD_VERSION = "account-findings-v8"
 WINDOW_DAYS = 30
 STATUS_LABELS = {1: "необычный", 2: "устойчиво необычный"}
 TITLES = {
@@ -70,8 +71,11 @@ TITLES = {
     "synchronous_waves": "Волны реакций сразу на многих постах",
     "engagement_shift": "Скачок доли реакций на просмотр",
     "night_reactions": "Реакции приходят ночью, когда просмотров нет",
+    "organized_response": "Организованный отклик",
 }
 ALTERNATIVES = {
+    "organized_response": ("Сотрудники и студенты вуза поддерживают посты: корпоративная привычка, конкурс, "
+                           "призыв реагировать; живая вовлечённая аудитория"),
     "early_pack": ("Подписчики-активисты реагируют сразу после публикации, а поздние читатели почти не "
                    "реагируют; рассылка поста в профильные чаты в первые минуты"),
     "regular_reactions": ("Стабильное ядро аудитории, которое реагирует на каждый пост одинаково; "
@@ -172,10 +176,25 @@ NIGHT_MEMBER_REACTIONS = 5
 NIGHT_MSK_START = 1
 NIGHT_SHIFT_NOTE_HOURS = 2
 # Сдвиг ночи аудитории от московской (часы, «−5» — ночь на пять часов раньше
-# по МСК): от Камчатки (UTC+12, −9) до Калининграда (UTC+2, +1). Провал вне
-# этих поясов — не ночь (КБГУ во ВКонтакте: просмотры «спят» в 15–21 МСК).
-NIGHT_SHIFT_RANGE = (-9, 1)
+# по МСК): от Дальнего Востока (−6) до Калининграда (UTC+2, +1), как в
+# audience_rhythm.OFFSET_RANGE. Провал вне этих поясов — не ночь (КБГУ во
+# ВКонтакте: просмотры «спят» в 15–21 МСК); карточка аккаунта предупреждает.
+NIGHT_SHIFT_RANGE = (-6, 1)
 MOSCOW_UTC_OFFSET = 3
+# Организованный отклик — явление аккаунта, а не поста: ЮЗГУ и РТУ МИРЭА на копии
+# 07.11. Медиана ERV к трём суткам в 2,5 раза выше площадки и минимум два из трёх:
+# комментарии под постами при нуле у площадки; волны реакций рабочими часами; реакции
+# внутри всплесков выше обычных. Устойчивость — тот же сдвиг отклика в другой сети вуза.
+ORGANIZED_MIN_POSTS = 30
+ORGANIZED_ERV_RATIO = 2.5
+ORGANIZED_MIN_COMMENTS = 5
+ORGANIZED_PLATFORM_COMMENTS = 0.5
+ORGANIZED_WAVE_POSTS = 10
+ORGANIZED_WAVE_DAYS = 3
+ORGANIZED_HOURS = (9, 18)
+ORGANIZED_HIGH_SHARE = 1.5
+ORGANIZED_HIGH_POSTS = 3
+ORGANIZED_NEEDED = 2
 PLATFORM_TITLES = {"telegram": "Telegram", "vk": "VK", "max": "MAX", "rutube": "Rutube"}
 
 
@@ -319,6 +338,15 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
             metrics = {**_public(night), "cohort": _without(night_cohort.get(platform, {}), "medians")}
             result.append(AccountFinding(account, platform, "night_reactions", status, start, computed_for,
                                          metrics, tuple(night["members"])))
+    organized_base = _organized_base(by_account)
+    for account, items in by_account.items():
+        stats = _organized_stats(items, events.get(account, ()), organized_base.get(items[0].platform))
+        if stats is None:
+            continue
+        status = 2 if shifts[account] is not None and _shift_found(shifts[account]) and _corroboration(
+            account, items, shifts[account], by_account, shifts) else 1
+        result.append(AccountFinding(account, items[0].platform, "organized_response", status, start, computed_for,
+                                     _public(stats), tuple(stats["members"])))
     for account, (platform, status, metrics) in (tail_status or {}).items():
         if status == 2:
             # Участники — посты с признаком позднего отклика и посты, у которых
@@ -550,6 +578,67 @@ def _corroboration(account: UUID, items: Sequence[LedgerPost], shift: Mapping[st
     return sorted(support, key=lambda item: (-item["ratio"], item["platform"]))
 
 
+def _h72_erv(post: LedgerPost) -> float | None:
+    point = post.ledger.marks.get("h72")
+    return None if point is None or point.views <= 0 else point.reactions / point.views
+
+
+def _median_erv(items: Sequence[LedgerPost]) -> float | None:
+    values = [value for post in items if not post.is_repost and (value := _h72_erv(post)) is not None]
+    return median(values) if values else None
+
+
+def _organized_base(by_account: Mapping[UUID, Sequence[LedgerPost]]) -> dict[str, dict[str, float]]:
+    """Медианы площадки по аккаунтам: ERV и комментарии на пост."""
+    ervs: dict[str, list[float]] = {}
+    comments: dict[str, list[float]] = {}
+    for items in by_account.values():
+        erv = _median_erv(items)
+        known = [post.ledger.comments72 for post in items if post.ledger.comments72 is not None]
+        if erv is not None:
+            ervs.setdefault(items[0].platform, []).append(erv)
+        if known:
+            comments.setdefault(items[0].platform, []).append(median(known))
+    return {platform: {"erv": median(values), "comments": median(comments[platform]) if comments.get(platform) else 0.0}
+            for platform, values in ervs.items()}
+
+
+def _workday_wave_days(items: Sequence[LedgerPost], events: Iterable[SynchronyEvent]) -> int:
+    rhythm = account_rhythm(post.ledger for post in items)
+    if rhythm is None or not rhythm.clock_known:
+        return 0
+    by_hour: dict[datetime, set[UUID]] = {}
+    for event in events:
+        by_hour.setdefault(event.hour, set()).add(event.publication_id)
+    days = set()
+    for hour, posts in by_hour.items():
+        moment = hour.astimezone(MOSCOW)
+        if len(posts) >= ORGANIZED_WAVE_POSTS and ORGANIZED_HOURS[0] <= (moment.hour + rhythm.offset_hours) % 24 <= ORGANIZED_HOURS[1]:
+            days.add(moment.date())
+    return len(days)
+
+
+def _organized_stats(items: Sequence[LedgerPost], events: Iterable[SynchronyEvent],
+                     base: Mapping[str, float] | None) -> dict[str, Any] | None:
+    own = [post for post in items if not post.is_repost]
+    erv = _median_erv(own)
+    if base is None or erv is None or len(own) < ORGANIZED_MIN_POSTS or not base["erv"] or erv < ORGANIZED_ERV_RATIO * base["erv"]:
+        return None
+    known = [post.ledger.comments72 for post in own if post.ledger.comments72 is not None]
+    comments = median(known) if known else 0.0
+    wave_days = _workday_wave_days(own, events)
+    high = sum(post.ledger.burst is not None and post.ledger.burst[1] >= ORGANIZED_HIGH_SHARE for post in own)
+    checks = (comments >= ORGANIZED_MIN_COMMENTS and base["comments"] <= ORGANIZED_PLATFORM_COMMENTS,
+              wave_days >= ORGANIZED_WAVE_DAYS, high >= ORGANIZED_HIGH_POSTS)
+    if sum(checks) < ORGANIZED_NEEDED:
+        return None
+    return {"posts": len(own), "erv": round(erv, 4), "cohortErv": round(base["erv"], 4),
+            "ervRatio": round(erv / base["erv"], 2), "comments": comments, "workdayWaveDays": wave_days,
+            "highResponseBursts": high,
+            "members": [post.publication_id for post in own
+                        if (post.ledger.comments72 or 0) >= ORGANIZED_MIN_COMMENTS]}
+
+
 def _night_stats(items: Sequence[LedgerPost], night_start: int | None = None,
                  min_reactions: int = NIGHT_MIN_REACTIONS) -> dict[str, Any] | None:
     """Доли позднего прироста реакций и просмотров в ночь аудитории; None — мало данных или нет ночи."""
@@ -685,6 +774,11 @@ def summary(finding: AccountFinding) -> str:
                 f"в {PLATFORM_TITLES.get(item['platform'], item['platform'])} (×{_ru(item['ratio'])})"
                 for item in support)
         return text
+    if finding.kind == "organized_response":
+        return (f"Медиана ERV {_ru(100 * data['erv'])} % — в {_ru(data['ervRatio'])} раза выше площадки; "
+                f"комментариев на пост {_ru(data['comments'], 0)}, дней с волнами реакций в рабочие часы "
+                f"{data['workdayWaveDays']}. Так выглядит постоянная вовлечённая группа читателей; находка "
+                "относится к аккаунту, а не к отдельным постам")
     if finding.kind == "night_reactions":
         start = data["nightStartMsk"]
         text = (f"Ночью аудитории ({start:02d}:00–{(start + NIGHT_HOURS) % 24:02d}:00 МСК) приходит "
@@ -738,6 +832,8 @@ def headline(finding: AccountFinding) -> str:
         if SHIFT_SAME_VIEWS[0] <= data["viewsRatio"] <= SHIFT_SAME_VIEWS[1]:
             return text + " при тех же просмотрах"
         return text + f", просмотры изменились в {_ru(data['viewsRatio'])} раза"
+    if finding.kind == "organized_response":
+        return f"ERV в {_ru(data['ervRatio'])} раза выше площадки, отклик постоянной группы читателей"
     if finding.kind == "night_reactions":
         return (f"{_ru(100 * data['reactionShare'], 0)} % поздних реакций ночью при "
                 f"{_ru(100 * data['viewShare'])} % просмотров")
@@ -760,6 +856,9 @@ def figure(finding: AccountFinding) -> dict[str, Any] | None:
         value, unit, label, direction = data["share"], "percent", "постов в волнах реакций", "higher"
     elif finding.kind == "engagement_shift":
         value, unit, label, direction = data["ratio"], "times", "рост доли реакций на просмотр", "higher"
+    elif finding.kind == "organized_response":
+        return {"value": data["erv"], "typical": data["cohortErv"], "unit": "percent", "label": "медиана ERV к трём суткам",
+                "direction": "higher"}
     elif finding.kind == "night_reactions":
         value, unit, label, direction = data["lift"], "times", "доля реакций ночью к доле просмотров", "higher"
     else:

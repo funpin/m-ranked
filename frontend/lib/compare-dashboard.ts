@@ -80,6 +80,8 @@ export const FINDING_TITLES: Record<InstitutionFinding["kind"], string> = {
   level3_share: "Много постов с признаками искусственной активности",
   promotion: "Похоже на продвижение записей",
   early_response: "Ранний отклик выше площадки",
+  organized_response: "Организованный отклик",
+  reaction_view_link: "Просмотры растут независимо от отклика",
 };
 
 export type InstitutionRow = {
@@ -88,7 +90,7 @@ export type InstitutionRow = {
   subscriberNetworks: number; connectedNetworks: number;
   students: number | null; studentFact: components["schemas"]["InstitutionStudentCount"] | null;
   views24: number | null; reactions24: number | null; comments24: number | null; engagement24: number | null;
-  viewsTotal: number; reactionsTotal: number; sample24: number;
+  viewsTotal: number; viewsAdjusted: number; reactionsTotal: number; sample24: number;
   analyzed: number; levels: [number, number, number, number];
   /** Доля постов с уровнем 2–3 среди проанализированных, в процентах. */
   anomalyShare: number | null;
@@ -106,7 +108,7 @@ export type Metric =
 export const METRICS: Record<Metric, { label: string; short: string; unit?: string; percent?: boolean; hint: string }> = {
   views24: { label: "Просмотры поста за 24 часа, медиана", short: "Просмотры за 24 ч", hint: "Типичный пост: половина набирает за первые сутки больше, половина — меньше. Один возраст для всех, поэтому частые публикации не занижают число." },
   reactions24: { label: "Реакции поста за 24 часа, медиана", short: "Реакции за 24 ч", hint: "Реакции (в Telegram) и лайки (в остальных сетях) на 24-м часу после выхода, медиана по постам." },
-  engagement24: { label: "Вовлечённость за 24 часа, медиана", short: "Вовлечённость", unit: "%", percent: true, hint: "Для каждого поста на 24-м часу: реакции / просмотры в Telegram, (лайки + комментарии + репосты) / просмотры в остальных. Медиана по постам." },
+  engagement24: { label: "Вовлечённость за 24 часа, медиана", short: "Вовлечённость", unit: "%", percent: true, hint: "Для каждого поста на 24-м часу: реакции / просмотры в Telegram, (лайки + комментарии + репосты) / просмотры в остальных. Медиана по постам. Клипы и видео ВК не входят: просмотры записи не включают ленту клипов." },
   postsPerDay: { label: "Публикаций в день", short: "Постов в день", hint: "Сколько публикаций в среднем выходило за сутки выбранного периода." },
   viewsTotal: { label: "Просмотры всех публикаций периода", short: "Просмотров всего", hint: "Сумма последних замеров просмотров всех публикаций, вышедших за период: общий охват." },
   subscribers: { label: "Подписчики", short: "Подписчики", hint: "Последний замер числа подписчиков официальных сообществ вуза." },
@@ -144,7 +146,8 @@ export function institutionRows(data: Dashboard, platform: DashboardPlatform): I
       students: institution.students?.value ?? null, studentFact: institution.students ?? null,
       views24: stat?.views24 ?? null, reactions24: stat?.reactions24 ?? null, comments24: stat?.comments24 ?? null,
       engagement24: stat?.engagement24 ?? null,
-      viewsTotal: stat?.viewsTotal ?? 0, reactionsTotal: stat?.reactionsTotal ?? 0, sample24: stat?.sample24 ?? 0,
+      viewsTotal: stat?.viewsTotal ?? 0, viewsAdjusted: stat?.viewsAdjusted ?? stat?.viewsTotal ?? 0,
+      reactionsTotal: stat?.reactionsTotal ?? 0, sample24: stat?.sample24 ?? 0,
       analyzed, levels,
       anomalyShare: analyzed ? ((levels[2] + levels[3]) * 100) / analyzed : null,
       byNetwork,
@@ -191,6 +194,7 @@ export function platformSummary(data: Dashboard, platform: DashboardPlatform, ro
     posts: stat?.posts ?? 0,
     postsPerDay: (stat?.posts ?? 0) / periodDays(data.period as DashboardPeriod),
     viewsTotal: stat?.viewsTotal ?? 0,
+    viewsAdjusted: stat?.viewsAdjusted ?? stat?.viewsTotal ?? 0,
     reactionsTotal: stat?.reactionsTotal ?? 0,
     views24: stat?.views24 ?? null,
     reactions24: stat?.reactions24 ?? null,
