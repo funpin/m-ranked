@@ -219,6 +219,7 @@ def dashboard_body(period: str, revision: int, committed_at: Any, dashboard: dic
         "stats": [{
             "institutionId": row["institution_id"], "platform": row["platform"],
             "posts": row["posts"], "viewsTotal": row["views_total"],
+            "viewsAdjusted": row["views_adjusted"],
             "reactionsTotal": row["reactions_total"], "commentsTotal": row["comments_total"],
             "sharesTotal": row["shares_total"], "sample24": row["sample24"],
             "views24": _number(row["views24"]), "reactions24": _number(row["reactions24"]),

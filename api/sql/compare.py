@@ -259,7 +259,10 @@ _TYPE_BUCKET = """CASE WHEN publication.publication_type IN ('text','photo','alb
 
 # Вовлечённость на 24-м часу: реакции / просмотры в Telegram, (лайки +
 # комментарии + репосты) / просмотры в остальных сетях.
-_ENGAGEMENT24 = """CASE WHEN day24.views_count > 0 AND (day24.reactions_count IS NOT NULL
+# Клипы и видео ВК не входят: просмотры записи не включают ленту клипов, и доля
+# реакций на такой просмотр несопоставима с обычным постом.
+_ENGAGEMENT24 = """CASE WHEN NOT (account.platform = 'vk' AND publication.publication_type = 'video')
+                 AND day24.views_count > 0 AND (day24.reactions_count IS NOT NULL
                      OR (account.platform <> 'telegram' AND (day24.comments_count IS NOT NULL OR day24.shares_count IS NOT NULL)))
                 THEN (coalesce(day24.reactions_count,0)
                       + CASE WHEN account.platform = 'telegram' THEN 0
@@ -276,6 +279,7 @@ WITH params AS (
            CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.reactions_count END AS reactions,
            CASE WHEN latest.comments_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.comments_count END AS comments,
            CASE WHEN latest.shares_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.shares_count END AS shares,
+           discount.discounted_views,
            coalesce(recheck.effective_level, state.level) AS level,
            day24.views_count AS views24, day24.reactions_count AS reactions24,
            day24.comments_count AS comments24, day24.shares_count AS shares24,
@@ -289,6 +293,10 @@ WITH params AS (
        AND NOT latest.synthetic AND latest.quality <> 'invalid'
       LEFT JOIN analytics.post_anomaly_state state ON state.publication_id = publication.id
        AND state.analyzed_at IS NOT NULL
+      -- Отдельным соединением по частичному индексу: чтение колонки из state
+      -- заставило бы ходить в кучу за каждым постом окна.
+      LEFT JOIN analytics.post_anomaly_state discount ON discount.publication_id = publication.id
+       AND discount.discounted_views IS NOT NULL
       LEFT JOIN analytics.post_anomaly_context_recheck recheck
         ON recheck.publication_id = state.publication_id
        AND recheck.source_analyzed_at = state.analyzed_at
@@ -329,7 +337,9 @@ DASHBOARD = _DASHBOARD_POSTS + """, dated AS (
 ), stats AS (
     SELECT institution_id, coalesce(platform, 'all') AS platform,
            count(*)::integer AS posts,
-           sum(views)::bigint AS views_total, sum(reactions)::bigint AS reactions_total,
+           sum(views)::bigint AS views_total,
+           sum(greatest(views - coalesce(discounted_views, 0), 0))::bigint AS views_adjusted,
+           sum(reactions)::bigint AS reactions_total,
            sum(comments)::bigint AS comments_total, sum(shares)::bigint AS shares_total,
            count(views24)::integer AS sample24,
            percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24,

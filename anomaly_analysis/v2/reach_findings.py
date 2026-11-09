@@ -21,6 +21,7 @@ from uuid import UUID
 
 from .account_findings import WINDOW_DAYS, AccountFinding, LedgerPost, _halves_by_time
 from .audience_rhythm import account_rhythm, summed_views
+from .detectors.view_burst_response import MIN_SURPRISE
 from .tail_ledger import MOSCOW
 
 REACH_KINDS = ("view_packs", "view_waves", "level3_share", "flat_daily_views", "promotion", "early_response",
@@ -240,7 +241,31 @@ def _own(posts: Sequence[LedgerPost], computed_for: date) -> dict[UUID, list[Led
 
 
 def wave_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[AccountFinding]:
-    """Часы, когда последние посты стены разом получили просмотры почти без реакций."""
+    return [finding for finding, _ in account_waves(posts, computed_for)]
+
+
+def view_discounts(posts: Sequence[LedgerPost],
+                   waves: Sequence[tuple[AccountFinding, Mapping[UUID, int]]]) -> dict[UUID, int | None]:
+    """Просмотры поста, не входящие в сумму «без волн и всплесков»; None — таких нет.
+
+    Часы всплеска в сводке не хранятся, и он может совпасть с часом волны,
+    поэтому берётся большее из двух: сумма не занижается вдвойне.
+    """
+    in_waves = {publication: views for _, by_post in waves for publication, views in by_post.items()}
+    result: dict[UUID, int | None] = {}
+    for post in posts:
+        burst = post.ledger.burst
+        burst_views = burst[2] if burst and burst[0] == "decoupled" and burst[3] >= MIN_SURPRISE else 0
+        result[post.publication_id] = max(in_waves.get(post.publication_id, 0), burst_views) or None
+    return result
+
+
+def account_waves(posts: Sequence[LedgerPost],
+                  computed_for: date) -> list[tuple[AccountFinding, dict[UUID, int]]]:
+    """Часы, когда последние посты стены разом получили просмотры почти без реакций.
+
+    Вместе с находкой — просмотры этих часов по постам.
+    """
     start = computed_for - timedelta(days=WINDOW_DAYS)
     by_account = _own(posts, computed_for)
     platform_of = {account: items[0].platform for account, items in by_account.items()}
@@ -267,6 +292,7 @@ def wave_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[Accou
         late_rate = late_reactions / late_views if late_views else None
         wave_hours: list[int] = []
         members: set[UUID] = set()
+        by_post: dict[UUID, int] = {}
         views_in = reactions_in = latest = 0
         for hour, hits in sorted(tables[account].items()):
             if len(hits) < WAVE_MIN_POSTS:
@@ -286,6 +312,8 @@ def wave_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[Accou
                 continue
             wave_hours.append(hour)
             members |= hit_ids
+            for post, views, _ in hits:
+                by_post[post.publication_id] = by_post.get(post.publication_id, 0) + views
             views_in += hour_views
             reactions_in += hour_reactions
             latest = max(latest, depth)
@@ -300,8 +328,8 @@ def wave_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[Accou
         metrics = {"days": len(days), "hours": len(wave_hours), "views": views_in, "reactions": reactions_in,
                    "viewShare": round(share, 3), "latestN": latest, "posts": len(items),
                    "viewsWithoutWaves": max(0, total_views - views_in)}
-        result.append(AccountFinding(account, platform, "view_waves", status, start, computed_for, metrics,
-                                     tuple(sorted(members, key=str))))
+        result.append((AccountFinding(account, platform, "view_waves", status, start, computed_for, metrics,
+                                      tuple(sorted(members, key=str))), by_post))
     return result
 
 

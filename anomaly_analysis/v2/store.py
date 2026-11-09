@@ -885,6 +885,16 @@ class PostgresAnomalyStore:
                 [(item.account_id, item.kind, item.platform, item.status, item.window_start, item.window_end,
                   _json(item.metrics), list(item.members), method_version) for item in findings])
 
+    def write_view_discounts(self, discounts: Mapping[UUID, int | None]) -> None:
+        """Просмотры вне суммы «без волн и всплесков»; пишутся только изменившиеся значения."""
+        with self._factory() as connection:
+            connection.execute(
+                """UPDATE analytics.post_anomaly_state state SET discounted_views = wanted.views
+                     FROM unnest(%s::uuid[], %s::integer[]) AS wanted(publication_id, views)
+                    WHERE state.publication_id = wanted.publication_id
+                      AND state.discounted_views IS DISTINCT FROM wanted.views""",
+                (list(discounts), list(discounts.values())))
+
     def read_activity(self, accounts: Sequence[UUID], since: datetime, until: datetime,
                       published_since: datetime) -> dict[UUID, SiblingActivity]:
         """Почасовые максимумы счётчиков постов аккаунтов — агрегаты для синхронности."""
