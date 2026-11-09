@@ -193,7 +193,7 @@ def test_version_three_ledgers_are_still_readable_without_hours():
     payload.pop("hours", None)
     old = ledger_from_payload(payload)
     assert old is not None and old.hours is None and old.early.views == 1000
-    assert build_ledger(_series(points)).payload()["v"] == 6
+    assert build_ledger(_series(points)).payload()["v"] == 7
 
 
 def _old_post_with_wave(rounded=False):

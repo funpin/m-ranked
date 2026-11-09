@@ -135,7 +135,7 @@ def main() -> None:
                     row.publication_id, row.published_at, moment, decision.next_due_at, verdict=verdict,
                     analyzed_points=len(subject.observed_at), last_point_observed_at=subject.observed_at[-1],
                     norm_version_id=version, frozen=decision.frozen, lag_seconds=0, reason="backfill",
-                    tail_ledger=build_ledger(subject, moment).payload()))
+                    tail_ledger=build_ledger(subject, moment, burst=verdict.burst).payload()))
                 analyzed += 1
             store.write_states(writes)
         failed += account_failed

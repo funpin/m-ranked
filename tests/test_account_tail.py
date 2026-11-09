@@ -131,10 +131,10 @@ def test_nightly_job_writes_reach_findings_with_the_others():
     written = {}
     store = SimpleNamespace(
         read_finding_ledgers=lambda start, end: [], read_late_members=lambda accounts, start, end: {},
-        read_synchrony_events=lambda start, end: [], read_post_levels=lambda start, end: levels,
+        read_latest_subscribers=lambda accounts, since: {}, read_synchrony_events=lambda start, end: [], read_post_levels=lambda start, end: levels,
         write_account_findings=lambda found, version: written.update(found=found, version=version))
     run_findings(store, date(2026, 10, 8))
-    assert written["version"] == "account-findings-v7"
+    assert written["version"] == "account-findings-v8"
     (finding,) = [item for item in written["found"] if item.kind == "level3_share"]
     assert finding.account_id == UUID(int=1) and finding.metrics["summary"]
 
@@ -149,7 +149,7 @@ def test_nightly_job_does_not_publish_the_unconfirmed_rhythm_finding(monkeypatch
     monkeypatch.setattr(reach_findings, "flat_day_findings", lambda *a, **k: called.append(1) or [])
     store = SimpleNamespace(
         read_finding_ledgers=lambda start, end: [], read_late_members=lambda accounts, start, end: {},
-        read_synchrony_events=lambda start, end: [], read_post_levels=lambda start, end: [],
+        read_latest_subscribers=lambda accounts, since: {}, read_synchrony_events=lambda start, end: [], read_post_levels=lambda start, end: [],
         write_account_findings=lambda found, version: None)
     account_tail_job.run_findings(store, date(2026, 10, 8))
     assert called == []

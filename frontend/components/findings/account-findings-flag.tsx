@@ -22,8 +22,8 @@ export function AccountFindingsFlag({ findings }: { findings: PostAccountFinding
  *  нейтральный значок, а не флажок находок. */
 export function PromotionMark({ promoted }: { promoted: boolean }) {
   if (!promoted) return null;
-  const note = "Похоже на продвижение записи: просмотров во много раз больше, чем у постов аккаунта того же возраста, "
-    + "по суточному ритму и почти без реакций. Контекст, а не уровень аномалии";
+  const note = "Похоже на продвижение записи или рекомендации ВК: охват необычно большой или пришёл поздно, "
+    + "а реакции идут как обычно. Контекст, а не уровень аномалии";
   return <span data-testid="findings-promotion-mark" role="img" aria-label={note} title={note}
     className="inline-flex shrink-0 text-sky-600 dark:text-sky-400">
     <Megaphone className="size-3.5" aria-hidden="true" />
