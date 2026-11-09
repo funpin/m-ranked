@@ -32,6 +32,8 @@ export const SIGNAL_LEGEND = [
   { pattern: 17, title: "поток одной реакции" },
   { pattern: 18, title: "реакции сквозь ночь" },
   { pattern: 19, title: "всплеск просмотров без отклика" },
+  { pattern: 20, title: "пакет просмотров после второго часа" },
+  { pattern: 21, title: "поздний старт охвата" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;
@@ -205,7 +207,13 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
       { label: window, value: share("windowReactions", "windowViews"), highlight: false },
     ] };
   }
-  if (render.kind === "view_burst") {
+  if (render.kind === "late_start") {
+    // Доля итоговых просмотров, набранная за первые шесть часов.
+    return { type: "bars", percent: true, bars: [
+      { label: "за 6 часов", value: numberAt(render, "earlyShare") ?? 0, highlight: true },
+    ] };
+  }
+  if (render.kind === "view_burst" || render.kind === "view_packet") {
     // Реакций на тысячу новых просмотров: в часы всплеска и у поста вне них.
     const perThousand = (reactions: string, views: string) => {
       const v = numberAt(render, views) ?? 0;

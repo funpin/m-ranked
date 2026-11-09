@@ -47,6 +47,7 @@ DECOUPLED = 0.20
 COUPLED = 0.50
 # −log₁₀ p → сила. Подтверждённого уровня здесь нет: составной признак — этап формы.
 STRENGTHS = ((10.0, 0.75), (6.0, 0.55), (4.0, 0.45))
+MIN_SURPRISE = STRENGTHS[-1][0]
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +77,7 @@ class BurstResponse:
         return 1000 * self.outside_reactions / max(self.outside_views, 1.0)
 
 
-def burst_response(prepared: PreparedSeries) -> BurstResponse | None:
+def burst_response(prepared: PreparedSeries, view_share: float = VIEW_SHARE) -> BurstResponse | None:
     """Самый крупный всплеск просмотров в первые трое суток; None — его нет или не с чем сравнить."""
     if prepared.series.platform not in PLATFORMS:
         return None
@@ -97,7 +98,7 @@ def burst_response(prepared: PreparedSeries) -> BurstResponse | None:
               & ~view_grid.negative[cells[0]] & ~reaction_grid.negative[cells[1]])
     growth = np.diff(view_cumulative)
     hot = (usable & (edges[:-1] >= MIN_AGE) & (edges[:-1] < HORIZON)
-           & (growth >= max(MIN_VIEWS, VIEW_SHARE * reference_views)))
+           & (growth >= max(MIN_VIEWS, view_share * reference_views)))
     bounds = np.flatnonzero(np.diff(np.concatenate(([0], hot.astype(np.int8), [0]))))
     if not bounds.size:
         return None
