@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
+import math
 from uuid import UUID
 
 from anomaly_analysis.v2.detectors import DetectorContext, view_burst_response
@@ -117,3 +119,10 @@ def test_only_vk_is_judged_until_other_platforms_are_calibrated():
 
     item = replace(series(), platform="max")
     assert view_burst_response.burst_response(prepared(item)) is None
+
+
+def test_certain_burst_stays_writable_as_json():
+    # Вероятность ниже точности float даёт бесконечный surprise; ALLOW_NAN=False в записи состояния ронял пачку.
+    result = assess(series(burst_views=30_000_000, base_views=20_000.0, rate=0.05))
+    assert result.burst is not None and result.burst[0] == "decoupled" and math.isfinite(result.burst[3])
+    json.dumps(result.burst, allow_nan=False)
