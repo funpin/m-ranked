@@ -191,7 +191,8 @@ def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: N
     burst = burst_response(prepared)
     if burst is None:
         return result
-    return replace(result, burst=(burst.outcome, round(burst.share, 3), round(burst.views), round(burst.surprise, 1)))
+    return replace(result, burst=(burst.outcome, round(burst.share, 3), round(burst.views),
+                                  round(min(burst.surprise, 999.0), 1)))
 
 
 def run_detectors(prepared: PreparedSeries, context: DetectorContext) -> tuple[list[Sign], dict[str, str]]:
