@@ -98,7 +98,8 @@ ssh-keyscan -p <порт> <сервер> > known_hosts   # сверить отп
 
 Settings → Environments → `production`:
 
-- Required reviewers — кто одобряет выкатку; Prevent self-review.
+- Required reviewers — кто одобряет выкатку; Prevent self-review выключен:
+  автор релиза может подтвердить выкатку сам.
 - Deployment branches and tags — Selected: `main`.
 - Secrets: `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER` (= `m-ranked-deploy`),
   `DEPLOY_SSH_KEY` (содержимое `deploy_key`), `DEPLOY_KNOWN_HOSTS`
