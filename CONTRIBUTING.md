@@ -61,9 +61,11 @@ Commits should explain why a change exists and keep one coherent concern.
 
 The ruleset cannot say *from which* branch a PR may come, so
 `.github/workflows/policy.yml` checks it. A PR could edit that check, or any
-workflow, to judge itself more leniently, so `.github/`, `operations/deploy/`
-and `operations/github/` are listed in `.github/CODEOWNERS` and both rulesets
-require code-owner approval for them; ordinary task PRs need no review.
+workflow, to judge itself more leniently. `.github/`, `operations/deploy/`
+and `operations/github/` are listed in `.github/CODEOWNERS`, so GitHub asks
+their owners for review, but since 2026-11-12 neither ruleset requires that
+approval (owner's decision: one person must be able to ship). Read such diffs
+before merging; ordinary task PRs need no review.
 (`pull_request_target` is not an option: it always runs the default branch's
 workflow, and GitHub disables it for public repositories by default.)
 
