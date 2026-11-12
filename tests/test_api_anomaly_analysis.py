@@ -92,6 +92,26 @@ def test_account_levels_carry_only_the_level_words():
         "признаки искусственной активности", "нет признаков"]
 
 
+def test_account_levels_mark_posts_of_the_promotion_finding():
+    # Пометка продвижения — контекст рядом с уровнем, а не уровень: таблица
+    # постов аккаунта показывает её так же, как «Находки» и страница поста.
+    body = analysis.levels_body("99269506-1466-5e18-a215-a3db2688d786", 12, [
+        {"publication_id": "0f0cb3a4-7b1e-5c43-9d44-1d5d0b1f5a01", "level": 0, "promotion": True},
+        {"publication_id": "0f0cb3a4-7b1e-5c43-9d44-1d5d0b1f5a02", "level": 0},
+    ])
+    _validate(body, "AccountAnomalyLevels")
+    assert [item["promotion"] for item in body["items"]] == [True, False]
+    assert [item["level"] for item in body["items"]] == [0, 0]
+
+
+def test_account_levels_query_reads_promotion_of_this_account_only():
+    from api.sql import analysis as analysis_sql
+    query = " ".join(analysis_sql.ACCOUNT_LEVELS.split())
+    assert "kind='promotion'" in query
+    assert "finding.account_id=%(account)s::uuid" in query
+    assert "AS promotion" in query
+
+
 def test_new_reference_signals_use_the_public_contract():
     from datetime import datetime, timezone
     from uuid import UUID

@@ -485,8 +485,9 @@ const server = createServer(async (request, response) => {
     return json({items:[postItem(1,url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts",day),postItem(2,"posts",day)],nextCursor:paged?`page2:${day??"-"}`:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);
   }
   // Уровни аккаунта: первый пост с выраженной аномалией, второй ещё не проанализирован.
+  // У аккаунтов площадок первый пост ещё и в находке продвижения.
   const levelsId=/^\/api\/v1\/accounts\/(\d+)\/anomaly-levels$/.exec(url.pathname);
-  if(levelsId) {const type=url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts";return json({accountId:uuid(1,Number(levelsId[1])),datasetRevision:revision,items:[{publicationId:publication(1,type).publicationId,level:2,levelLabel:"выраженная аномалия",levelSymbol:"◑"}]} satisfies Schema["AccountAnomalyLevels"]);}
+  if(levelsId) {const type=url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts";return json({accountId:uuid(1,Number(levelsId[1])),datasetRevision:revision,items:[{publicationId:publication(1,type).publicationId,level:2,levelLabel:"выраженная аномалия",levelSymbol:"◑",promotion:type==="platform_posts"}]} satisfies Schema["AccountAnomalyLevels"]);}
   // Профиль позднего отклика: канал 1 — устойчиво необычный, остальные — воздержание.
   const tailId=/^\/api\/v1\/accounts\/(\d+)\/tail-profile$/.exec(url.pathname);
   if(tailId) {
