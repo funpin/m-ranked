@@ -34,10 +34,19 @@ SELECT coalesce(recheck.effective_level, state.level) AS level,
 
 # Уровни постов аккаунта для колонки в таблице публикаций: по индексу
 # (аккаунт, дата публикации) и первичному ключу состояния, без признаков.
+# Пометка продвижения — посты из находки «продвижение» этого же аккаунта:
+# одна строка по первичному ключу находки (аккаунт, вид).
 ACCOUNT_LEVELS = """
+WITH promoted AS MATERIALIZED (
+    SELECT DISTINCT member AS publication_id
+      FROM analytics.account_anomaly_finding finding
+     CROSS JOIN LATERAL unnest(finding.members) member
+     WHERE finding.account_id=%(account)s::uuid AND finding.kind='promotion'
+)
 SELECT publication.id AS publication_id,
        coalesce(recheck.effective_level, state.level) AS level,
-       coalesce(state.quality->'codes' ? 'no_precise_metrics', false) AS insufficient_data
+       coalesce(state.quality->'codes' ? 'no_precise_metrics', false) AS insufficient_data,
+       publication.id IN (SELECT publication_id FROM promoted) AS promotion
   FROM ingest.publication publication
   JOIN analytics.post_anomaly_state state ON state.publication_id=publication.id
   LEFT JOIN analytics.post_anomaly_context_recheck recheck

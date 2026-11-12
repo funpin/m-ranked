@@ -124,6 +124,15 @@ test("account table shows the analysis level without waiting for it",async({page
   await expect(cells.nth(0)).toContainText("выраженная аномалия");
   await expect(cells.nth(0).locator("svg.lucide")).toHaveCount(1);
   await expect(cells.nth(1)).toContainText("ожидает");
+  await expect(page.getByTestId("findings-promotion-mark")).toHaveCount(0);
+});
+
+test("account table marks promoted VK posts next to the level",async({page})=>{
+  await page.goto("/accounts/00000002-0000-4000-8000-000000000002");
+  const cells=page.getByTestId("anomaly-level-cell");
+  await expect(cells.nth(0)).toContainText("выраженная аномалия");
+  await expect(cells.nth(0).getByTestId("findings-promotion-mark")).toHaveAttribute("aria-label",/Похоже на продвижение/);
+  await expect(cells.nth(1).getByTestId("findings-promotion-mark")).toHaveCount(0);
 });
 
 test("account page explains late engagement against the platform without waiting for it",async({page})=>{
