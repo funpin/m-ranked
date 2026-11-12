@@ -203,12 +203,13 @@ def tail_profile_body(account_id: str, dataset_revision: int, rows: list[dict[st
 
 
 def levels_body(account_id: str, dataset_revision: int, rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Только уровень: признаки и качество читает страница поста."""
+    """Уровень и пометка продвижения: признаки и качество читает страница поста."""
     return {
         "accountId": account_id, "datasetRevision": dataset_revision,
         "items": [{"publicationId": str(row["publication_id"]), "level": int(row["level"]),
                    "levelLabel": INSUFFICIENT_DATA if row.get("insufficient_data") and int(row["level"]) == 0 else LEVEL_LABELS[int(row["level"])],
-                   "levelSymbol": NOT_ANALYZED_SYMBOL if row.get("insufficient_data") and int(row["level"]) == 0 else LEVEL_SYMBOLS[int(row["level"])]} for row in rows],
+                   "levelSymbol": NOT_ANALYZED_SYMBOL if row.get("insufficient_data") and int(row["level"]) == 0 else LEVEL_SYMBOLS[int(row["level"])],
+                   "promotion": bool(row.get("promotion"))} for row in rows],
     }
 
 

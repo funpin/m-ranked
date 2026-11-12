@@ -52,7 +52,7 @@ reviewers="$(for login in "$@"; do
   printf '{"type":"User","id":%s}\n' "$(gh api "users/$login" --jq .id)"
 done | jq -s .)"
 jq -n --argjson reviewers "$reviewers" '{
-  wait_timer: 0, prevent_self_review: true, reviewers: $reviewers,
+  wait_timer: 0, prevent_self_review: false, reviewers: $reviewers,
   deployment_branch_policy: {protected_branches: false, custom_branch_policies: true}
 }' | gh api -X PUT "repos/$repo/environments/production" --input - >/dev/null
 if ! gh api "repos/$repo/environments/production/deployment-branch-policies" \
