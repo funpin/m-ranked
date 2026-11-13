@@ -47,6 +47,10 @@
   AI), `ai_training`, `seo` (SEO-сервисы: Semrush, Ahrefs, Majestic, SE Ranking
   и др.), `search` (поисковики выдачи), `crawler` (прочие роботы).
 - Закрытые классы — в `crawler-policy.conf`: 403 на всё, кроме robots.txt.
+  Сейчас закрыты `ai_training` и `seo`. `ai_search` открыт с 13.11.2026: без
+  него поиск ChatGPT, Claude и Perplexity не находит сайт, а ИИ-поисковики не из
+  списка (ExaSearchBot) и так ходили классом `crawler`. Лимит у него как у
+  прочих роботов: свои 12 холодных страниц в минуту и общий один рендер.
 - Ключ кэша включает сборку (`build.conf`, пишет выкатка), признак gzip и
   заголовки навигации Next. Срок задаёт приложение заголовком `X-Accel-Expires`.
 - Журнал `/var/log/nginx/m-ranked-access.log` (формат `m_ranked_traffic`) несёт
