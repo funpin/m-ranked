@@ -33,6 +33,7 @@ CRAWLER = ("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Refle
 META_INDEXER = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/145.0.0.0 Safari/537.36 (compatible; meta-webindexer/1.1 "
                 "(+https://developers.facebook.com/docs/sharing/webmasters/crawler))")
+GPTBOT = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)"
 BITS = 10
 
 
@@ -344,7 +345,17 @@ def test_crawlers_get_a_page_budget_and_search_engines_keep_their_own(site):
     assert [get(f"{base}/publications/search-{i}", agent=GOOGLE)[0] for i in range(5)] == [200] * 5
 
 
-def test_meta_ai_search_indexer_is_closed_like_other_ai_search(site):
+def test_ai_search_is_open_with_its_own_page_budget(site):
+    """13.11.2026 ai_search открыт: поисковые ИИ-роботы получают страницы, но
+    как прочие роботы — свои 12 холодных страниц в минуту (всплеск 5), сверх
+    этого 503. Запас считается отдельно от класса crawler."""
     base, _, _ = site
-    assert get(base + "/publications/meta-1", agent=META_INDEXER)[0] == 403
+    answers = [get(f"{base}/publications/meta-{i}", agent=META_INDEXER)[0] for i in range(10)]
+    assert answers[:6] == [200] * 6 and answers[-1] == 503, answers
     assert get(base + "/robots.txt", agent=META_INDEXER)[0] == 200
+
+
+def test_ai_training_stays_closed(site):
+    base, _, _ = site
+    assert get(base + "/publications/gpt-1", agent=GPTBOT)[0] == 403
+    assert get(base + "/robots.txt", agent=GPTBOT)[0] == 200
