@@ -236,8 +236,11 @@ jobs:
           done
           for lock in requirements/{api,anomaly,collector,tooling}.lock \
                       requirements/py311/{api,anomaly,collector,tooling}.lock; do
+            # Исключения — только из security/vex.json, по одному lock-файлу и
+            # до срока; просроченное останавливает проверку.
+            ignores=$(python3 operations/scripts/vex_ignores.py "$lock")
             .venv/bin/pip-audit --progress-spinner off --disable-pip --no-deps \
-              -r "$lock"
+              -r "$lock" $ignores
           done
       - name: Known vulnerabilities in production frontend dependencies
         run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level=high
