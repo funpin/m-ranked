@@ -266,3 +266,98 @@ def test_rutube_zeros_are_the_video_threshold_not_an_ignored_channel():
                               prior={"kursk": {"rutube": 0}})
     cell = rf.forecast([ours], base_month, ERRORS)[0]["explanation"]["categories"]["rutube"]
     assert cell["source"] == "formula" and cell["score"] > 0
+
+
+# --- Версия 2 (подбор 18.11.2026 на сентябре и октябре, research/m-rating-forecast) ---
+
+V2 = rf.FORMULA_V2
+
+
+def test_current_formula_is_v2_and_v1_is_unchanged():
+    assert rf.FORMULA_CURRENT is V2 and V2["version"] == 2
+    assert V2["formulaKey"] == rf.FORMULA_KEY and V2["weights"] == rf.FORMULA_V1["weights"]
+    # V1 остаётся как в миграции 0084: её снимки объяснимы своей версией.
+    assert rf.FORMULA_V1["posts"] == {"low": 20, "high": 100} and "scale" not in rf.FORMULA_V1
+
+
+def test_power_subscore_without_a_floor():
+    # Низ 0: 100·(x/верх)^0.7, выше верха — 100.
+    assert rf.power_subscore(1.7, 0, 1.7, 0.7) == pytest.approx(100)
+    assert rf.power_subscore(0.85, 0, 1.7, 0.7) == pytest.approx(100 * 0.5 ** 0.7)
+    assert rf.power_subscore(5, 0, 1.7, 0.7) == 100
+    assert rf.power_subscore(0, 0, 1.7, 0.7) == 0 and rf.power_subscore(None, 0, 1.7, 0.7) == 0
+
+
+def test_power_subscore_with_a_floor():
+    assert rf.power_subscore(15, 15, 90, 0.7) == 0
+    assert rf.power_subscore(10, 15, 90, 0.7) == 0
+    assert rf.power_subscore(90, 15, 90, 0.7) == pytest.approx(100)
+    middle = (15 ** 0.7 + 90 ** 0.7) / 2
+    assert rf.power_subscore(middle ** (1 / 0.7), 15, 90, 0.7) == pytest.approx(50)
+
+
+def test_v2_vk_score_uses_the_power_scale():
+    # 90 постов → 100; 1.7 просмотра на студента → 100; ERV 3.5 % → 100.
+    full = rf.platform_score("vk", month(90, views=90 * 1700, interactions=90 * 1700 * 35 // 1000), 1000, None,
+                             formula=V2)
+    assert full.score == pytest.approx(100) and full.source == "formula"
+    # ERV 4 % — выше верха 3.5 %, подбалл упирается в 100.
+    half_views = rf.platform_score("vk", month(90, views=90 * 850, interactions=90 * 850 * 4 // 100), 1000, None,
+                                   formula=V2)
+    assert half_views.subscores["views"] == pytest.approx(100 * 0.5 ** 0.7)
+    assert half_views.subscores["erv"] == pytest.approx(100)
+
+
+def test_v2_max_thresholds():
+    score = rf.platform_score("max", month(90, views=90 * 330, interactions=90 * 330 * 8 // 100), 1000, None,
+                              formula=V2)
+    assert score.subscores == pytest.approx({"posts": 100, "views": 100, "erv": 100})
+    vk = rf.platform_score("vk", month(90, views=90 * 330, interactions=90 * 330 * 8 // 100), 1000, None, formula=V2)
+    assert vk.subscores["views"] < 40
+
+
+def test_v2_rutube_counts_uploaded_videos():
+    """Источник считает видео по дате загрузки: МЭИ в октябре — 5 опубликовано, 4 загружено, балл 0."""
+    published_five = rf.PlatformMonth(posts=5, viewed_posts=5, views=500, interactions=5, covered=True,
+                                      uploaded_posts=4)
+    assert rf.platform_score("rutube", published_five, 1000, 40, formula=V2).score == 0
+    uploaded_five = rf.PlatformMonth(posts=3, viewed_posts=3, views=300, interactions=3, covered=True,
+                                     uploaded_posts=5)
+    assert rf.platform_score("rutube", uploaded_five, 1000, None, formula=V2).score > 0
+    # V1 по-прежнему считает по дате публикации.
+    assert rf.platform_score("rutube", published_five, 1000, None).score > 0
+
+
+def test_v2_rutube_own_score_and_blend():
+    rule = V2["rutube"]
+    videos = rf.PlatformMonth(posts=150, viewed_posts=150, views=150 * 5000, interactions=0, covered=True,
+                              uploaded_posts=150)
+    # 150 видео и 5 просмотров на студента — верх обеих шкал: (100 + 100) / 3 + 25.
+    own = rf.platform_score("rutube", videos, 1000, None, formula=V2)
+    assert own.score == pytest.approx(200 / 3 + rule["depthConstant"])
+    blended = rf.platform_score("rutube", videos, 1000, 60, formula=V2)
+    assert blended.score == pytest.approx(0.5 * own.score + 0.5 * 60)
+    assert set(own.subscores) == {"videos", "views", "own"}
+
+
+def test_v2_rutube_without_upload_dates_falls_back_to_posts():
+    no_dates = rf.PlatformMonth(posts=8, viewed_posts=8, views=800, interactions=0, covered=True)
+    assert rf.platform_score("rutube", no_dates, 1000, None, formula=V2).score > 0
+
+
+def test_v2_scale_extrapolates_uploaded_videos():
+    running = rf.PlatformMonth(posts=2, viewed_posts=2, views=200, interactions=0, covered=True, uploaded_posts=3)
+    assert rf.platform_score("rutube", running, 1000, None, formula=V2).score == 0
+    assert rf.platform_score("rutube", running, 1000, None, scale=2.0, formula=V2).score > 0
+
+
+def test_v2_does_not_zero_a_channel_the_source_ignored_before():
+    """Орловский ГАУ: MAX 0 с июня по сентябрь, в октябре 73.0. Правило V1 дало 0;
+    в V2 его нет — балл по формуле."""
+    ours = institution("orel", {"max": month(100, views=100 * 500, interactions=5000)})
+    base_month = rf.BaseMonth(period="Сентябрь 2026", scores={"orel": {"social": 40, "max": 0, "vk": 60, "rutube": 0}},
+                              names={"orel": "Вуз orel"}, prior={"orel": {"social": 41, "max": 0, "vk": 58, "rutube": 0}})
+    cell = rf.forecast([ours], base_month, ERRORS, formula=V2)[0]["explanation"]["categories"]["max"]
+    assert cell["source"] == "formula" and cell["score"] > 50
+    v1 = rf.forecast([ours], base_month, ERRORS)[0]["explanation"]["categories"]["max"]
+    assert v1["source"] == "source_zero"
