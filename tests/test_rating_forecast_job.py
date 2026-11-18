@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 
+from api import rating_forecast as rf
 from api.tools import rating_forecast as job
 
 
@@ -96,12 +97,25 @@ def test_definer_functions_read_the_revision_without_foreign_functions():
     assert body.count("SELECT max(id) INTO revision FROM analytics.dataset_revision") == 2
 
 
-def test_job_reads_the_month_before_base_for_source_zeros():
+def test_job_reads_the_month_before_base_and_v2_keeps_the_formula():
+    """Месяц перед базовым читается и пишется в параметры снимка; правило нулей
+    источника было в V1, в V2 его нет: балл MAX — по формуле."""
     zero_max = [{**SCORES[0], "max_score": 0}]
     rows = MONTH_ROWS + [{**MONTH_ROWS[0], "platform": "max"}]
     database = FakeDatabase(["Август 2026", "Сентябрь 2026"],
                             {"Август 2026": zero_max, "Сентябрь 2026": zero_max}, rows)
     asyncio.run(job.run(database, datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
     [body] = database.recorded
-    assert body["results"][0]["explanation"]["categories"]["max"]["source"] == "source_zero"
+    assert body["results"][0]["explanation"]["categories"]["max"]["source"] == "formula"
     assert body["parameters"]["priorPeriod"] == "Август 2026"
+
+
+def test_job_records_snapshots_with_the_current_formula():
+    rows = MONTH_ROWS + [{**MONTH_ROWS[0], "platform": "rutube", "posts": 4, "uploaded_posts": 6}]
+    database = FakeDatabase(["Август 2026", "Сентябрь 2026"], {"Сентябрь 2026": SCORES}, rows)
+    asyncio.run(job.run(database, datetime(2026, 11, 1, 0, 30, tzinfo=timezone.utc)))
+    body = database.recorded[0]
+    assert body["version"] == 2 and body["parameters"]["formulaVersion"] == 2
+    rutube = body["results"][0]["explanation"]["platforms"]["rutube"]
+    # Видео по дате загрузки: 6, а не 4 опубликованных.
+    assert rutube["metrics"]["posts"] == 6 and rutube["source"] == "formula"
