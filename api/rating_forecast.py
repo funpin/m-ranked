@@ -2,9 +2,11 @@
 
 Модуль считает без базы: на входе метрики площадок наших вузов за месяц и
 баллы последнего опубликованного месяца, на выходе — баллы и места.
-Формула подобрана 15.10.2026 на сентябре (спек
+Версия 1 подобрана 15.10.2026 на сентябре (спек
 docs/superpowers/specs/2026-10-16-rating-forecast-design.md): балл площадки —
-среднее трёх лог-шкал, соцсети — взвешенная сумма баллов площадок. Места
+среднее трёх лог-шкал, соцсети — взвешенная сумма баллов площадок. Версия 2
+подобрана 18.11.2026 на сентябре и октябре (research/m-rating-forecast/README.md):
+те же три показателя на степенной шкале, Rutube — по дате загрузки видео. Места
 считаются по сумме баллов, а не по местам на площадках: поэтому ровно сильный
 вуз бывает в топ-10 соцсетей, не входя в топ-10 ни одной площадки (СКФУ в
 сентябре — 8-й при 27/38/13).
@@ -40,6 +42,32 @@ FORMULA_V1: dict[str, Any] = {
     "defaultErrors": {"social": 7, "max": 10, "vk": 9, "rutube": 8},
 }
 
+# Версия 2 (миграция 0093): подбалл 100·(x^0.7 − низ^0.7)/(верх^0.7 − низ^0.7). На
+# отложенном месяце (сентябрь → октябрь) ошибка балла VK 3.60 → 2.67, MAX 3.46 → 2.57.
+# Rutube: видео по дате загрузки (так считает источник), над порогом — подбаллы
+# видео и просмотров на студента плюс средний вклад «глубины просмотров», которую мы
+# не собираем. Правила «источник не учитывает канал» нет: в октябре 2026 нули
+# Орловского ГАУ и БГТУ им. Шухова в MAX закончились, а правило дало бы 0.
+FORMULA_V2: dict[str, Any] = {
+    "formulaKey": FORMULA_KEY,
+    "version": 2,
+    "timezone": "Europe/Moscow",
+    "weights": {"max": 0.4, "vk": 0.3, "rutube": 0.3},
+    "scale": {"kind": "power", "exponent": 0.7},
+    "posts": {"low": 15, "high": 90},
+    "viewsPerStudent": {"vk": {"low": 0, "high": 1.7}, "max": {"low": 0, "high": 0.33}},
+    "erv": {"vk": {"low": 0, "high": 0.035}, "max": {"low": 0, "high": 0.08}},
+    "rutube": {"minVideos": 5, "countBy": "uploaded", "videos": {"low": 20, "high": 150},
+               "viewsPerStudent": {"low": 0.01, "high": 5}, "depthConstant": 25, "officialBlend": 0.5},
+    "sourceZeroRule": False,
+    "matureAfterDays": 3,
+    "earlyBeforeDay": 7,
+    "defaultErrors": {"social": 5, "max": 5, "vk": 5, "rutube": 8},
+}
+
+# Версия, которой ночное задание пишет новые снимки.
+FORMULA_CURRENT = FORMULA_V2
+
 
 @dataclass(frozen=True)
 class PlatformMonth:
@@ -49,6 +77,8 @@ class PlatformMonth:
     views: int
     interactions: int
     covered: bool
+    # Rutube: видео, загруженные в месяце (дата публикации, если загрузка неизвестна).
+    uploaded_posts: int | None = None
 
 
 @dataclass(frozen=True)
@@ -87,6 +117,35 @@ def subscore(value: float | None, low: float, high: float) -> float:
     return min(100.0, max(0.0, 100.0 * math.log(value / low) / math.log(high / low)))
 
 
+def power_subscore(value: float | None, low: float, high: float, exponent: float) -> float:
+    if value is None or value <= 0:
+        return 0.0
+    return min(100.0, max(0.0, 100.0 * (value ** exponent - low ** exponent) / (high ** exponent - low ** exponent)))
+
+
+def _scaled(formula: Mapping[str, Any]):
+    scale = formula.get("scale")
+    if scale and scale.get("kind") == "power":
+        exponent = scale["exponent"]
+        return lambda value, rule: power_subscore(value, rule["low"], rule["high"], exponent)
+    return lambda value, rule: subscore(value, rule["low"], rule["high"])
+
+
+def _rutube_v2(month: PlatformMonth, per_student: float | None, official: float | None, scale: float,
+               metrics: dict[str, Any], rule: Mapping[str, Any]) -> PlatformScore:
+    videos = (month.uploaded_posts if month.uploaded_posts is not None else month.posts) * scale
+    metrics = {**metrics, "posts": month.uploaded_posts if month.uploaded_posts is not None else month.posts,
+               "publishedPosts": month.posts, "postsExtrapolated": round(videos, 1)}
+    if videos < rule["minVideos"]:
+        return PlatformScore(0.0, "formula", {"videos": 0.0, "views": 0.0, "own": 0.0}, metrics)
+    subscores = {"videos": subscore(videos, rule["videos"]["low"], rule["videos"]["high"]),
+                 "views": subscore(per_student, rule["viewsPerStudent"]["low"], rule["viewsPerStudent"]["high"])}
+    own = min(100.0, (subscores["videos"] + subscores["views"]) / 3 + rule["depthConstant"])
+    blend = rule["officialBlend"]
+    score = blend * official + (1 - blend) * own if official is not None and official > 0 else own
+    return PlatformScore(score, "formula", {**subscores, "own": own}, metrics)
+
+
 def platform_score(platform: str, month: PlatformMonth | None, students: int | None,
                    official: float | None, *, scale: float = 1.0,
                    formula: Mapping[str, Any] = FORMULA_V1) -> PlatformScore:
@@ -102,6 +161,9 @@ def platform_score(platform: str, month: PlatformMonth | None, students: int | N
     metrics = {"posts": month.posts, "postsExtrapolated": round(posts, 1),
                "avgViews": round(average, 1) if average is not None else None,
                "students": students, "erv": round(erv, 5) if erv is not None else None}
+    if platform == "rutube" and formula["rutube"].get("countBy") == "uploaded":
+        per_student = average / students if average is not None and students else None
+        return _rutube_v2(month, per_student, official, scale, metrics, formula["rutube"])
     if platform == "rutube":
         rule = formula["rutube"]
         if posts < rule["minVideos"]:
@@ -112,9 +174,10 @@ def platform_score(platform: str, month: PlatformMonth | None, students: int | N
         return PlatformScore(score, "formula", {"videos": own}, metrics)
     views_rule, erv_rule = formula["viewsPerStudent"][platform], formula["erv"][platform]
     per_student = average / students if average is not None and students else None
-    subscores = {"posts": subscore(posts, formula["posts"]["low"], formula["posts"]["high"]),
-                 "views": subscore(per_student, views_rule["low"], views_rule["high"]),
-                 "erv": subscore(erv, erv_rule["low"], erv_rule["high"])}
+    sub = _scaled(formula)
+    subscores = {"posts": sub(posts, formula["posts"]),
+                 "views": sub(per_student, views_rule),
+                 "erv": sub(erv, erv_rule)}
     return PlatformScore(sum(subscores.values()) / 3, "formula", subscores, metrics)
 
 
@@ -156,7 +219,7 @@ def forecast(institutions: Iterable[InstitutionMonth], base: BaseMonth, errors: 
                                               scale=scale, formula=formula)
                      for platform in PLATFORMS}
         for platform, item in list(platforms.items()):
-            if ignored_by_source(platform, institution.code, base, item):
+            if formula.get("sourceZeroRule", True) and ignored_by_source(platform, institution.code, base, item):
                 platforms[platform] = PlatformScore(0.0, "source_zero", item.subscores, item.metrics)
         scores = {platform: platforms[platform].score for platform in PLATFORMS}
         scores["social"] = sum(weights[platform] * scores[platform] for platform in PLATFORMS)

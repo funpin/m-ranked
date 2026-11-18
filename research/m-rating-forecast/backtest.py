@@ -24,11 +24,15 @@ from api.sql import rating as sql  # noqa: E402
 KEYS = {"social": "social", "max": "ok", "vk": "vk", "rutube": "rt"}
 
 
-def official(source: dict, month: date) -> rf.BaseMonth:
+FORMULAS = {1: rf.FORMULA_V1, 2: rf.FORMULA_V2}
+
+
+def official(source: dict, month: date, prior: rf.BaseMonth | None = None) -> rf.BaseMonth:
     item = source["months"][month.month - 1]
     return rf.BaseMonth(period=rf.period_label(month), names={row["code"]: row["name"] for row in item["items"]},
                         scores={row["code"]: {category: row["scores"].get(key) for category, key in KEYS.items()}
-                                for row in item["items"] if row.get("code")})
+                                for row in item["items"] if row.get("code")},
+                        prior=prior.scores if prior is not None else {})
 
 
 def institutions(connection, month: date, as_of: datetime) -> list[rf.InstitutionMonth]:
@@ -41,7 +45,8 @@ def institutions(connection, month: date, as_of: datetime) -> list[rf.Institutio
         if row["platform"] is not None:
             entry["platforms"][row["platform"]] = rf.PlatformMonth(
                 posts=row["posts"], viewed_posts=row["viewed_posts"], views=int(row["views"]),
-                interactions=int(row["interactions"]), covered=bool(row["covered"]))
+                interactions=int(row["interactions"]), covered=bool(row["covered"]),
+                uploaded_posts=row.get("uploaded_posts"))
     return [rf.InstitutionMonth(key, value["code"], value["name"], (students.get(key) or {}).get("value"),
                                 value["platforms"]) for key, value in grouped.items()]
 
@@ -51,7 +56,9 @@ def main() -> int:
     parser.add_argument("--dsn", required=True)
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--months", required=True)
+    parser.add_argument("--formula", type=int, choices=sorted(FORMULAS), default=rf.FORMULA_CURRENT["version"])
     arguments = parser.parse_args()
+    formula = FORMULAS[arguments.formula]
     source = json.loads(arguments.source.read_text(encoding="utf-8"))
     as_of = datetime.now(timezone.utc)
     with psycopg.connect(arguments.dsn, row_factory=dict_row) as connection:
@@ -59,9 +66,12 @@ def main() -> int:
         for text in arguments.months.split(","):
             month = date.fromisoformat(f"{text}-01")
             previous = (month - timedelta(days=1)).replace(day=1)
-            base, fact = official(source, previous), official(source, month)
-            rows = rf.forecast(institutions(connection, month, as_of), base, rf.FORMULA_V1["defaultErrors"])
-            print(f"== {fact.period} (база {base.period}), вузов {len(rows)}")
+            before = (previous - timedelta(days=1)).replace(day=1)
+            # Месяц перед базовым — как в ночном задании: по нему V1 узнаёт нули источника.
+            prior = official(source, before) if source["months"][before.month - 1]["items"] else None
+            base, fact = official(source, previous, prior), official(source, month)
+            rows = rf.forecast(institutions(connection, month, as_of), base, formula["defaultErrors"], formula=formula)
+            print(f"== {fact.period} (база {base.period}, формула v{formula['version']}), вузов {len(rows)}")
             for category in rf.CATEGORIES:
                 predicted = {row["explanation"]["code"]: row["explanation"]["categories"][category]["score"] for row in rows}
                 ranks = {row["explanation"]["code"]: row["explanation"]["categories"][category]["rank"] for row in rows}

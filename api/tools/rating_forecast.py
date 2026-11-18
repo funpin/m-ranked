@@ -70,7 +70,7 @@ async def _institutions(database: Any, month: date, as_of: datetime) -> list[rf.
     start, end = rf.month_window(month)
     rows = await database.fetch_all(sql.PLATFORM_MONTH, {
         "window_start": start, "window_end": min(end, as_of),
-        "mature_before": as_of - timedelta(days=rf.FORMULA_V1["matureAfterDays"])})
+        "mature_before": as_of - timedelta(days=rf.FORMULA_CURRENT["matureAfterDays"])})
     students = _students_by_institution()
     grouped: dict[str, dict[str, Any]] = defaultdict(lambda: {"platforms": {}})
     for row in rows:
@@ -85,7 +85,8 @@ async def _institutions(database: Any, month: date, as_of: datetime) -> list[rf.
             viewed_posts=row["mature_posts"] if mature else row["viewed_posts"],
             views=int(row["mature_views"] if mature else row["views"]),
             interactions=int(row["mature_interactions"] if mature else row["interactions"]),
-            covered=bool(row["covered"]))
+            covered=bool(row["covered"]),
+            uploaded_posts=row.get("uploaded_posts"))
     return [rf.InstitutionMonth(institution_id=key, code=value["code"], name=value["name"],
                                 students=(students.get(key) or {}).get("value"), platforms=value["platforms"])
             for key, value in sorted(grouped.items(), key=lambda item: item[1]["code"])]
@@ -93,7 +94,7 @@ async def _institutions(database: Any, month: date, as_of: datetime) -> list[rf.
 
 async def _errors(database: Any, month: date, published: dict[date, str]) -> dict[str, float]:
     """Типичные ошибки — по последнему опубликованному месяцу, где есть снимок."""
-    defaults = dict(rf.FORMULA_V1["defaultErrors"])
+    defaults = dict(rf.FORMULA_CURRENT["defaultErrors"])
     for candidate in sorted((item for item in published if item < month), reverse=True)[:3]:
         rows = await database.fetch_all(sql.PUBLISHED_SNAPSHOT_SCORES, {
             "formula_key": rf.FORMULA_KEY, "window_start": rf.month_window(candidate)[0],
@@ -128,16 +129,16 @@ async def _forecast_month(database: Any, month: date, status: str, as_of: dateti
     scale, early = (1.0, False) if status == "retrospective" else rf.running_scale(month, as_of)
     institutions = await _institutions(database, month, as_of)
     errors = await _errors(database, month, published)
-    results = rf.forecast(institutions, base, errors, scale=scale)
+    results = rf.forecast(institutions, base, errors, scale=scale, formula=rf.FORMULA_CURRENT)
     start, end = rf.month_window(month)
     window_end = min(end, as_of)
     parameters = {"status": status, "basePeriod": base.period, "period": rf.period_label(month),
                   "priorPeriod": prior.period if prior is not None else None,
                   "errors": errors, "postsScale": round(scale, 4), "early": early,
-                  "formulaVersion": rf.FORMULA_V1["version"]}
+                  "formulaVersion": rf.FORMULA_CURRENT["version"]}
     digest = hashlib.sha256(json.dumps({"month": month.isoformat(), "parameters": parameters,
                                         "results": results}, sort_keys=True, default=str).encode()).hexdigest()
-    body = {"formulaKey": rf.FORMULA_KEY, "version": rf.FORMULA_V1["version"],
+    body = {"formulaKey": rf.FORMULA_KEY, "version": rf.FORMULA_CURRENT["version"],
             "windowStart": start.astimezone(timezone.utc).isoformat(),
             "windowEnd": window_end.astimezone(timezone.utc).isoformat(),
             "asOf": as_of.astimezone(timezone.utc).isoformat(),
