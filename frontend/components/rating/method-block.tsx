@@ -1,6 +1,7 @@
 import { CalendarDays, Eye, Heart } from "lucide-react";
 import Link from "@/components/native-link";
-import { Glyphs, WeightStrip } from "@/components/rating/formula-visual";
+import { PlatformLogo } from "@/components/platform-logo";
+import { PartsEquation, WeightStrip } from "@/components/rating/formula-visual";
 import type { RatingForecast } from "@/lib/types";
 
 /** Формула М-Рейтинга картинкой — перед таблицей, как на других вкладках «Рейтинга». */
@@ -10,14 +11,13 @@ export function ForecastMethod({ forecast }: { forecast: RatingForecast }) {
     <h2 id="rating-method" className="font-heading mb-3 text-base font-semibold">Как считает М-Рейтинг</h2>
     <div className="space-y-4">
     <WeightStrip weights={{ max: 0.4, vk: 0.3, rutube: 0.3 }} label="Балл соцсетей М-Рейтинга" />
-    <div>
-      <p className="mb-2 text-sm">Балл VK и MAX — среднее трёх частей; Rutube — меньше 5 видео за месяц дают 0:</p>
-      <Glyphs items={[
-        { icon: CalendarDays, label: "Постов за месяц" },
-        { icon: Eye, label: "Просмотры поста на студента" },
-        { icon: Heart, label: "Реакции на просмотр" },
-      ]} />
-    </div>
+    <PartsEquation subject="VK, MAX" items={[
+      { icon: CalendarDays, label: "Постов за месяц" },
+      { icon: Eye, label: "Просмотры на студента" },
+      { icon: Heart, label: "Реакции на просмотр" },
+    ]} />
+    <p className="text-muted-foreground flex items-center gap-2 text-xs">
+      <PlatformLogo platform="rutube" size={14} decorative />Rutube: меньше 5 видео за месяц — 0 баллов</p>
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <span>Типичная ошибка балла:</span>
       {errors.map(([label, value]) => <span key={label} className="bg-background ring-border rounded-md px-2 py-0.5 tabular-nums ring-1">

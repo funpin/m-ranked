@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Equal, Waves, Zap } from "lucide-react";
 import Link from "@/components/native-link";
 import { PlatformLogo } from "@/components/platform-logo";
-import { Glyphs, WeightStrip } from "@/components/rating/formula-visual";
+import { Glyphs, GroupLabel, WeightStrip } from "@/components/rating/formula-visual";
 import { CleanTable, placeShift } from "@/components/rating/clean-table";
 import { OwnTabs } from "@/components/rating/own-tabs";
 import { RatingTabs } from "@/components/rating/rating-tabs";
@@ -31,7 +31,7 @@ function Method({ clean }: { clean: RatingClean }) {
     <div className="space-y-4">
     <WeightStrip weights={{ max: 0.4, vk: 0.3, rutube: 0.3 }} label="Тот же балл соцсетей, что у М-Рейтинга" />
     <div>
-      <p className="mb-2 text-sm">Тот же балл, что у М-Рейтинга, но из VK и MAX вычитаем:</p>
+      <GroupLabel>Тот же балл, что у М-Рейтинга, но из VK и MAX вычитаем</GroupLabel>
       <Glyphs tone="minus" items={[
         { icon: Zap, label: "Пакеты реакций и просмотров", detail: "крупнейший эпизод на посте с явными признаками" },
         { icon: Equal, label: "Ровный отклик с долгим хвостом", detail: "поздние реакции сверх нормы площадки" },

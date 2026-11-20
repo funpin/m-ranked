@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { CalendarDays, Equal, Eye, Heart, Hourglass, Zap } from "lucide-react";
 import Link from "@/components/native-link";
-import { Glyphs, WeightStrip } from "@/components/rating/formula-visual";
+import { Glyphs, GroupLabel, PartsEquation, WeightStrip } from "@/components/rating/formula-visual";
 import { OwnTable } from "@/components/rating/own-table";
 import { OwnTabs } from "@/components/rating/own-tabs";
 import { RatingTabs } from "@/components/rating/rating-tabs";
@@ -30,16 +30,13 @@ function Method({ own }: { own: OwnRating }) {
     <h2 id="own-method" className="font-heading mb-3 text-base font-semibold">Как считается</h2>
     <div className="space-y-4">
     <WeightStrip weights={formula.weights} label="Балл вуза — среднее четырёх площадок поровну" />
+    <PartsEquation subject="Площадка" items={[
+      { icon: CalendarDays, label: "Дни с постами", detail: `100 — от ${formula.activeDays.full.vk} из ${formula.activeDays.perDays}, Rutube от ${formula.activeDays.full.rutube}` },
+      { icon: Eye, label: "Просмотры на студента", detail: "в сравнении с вузами площадки" },
+      { icon: Heart, label: "Реакции на просмотр", detail: "с комментариями и репостами" },
+    ]} />
     <div>
-      <p className="mb-2 text-sm">Балл площадки — среднее трёх частей, каждая от 0 до 100:</p>
-      <Glyphs items={[
-        { icon: CalendarDays, label: "Дни с публикациями", detail: `100 — от ${formula.activeDays.full.vk} дней из ${formula.activeDays.perDays}, у Rutube от ${formula.activeDays.full.rutube}` },
-        { icon: Eye, label: "Просмотры поста на студента", detail: "0 и 100 — нижние и верхние 10 % вузов" },
-        { icon: Heart, label: "Реакции на просмотр", detail: "с комментариями и репостами" },
-      ]} />
-    </div>
-    <div>
-      <p className="mb-2 text-sm">Не засчитываем:</p>
+      <GroupLabel>Не засчитываем</GroupLabel>
       <Glyphs tone="minus" items={[
         { icon: Zap, label: "Пакеты реакций и просмотров" },
         { icon: Hourglass, label: "Поздние реакции сверх нормы площадки" },

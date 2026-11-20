@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { PlatformLogo } from "@/components/platform-logo";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +51,38 @@ export function Glyphs({ items, tone = "neutral" }: {
       </span>
     </li>)}
   </ul>;
+}
+
+/** Подпись группы: тихая метка над значками, без двоеточия. */
+export function GroupLabel({ children }: { children: ReactNode }) {
+  return <p className="text-muted-foreground mb-2 text-xs font-medium">{children}</p>;
+}
+
+/** Формула балла площадки картинкой: «площадка = (часть + часть + часть) ÷ 3».
+ *  Знаки — крупные и тихие, части — значками; на телефоне столбиком с «+» между строк. */
+export function PartsEquation({ subject, items, divisor = 3 }: {
+  subject: ReactNode; items: { icon: LucideIcon; label: string; detail?: string }[]; divisor?: number;
+}) {
+  const sign = "text-muted-foreground/70 text-xl leading-none font-light select-none";
+  return <div data-testid="parts-equation" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+    <span className="flex items-center gap-2 text-sm font-medium whitespace-nowrap">{subject}<span aria-hidden="true" className={sign}>=</span>
+      <span className="text-muted-foreground font-normal sm:hidden">среднее {divisor === 3 ? "трёх" : divisor}</span></span>
+    <span aria-hidden="true" className={cn(sign, "hidden sm:inline")}>(</span>
+    {items.map(({ icon: Icon, label, detail }, index) => <span key={label} className="contents">
+      {index > 0 ? <span aria-hidden="true" className={cn(sign, "hidden sm:inline")}>+</span> : null}
+      <span className="flex min-w-0 items-center gap-2.5">
+        <span className="bg-background text-foreground ring-border grid size-8 shrink-0 place-items-center rounded-full ring-1">
+          <Icon className="size-4" aria-hidden="true" />
+        </span>
+        <span className="leading-tight sm:max-w-52">
+          <span className="block text-sm font-medium">{label}</span>
+          {detail ? <span className="text-muted-foreground block text-xs">{detail}</span> : null}
+        </span>
+      </span>
+    </span>)}
+    <span aria-hidden="true" className={cn(sign, "hidden whitespace-nowrap sm:inline")}>) ÷ {divisor}</span>
+    <span className="sr-only max-sm:hidden">, среднее {divisor} частей</span>
+  </div>;
 }
 
 /** Балл 0–100 полоской цвета площадки; число рядом. Без балла — прочерк. */
