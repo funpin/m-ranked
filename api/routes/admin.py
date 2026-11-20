@@ -570,9 +570,10 @@ async def _legacy_execute(body: LegacyCommand, request: Request, user: Principal
             return "/manage?tab=system&backup_status=requested"
         return "/manage?tab=system&backup_status=unavailable"
     if path == "/manage/m-rating/update":
-        from ..official_rating import refresh
+        from ..official_rating import recount_forecast, refresh
         try:
             recounted = await refresh(request, user.username, correlation, update_coverage=True)
+            await recount_forecast(request.app.state.db)
             # Покрытие пересчитывается не чаще раза в две недели: срезы
             # загружены, а число вузов на главной осталось прежним.
             return "/manage?m_rating_status=" + ("coverage-kept" if recounted is False else "updated")
