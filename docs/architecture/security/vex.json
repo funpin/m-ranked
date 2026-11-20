@@ -4,10 +4,134 @@
   "specVersion": "1.6",
   "version": 1,
   "metadata": {
-    "component": {"type": "application", "name": "m-ranked"},
+    "component": {
+      "type": "application",
+      "name": "m-ranked"
+    },
     "properties": [
-      {"name": "policy", "value": "docs/architecture/security/dependency-policy.md"}
+      {
+        "name": "policy",
+        "value": "docs/architecture/security/dependency-policy.md"
+      }
     ]
   },
-  "vulnerabilities": []
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-126190",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/CVE-2026-126190"
+      },
+      "affects": [
+        {
+          "ref": "requirements/py311/collector.lock"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Полиномиальный разбор при нескольких комбинаторах потомка на чужом HTML. Селекторы сборщика — константы с не более чем одним комбинатором потомка, то есть без роста степени; разбирается только страница t.me/s/ с разметкой Telegram, где автор поста не управляет вложенностью тегов. Окружение py311 ставится на Сервер 1 с Python 3.11.2; soupsieve с исправлением (3.0.2+) требует Python 3.11.5+, поэтому обновление там невозможно до смены Python. В окружении py3.13 (образы, Сервер 2) стоит 4.1.1."
+      },
+      "properties": [
+        {
+          "name": "package",
+          "value": "soupsieve==2.10"
+        },
+        {
+          "name": "owner",
+          "value": "funpin"
+        },
+        {
+          "name": "recorded",
+          "value": "2026-11-16"
+        },
+        {
+          "name": "expires",
+          "value": "2027-02-16"
+        },
+        {
+          "name": "test",
+          "value": "tests/test_collector_selectors.py"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-126191",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/CVE-2026-126191"
+      },
+      "affects": [
+        {
+          "ref": "requirements/py311/collector.lock"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "ReDoS при компиляции селектора из недоверенной строки. Сборщик передаёт в select()/select_one() только строковые константы из кода. Окружение py311 ставится на Сервер 1 с Python 3.11.2; soupsieve с исправлением (3.0.2+) требует Python 3.11.5+, поэтому обновление там невозможно до смены Python. В окружении py3.13 (образы, Сервер 2) стоит 4.1.1."
+      },
+      "properties": [
+        {
+          "name": "package",
+          "value": "soupsieve==2.10"
+        },
+        {
+          "name": "owner",
+          "value": "funpin"
+        },
+        {
+          "name": "recorded",
+          "value": "2026-11-16"
+        },
+        {
+          "name": "expires",
+          "value": "2027-02-16"
+        },
+        {
+          "name": "test",
+          "value": "tests/test_collector_selectors.py"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-126193",
+      "source": {
+        "name": "OSV",
+        "url": "https://osv.dev/vulnerability/CVE-2026-126193"
+      },
+      "affects": [
+        {
+          "ref": "requirements/py311/collector.lock"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Переполнение рекурсии на вложенных псевдоклассах в селекторе. Сборщик передаёт в select()/select_one() только строковые константы без псевдоклассов. Окружение py311 ставится на Сервер 1 с Python 3.11.2; soupsieve с исправлением (3.0.2+) требует Python 3.11.5+, поэтому обновление там невозможно до смены Python. В окружении py3.13 (образы, Сервер 2) стоит 4.1.1."
+      },
+      "properties": [
+        {
+          "name": "package",
+          "value": "soupsieve==2.10"
+        },
+        {
+          "name": "owner",
+          "value": "funpin"
+        },
+        {
+          "name": "recorded",
+          "value": "2026-11-16"
+        },
+        {
+          "name": "expires",
+          "value": "2027-02-16"
+        },
+        {
+          "name": "test",
+          "value": "tests/test_collector_selectors.py"
+        }
+      ]
+    }
+  ]
 }

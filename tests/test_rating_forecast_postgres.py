@@ -1,6 +1,7 @@
 """Снимки прогноза М-Рейтинга на одноразовой базе «Находок»; без неё пропускается.
 
-Применить 0084 к базе перед запуском: psql -f db/migrations/0084_rating_forecast.sql.
+Применить 0084 и 0093 к базе перед запуском: psql -f db/migrations/0084_rating_forecast.sql
+-f db/migrations/0093_rating_formula_v2.sql.
 """
 from __future__ import annotations
 
@@ -61,6 +62,29 @@ def test_formula_v1_matches_the_python_definition(dsn):
     assert row["definition"] == rf.FORMULA_V1
     canonical = json.dumps(rf.FORMULA_V1, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     assert row["source_hash"] == hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def test_formula_v2_matches_the_python_definition(dsn):
+    with _connect(dsn) as connection:
+        rows = connection.execute("SELECT version, definition, status, source_hash FROM rating.formula_definition "
+                                  "WHERE formula_key=%s ORDER BY version", (rf.FORMULA_KEY,)).fetchall()
+    assert [(row["version"], row["status"]) for row in rows] == [(1, "published"), (2, "published")]
+    assert rows[1]["definition"] == rf.FORMULA_V2
+    canonical = json.dumps(rf.FORMULA_V2, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    assert rows[1]["source_hash"] == hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def test_a_v2_snapshot_replaces_v1_as_the_month_forecast(dsn):
+    """После выкатки ночь пишет версию 2: страница берёт снимок месяца по времени,
+    а финализация оставляет последний снимок любой версии."""
+    world = World(dsn, "vk")
+    record(dsn, payload(world.institution, START + timedelta(days=5)))
+    record(dsn, {**payload(world.institution, START + timedelta(days=6), score=61.0), "version": 2})
+    with _connect(dsn) as connection:
+        run = connection.execute(sql.FORECAST_RUN, {"formula_key": rf.FORMULA_KEY, "window_start": START}).fetchone()
+        assert run["version"] == 2
+        connection.execute("SELECT ops_and_admin.finalize_rating_forecast(%s, %s)", (rf.FORMULA_KEY, START))
+    assert [(row["status"]) for row in runs(dsn)] == ["published"]
 
 
 def test_record_accepts_a_running_snapshot_minutes_after_month_start(dsn):
@@ -212,6 +236,28 @@ def test_platform_month_sums_moscow_month_and_mature_posts(dsn):
     assert (row["platform"], row["posts"], row["mature_posts"], row["mature_views"], row["mature_interactions"]) == \
         ("vk", 2, 1, 1000, 40)
     assert (row["viewed_posts"], row["views"], row["interactions"], row["covered"]) == (2, 1010, 41, True)
+
+
+def test_platform_month_counts_rutube_videos_by_upload_date(dsn):
+    """Источник считает порог Rutube по дате загрузки: видео, загруженное в августе и
+    опубликованное в сентябре, в сентябрь не входит; загруженное в сентябре и
+    опубликованное в октябре — входит; без даты загрузки — по дате публикации."""
+    world = World(dsn, "rutube")
+    code = f"t{world.legacy_id}"
+    coded(dsn, world, code)
+    early = world.post(datetime(2026, 9, 5, 9, tzinfo=timezone.utc), {})
+    late = world.post(datetime(2026, 10, 2, 9, tzinfo=timezone.utc), {})
+    world.post(datetime(2026, 9, 10, 9, tzinfo=timezone.utc), {})          # без даты загрузки
+    with _connect(dsn) as connection:
+        connection.execute("UPDATE ingest.publication SET uploaded_at='2026-08-20T09:00:00Z' WHERE id=%s", (early,))
+        connection.execute("UPDATE ingest.publication SET uploaded_at='2026-09-25T09:00:00Z' WHERE id=%s", (late,))
+    row = next(row for row in _platform_month(dsn, *SEPT, SEPT[1]) if row["code"] == code)
+    assert (row["platform"], row["posts"], row["uploaded_posts"]) == ("rutube", 2, 2)
+    vk = World(dsn, "vk")
+    coded(dsn, vk, f"t{vk.legacy_id}")
+    vk.post(datetime(2026, 9, 5, 9, tzinfo=timezone.utc), {})
+    other = next(row for row in _platform_month(dsn, *SEPT, SEPT[1]) if row["code"] == f"t{vk.legacy_id}")
+    assert other["uploaded_posts"] is None
 
 
 def test_platform_month_marks_accounts_added_mid_month_uncovered(dsn):

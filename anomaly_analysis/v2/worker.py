@@ -23,8 +23,8 @@ from .domain import PostSeries
 from .levels import assess, sign_from_payload
 from .norms import NormSet
 from .mature_reference import bundled_reference
-from .schedule import ScheduleConfig, plan, retry_after, stretch_for_lag
-from .series import GAP_FACTOR, HOUR, CollectionCadence
+from .schedule import ScheduleConfig, plan, retry_after, stretch_for_lag, stretch_share
+from .series import AGE_BAND_EDGES, GAP_FACTOR, HOUR, CollectionCadence
 from .store import KINDS_MILESTONES_HOURS, DueRow, PostgresAnomalyStore, SeriesTarget, StateWrite
 from .tail_ledger import build_ledger
 
@@ -32,6 +32,9 @@ PLATFORMS = ("telegram", "vk", "max", "rutube")
 SYNCHRONY_PATTERN = 8
 STREAM_PATTERN = 17
 POLICY_REFRESH_SECONDS = 60.0
+# Свежие посты — младше последней возрастной полосы (7 суток): их интервалы
+# никогда не растягиваются, и их отставание видно читателю.
+FRESH_AGE_SECONDS = float(AGE_BAND_EDGES[3])
 FINAL_ANALYSIS_DAYS = (3, 3650)
 logger = logging.getLogger("anomaly.worker")
 
@@ -92,6 +95,8 @@ class WorkerMetrics:
     seeded: int = 0
     due_backlog: int = 0
     queue_lag_seconds: float = 0.0
+    fresh_due_backlog: int = 0
+    fresh_queue_lag_seconds: float = 0.0
     stretch: float = 1.0
     norm_version: int = 0
     last_batch_size: int = 0
@@ -111,6 +116,8 @@ class WorkerMetrics:
         yield "seeded_total", "counter", {}, self.seeded
         yield "due_backlog", "gauge", {}, self.due_backlog
         yield "queue_lag_seconds", "gauge", {}, self.queue_lag_seconds
+        yield "fresh_due_backlog", "gauge", {}, self.fresh_due_backlog
+        yield "fresh_queue_lag_seconds", "gauge", {}, self.fresh_queue_lag_seconds
         yield "interval_stretch", "gauge", {}, self.stretch
         yield "norm_version", "gauge", {}, self.norm_version
         yield "last_batch_size", "gauge", {}, self.last_batch_size
@@ -140,6 +147,11 @@ class Worker:
         self.metrics.reference_accounts = len(self.reference.account_counts) if self.reference else 0
         self.metrics.reference_expires_at = self.reference.expires_at.timestamp() if self.reference else 0.
         self.norm_version: int | None = None
+        # Самая старая норма, вывод по которой ещё не перепроверяется
+        # (store.norm_recheck_floor); проверяется не чаще POLICY_REFRESH_SECONDS.
+        self.norm_floor: int | None = None
+        self._floor_checked: datetime | None = None
+        self._recheck_scheduled: tuple[int, int] | None = None
         self.norms: dict[str, NormSet] = {}
         self._activity = _AccountCache(config.account_cache_seconds)
         self._subscribers = _AccountCache(config.account_cache_seconds)
@@ -151,9 +163,12 @@ class Worker:
         self._refresh_policy(started)
         self.metrics.seeded += self.store.seed_new(now, self.schedule.seed_seconds, self.config.seed_limit)
         self._refresh_norms(now)
-        lag, backlog = self.store.queue_state(now)
-        stretch = stretch_for_lag(self.schedule, lag)
-        self.metrics.queue_lag_seconds, self.metrics.due_backlog, self.metrics.stretch = lag, backlog, stretch
+        queue = self.store.queue_state(now, now - timedelta(seconds=FRESH_AGE_SECONDS))
+        stretch = stretch_for_lag(self.schedule, queue.lag_seconds)
+        self.metrics.queue_lag_seconds, self.metrics.due_backlog = queue.lag_seconds, queue.backlog
+        self.metrics.fresh_queue_lag_seconds, self.metrics.fresh_due_backlog = (queue.fresh_lag_seconds,
+                                                                                queue.fresh_backlog)
+        self.metrics.stretch = stretch
         due = self.store.claim_due(now, self.config.batch_size)
         if due:
             self._analyze(due, now, stretch)
@@ -176,14 +191,26 @@ class Worker:
 
     def _refresh_norms(self, now: datetime) -> None:
         version = self.store.latest_accepted_norm_version()
-        if version is None or version == self.norm_version:
+        if version is None:
             return
-        self.norms = {platform: norms for platform in PLATFORMS
-                      if (norms := self.store.read_norms(version, platform)) is not None}
-        self.norm_version = version
-        self.metrics.norm_version = version
-        # Новая принятая норма — перепроверка всех незамороженных постов, растянутая по окну.
-        self.store.schedule_norm_recheck(version, now, self.schedule.recheck_window_seconds)
+        changed = version != self.norm_version
+        if changed:
+            self.norms = {platform: norms for platform in PLATFORMS
+                          if (norms := self.store.read_norms(version, platform)) is not None}
+            self.norm_version = version
+            self.metrics.norm_version = version
+        if changed or self._floor_checked is None or \
+                (now - self._floor_checked).total_seconds() >= POLICY_REFRESH_SECONDS:
+            self._floor_checked = now
+            floor = self.store.norm_recheck_floor(now - timedelta(seconds=self.schedule.norm_recheck_after_seconds))
+            self.norm_floor = version if floor is None else min(floor, version)
+        # Перепроверка — только выводов по норме старше границы, растянутая по
+        # окну. Раньше каждая ночная норма ставила на полный анализ все
+        # незамороженные посты (~48 тыс.), хотя меняла 0.2 % выводов.
+        key = (version, self.norm_floor)
+        if key != self._recheck_scheduled:
+            self.store.schedule_norm_recheck(version, self.norm_floor, now, self.schedule.recheck_window_seconds)
+            self._recheck_scheduled = key
 
     def _analyze(self, due: Sequence[DueRow], now: datetime, stretch: float) -> None:
         due = self._postpone_waiting(due, now, stretch)
@@ -281,13 +308,19 @@ class Worker:
                     new_points=new_points, analyzed_before=row.analyzed_at is not None,
                     resumed_after_gap=resumed, stale=stale, silent_seconds=silent, stretch=stretch,
                     norm_recheck=self._norm_recheck(row), tail_ledger_stale=row.tail_ledger_stale,
+                    spread=stretch_share(row.publication_id),
                     reference_checkpoint=(self.reference is not None and platform == self.reference.platform
                         and self.reference.available_at <= published_at < self.reference.expires_at
                         and row.analyzed_at is not None
                         and row.analyzed_at < published_at + timedelta(hours=72) <= now))
 
     def _norm_recheck(self, row: DueRow) -> bool:
-        return self.norm_version is not None and row.norm_version_id != self.norm_version
+        """Вывод поста посчитан по устаревшей норме: старше границы, неизвестной или без нормы."""
+        if self.norm_version is None:
+            return False
+        version = row.norm_version_id
+        return (version is None or version > self.norm_version
+                or (self.norm_floor is not None and version < self.norm_floor))
 
     def _load_accounts(self, accounts: Sequence[UUID], now: datetime, window_start: datetime) -> None:
         clock = time.monotonic()

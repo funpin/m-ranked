@@ -280,6 +280,16 @@ class Progress:
 
 
 @dataclass(frozen=True, slots=True)
+class QueueState:
+    """Очередь: отставание самой старой просрочки и её размер — всей и у постов моложе границы."""
+
+    lag_seconds: float
+    backlog: int
+    fresh_lag_seconds: float
+    fresh_backlog: int
+
+
+@dataclass(frozen=True, slots=True)
 class SeriesTarget:
     publication_id: UUID
     published_at: datetime
@@ -739,14 +749,27 @@ class PostgresAnomalyStore:
                        row["last_point_observed_at"], row["norm_version_id"], int(row["attempts"]),
                        tuple(row["signals"] or ()), row["tail_ledger_version"]) for row in rows]
 
-    def queue_state(self, now: datetime) -> tuple[float, int]:
-        """Отставание самой старой просрочки и размер очереди."""
+    def queue_state(self, now: datetime, fresh_since: datetime) -> QueueState:
+        """Отставание самой старой просрочки и размер очереди — всей и у постов с `fresh_since`.
+
+        Посты берутся свежими первыми, поэтому самая старая просрочка всей
+        очереди — обычно пост 7–30 суток, и при любой непустой очереди её
+        отставание растёт вместе с часами. Свежие посты меряются отдельно:
+        их отставание видно читателю сразу. Оба запроса — только по
+        частичным индексам незамороженных (next_due_at; published_at, next_due_at).
+        """
         with self._factory() as connection:
-            row = connection.execute(
+            total = connection.execute(
                 """SELECT coalesce(extract(epoch FROM %(now)s - min(next_due_at)), 0) AS lag, count(*) AS due
                      FROM analytics.post_anomaly_state
                     WHERE NOT frozen AND next_due_at <= %(now)s""", {"now": now}).fetchone()
-        return max(0.0, float(row["lag"])), int(row["due"])
+            fresh = connection.execute(
+                """SELECT coalesce(extract(epoch FROM %(now)s - min(next_due_at)), 0) AS lag, count(*) AS due
+                     FROM analytics.post_anomaly_state
+                    WHERE NOT frozen AND published_at >= %(since)s AND next_due_at <= %(now)s""",
+                {"now": now, "since": fresh_since}).fetchone()
+        return QueueState(max(0.0, float(total["lag"])), int(total["due"]),
+                          max(0.0, float(fresh["lag"])), int(fresh["due"]))
 
     def postpone(self, items: Sequence[tuple[UUID, datetime]]) -> None:
         """Срок наступил, но новых замеров не хватает: только сдвиг срока."""
@@ -970,22 +993,29 @@ class PostgresAnomalyStore:
         return {row["account_id"]: row["rhythm"]["offsetHours"] if row["rhythm"] and row["rhythm"]["clockKnown"] else None
                 for row in rows}
 
-    def schedule_norm_recheck(self, version_id: int, now: datetime, window_seconds: int) -> int:
-        """Перепроверить незамороженные посты под новой нормой, растянув по окну.
+    def schedule_norm_recheck(self, version_id: int, floor: int, now: datetime, window_seconds: int) -> int:
+        """Перепроверить незамороженные выводы по устаревшей норме, растянув по окну.
 
+        Устаревшая — старше `floor` (самой старой нормы, принятой за срок
+        перепроверки), неизвестная (новее принятой `version_id`) или пустая у
+        уже проанализированного поста; та же граница у worker._norm_recheck.
         Доля окна — первые 32 бита md5 от идентификатора поста, как в
-        schedule.recheck_offset: срок детерминирован, всплеска нет.
+        schedule.recheck_offset: срок детерминирован, всплеска нет. Строка, срок
+        которой и так раньше, не переписывается: повтор после перезапуска
+        работника не тратит запись на каждую строку.
         """
+        target = """%(now)s + make_interval(secs => (('x' || substr(md5(publication_id::text), 1, 8))::bit(32)::bigint
+                        %% %(window)s)::double precision)"""
         with self._factory() as connection:
             rows = connection.execute(
-                """UPDATE analytics.post_anomaly_state
-                      SET next_due_at = least(next_due_at, %(now)s + make_interval(secs =>
-                              (('x' || substr(md5(publication_id::text), 1, 8))::bit(32)::bigint
-                               %% %(window)s)::double precision)),
-                          updated_at = transaction_timestamp()
-                    WHERE NOT frozen AND norm_version_id IS DISTINCT FROM %(version)s
-                   RETURNING publication_id""",
-                {"now": now, "window": window_seconds, "version": version_id}).fetchall()
+                f"""UPDATE analytics.post_anomaly_state
+                       SET next_due_at = {target}, updated_at = transaction_timestamp()
+                     WHERE NOT frozen
+                       AND (norm_version_id < %(floor)s OR norm_version_id > %(version)s
+                            OR norm_version_id IS NULL AND analyzed_at IS NOT NULL)
+                       AND next_due_at > {target}
+                    RETURNING publication_id""",
+                {"now": now, "window": window_seconds, "version": version_id, "floor": floor}).fetchall()
         return len(rows)
 
     def norm_candidates(self, since: datetime, until: datetime) -> list[dict[str, Any]]:
@@ -1013,6 +1043,19 @@ class PostgresAnomalyStore:
                     WHERE status='accepted' AND model_version=%s ORDER BY id DESC LIMIT 1""",
                 (NORM_MODEL_VERSION,)).fetchone()
         return None if row is None else int(row["id"])
+
+    def norm_recheck_floor(self, accepted_after: datetime) -> int | None:
+        """Самая старая принятая норма с `accepted_after`; нет такой — последняя принятая.
+
+        Вывод по норме старше неё считается устаревшим и перепроверяется.
+        """
+        with self._factory() as connection:
+            row = connection.execute(
+                """SELECT coalesce(min(id) FILTER (WHERE coalesce(decided_at, created_at) > %s), max(id)) AS floor
+                     FROM analytics.anomaly_norm_version
+                    WHERE status='accepted' AND model_version=%s""",
+                (accepted_after, NORM_MODEL_VERSION)).fetchone()
+        return None if row is None or row["floor"] is None else int(row["floor"])
 
     def write_norm_version(self, model_version: str, status: NormStatus, norms: Sequence[NormSet], *,
                            reference_failures: Sequence[str] = (), drift: Mapping[str, float] | None = None,

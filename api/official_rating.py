@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import os
 import re
@@ -14,6 +15,8 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 
 from .errors import ApiProblem
+
+logger = logging.getLogger(__name__)
 
 BASE = "https://www.m-rating.ru/"
 CATEGORIES = {"social": "social", "telegram": "tg", "vk": "vk", "max": "ok",
@@ -170,6 +173,25 @@ async def refresh(request, actor: str, correlation: uuid.UUID, *,
     except Exception:
         await _report_failure(database, actor, correlation)
         raise
+
+
+async def recount_forecast(database: Any) -> bool:
+    """Пересчитывает снимки прогноза сразу после загрузки кнопкой.
+
+    Ночное задание (api.tools.rating_forecast, 01:47) ставилось после ночной
+    загрузки официального рейтинга. С 16.10 рейтинг грузит только кнопка, и
+    без этого пересчёта опубликованный месяц становился итоговым на вкладке
+    «Рейтинг» лишь следующей ночью. Ошибка прогноза не отменяет загрузку:
+    официальные данные уже записаны, ночной прогон досчитает.
+    """
+    from .tools import rating_forecast
+
+    try:
+        await rating_forecast.run(database, datetime.now(timezone.utc))
+        return True
+    except Exception as error:
+        logger.error("прогноз М-Рейтинга после загрузки не пересчитан: %s", type(error).__name__)
+        return False
 
 
 async def _update_coverage(database: Any, parsed: dict[str, Any], actor: str,
