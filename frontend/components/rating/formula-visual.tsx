@@ -63,7 +63,7 @@ export function GroupLabel({ children }: { children: ReactNode }) {
 export function PartsEquation({ subject, items, divisor = 3 }: {
   subject: ReactNode; items: { icon: LucideIcon; label: string; detail?: string }[]; divisor?: number;
 }) {
-  const sign = "text-muted-foreground/70 text-xl leading-none font-light select-none";
+  const sign = "text-muted-foreground text-xl leading-none font-light select-none";
   return <div data-testid="parts-equation" className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
     <span className="flex items-center gap-2 text-sm font-medium whitespace-nowrap">{subject}<span aria-hidden="true" className={sign}>=</span>
       <span className="text-muted-foreground font-normal sm:hidden">среднее {divisor === 3 ? "трёх" : divisor}</span></span>
