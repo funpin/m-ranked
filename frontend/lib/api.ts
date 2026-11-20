@@ -149,8 +149,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
     ratingClean(month?: string) {
       return client.GET("/api/v1/rating/clean", { params: { query: month ? { month } : {} } }).then(unwrap);
     },
-    ownRating() {
-      return client.GET("/api/v1/rating/own", {}).then(unwrap);
+    ownRatingMonths() {
+      return client.GET("/api/v1/rating/own/months", {}).then(unwrap);
+    },
+    ownRating(month?: string) {
+      return client.GET("/api/v1/rating/own", { params: { query: month ? { month } : {} } }).then(unwrap);
     },
     sitemapSummary() {
       return client.GET("/api/v1/sitemap", {}).then(unwrap);

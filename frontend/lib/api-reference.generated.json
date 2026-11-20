@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "616e4da6734d7db6028e4317684d57a187a3166f512aae98c043578a71e5fda9",
+  "sourceSha256": "ef71371156fc62bc94ee23f6d7bce1651693f160784455aedd41c5fa4e248c71",
   "version": "1.0.0",
   "operations": [
     {
@@ -1657,19 +1657,63 @@
       ]
     },
     {
+      "operationId": "getOwnRatingMonths",
+      "path": "/api/v1/rating/own/months",
+      "summary": "List months of our own rating",
+      "parameters": [],
+      "response": "RatingForecastMonths",
+      "fields": [
+        {
+          "name": "months",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
       "operationId": "getOwnRating",
       "path": "/api/v1/rating/own",
       "summary": "Read our own rating",
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "month",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "response": "OwnRating",
       "fields": [
+        {
+          "name": "month",
+          "type": "string"
+        },
         {
           "name": "status",
           "type": "string"
         },
         {
-          "name": "questions",
-          "type": "string[]"
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "institutions",
+          "type": "integer"
+        },
+        {
+          "name": "ranked",
+          "type": "integer"
+        },
+        {
+          "name": "formula",
+          "type": "object"
+        },
+        {
+          "name": "rows",
+          "type": "object[]"
         }
       ]
     },

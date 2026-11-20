@@ -64,6 +64,15 @@ test("режим «Факт» неопубликованного месяца о
   await expect(page.getByTestId("rating-table")).toHaveCount(0);
 });
 
+test("прогноз: формула картинкой перед таблицей, Telegram не учитывается", async ({ page }) => {
+  await page.goto("/rating");
+  const method = page.getByTestId("rating-method");
+  await expect(method.getByTestId("weight-strip").locator("figcaption")).toContainText("MAX 40 %, VK 30 %, Rutube 30 %; не учитывается: Telegram");
+  const methodBox = await method.boundingBox();
+  const tableBox = await page.getByTestId("rating-table").boundingBox();
+  expect(methodBox!.y).toBeLessThan(tableBox!.y);
+});
+
 test("прогноз неопубликованного месяца без колонок факта", async ({ page }) => {
   await page.goto("/rating");
   const headers = page.getByTestId("rating-table").getByRole("columnheader");
@@ -71,19 +80,33 @@ test("прогноз неопубликованного месяца без ко
   await expect(headers.filter({ hasText: /факт/i })).toHaveCount(0);
 });
 
-test("«Наша формула» — каркас с открытыми вопросами", async ({ page }) => {
+test("«Наша формула» — открытая формула перед таблицей, места и колонка «Без очистки»", async ({ page }) => {
   await page.goto("/rating/own/formula");
   await expect(page.getByTestId("rating-tabs").getByRole("link", { name: "Наш рейтинг" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("own-tabs").getByRole("link", { name: "Наша формула" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByText("Методика в разработке")).toBeVisible();
-  await expect(page.getByText("Какие площадки входят и с какими весами.")).toBeVisible();
+  const method = page.getByTestId("own-method");
+  await expect(method.getByTestId("weight-strip").locator("figcaption"))
+    .toContainText("Telegram 25 %, VK 25 %, MAX 25 %, Rutube 25 %");
+  await expect(method).not.toContainText("накрутк");
+  const methodBox = await method.boundingBox();
+  const tableBox = await page.getByTestId("own-table").boundingBox();
+  expect(methodBox!.y).toBeLessThan(tableBox!.y);
+  await method.getByText("Пороги и правила").click();
+  await expect(page.getByTestId("own-thresholds")).toContainText("0,108 → 1,33");
+  await expect(page.getByTestId("own-status")).toContainText("Месяц не закончен, данные на 21.11");
+  const rows = page.getByTestId("own-row");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(2)).toContainText("Университет с пакетами реакций");
+  await expect(rows.nth(2).getByLabel("без очистки выше на 1")).toBeAttached();
+  await expect(rows.nth(1).getByTitle("Telegram: собрано слишком мало дней, в среднее не входит")).toBeAttached();
 });
 
 test("«М-Рейтинг без накрутки» — формула перед таблицей, места и что убрано", async ({ page }) => {
   await page.goto("/rating/own");
   await expect(page.getByTestId("own-tabs").getByRole("link", { name: "М-Рейтинг без накрутки" })).toHaveAttribute("aria-current", "page");
   const method = page.getByTestId("clean-method");
-  await expect(method).toContainText("соцсети = 0.4 × MAX + 0.3 × VK + 0.3 × Rutube");
+  await expect(method.getByTestId("weight-strip")).toContainText("MAX 40 %");
+  await expect(method).toContainText("Пакеты реакций и просмотров");
   // Пояснение стоит перед таблицей.
   const methodBox = await method.boundingBox();
   const tableBox = await page.getByTestId("clean-table").boundingBox();
@@ -94,6 +117,7 @@ test("«М-Рейтинг без накрутки» — формула пере�
   await expect(rows.nth(2).getByLabel("ниже на 19")).toBeVisible();
   await expect(rows.nth(2).getByTestId("rutube-batch")).toContainText("Rutube: 4 из 5 видео загружены 16 октября");
   await expect(rows.nth(0).getByTestId("rutube-batch")).toHaveCount(0);
+  await expect(rows.nth(2)).toContainText("реакции −63 %");
   await page.getByTestId("clean-filter").getByRole("link", { name: "Только со сдвигом" }).click();
   await expect(page).toHaveURL(/filter=changed/);
   await expect(page.getByTestId("clean-row")).toHaveCount(2);
