@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from api import rating_forecast as rf
+from api import rating_clean as rc, rating_forecast as rf
 from api.tools import rating_forecast as job
 
 
@@ -15,6 +15,7 @@ class FakeDatabase:
     def __init__(self, periods, scores=None, months=None):
         self.periods, self.scores, self.months = periods, scores or {}, months or []
         self.recorded, self.finalized = [], []
+        self.inflation: dict[bool, list[dict]] = {}
 
     async def admin_fetch_all(self, query, params=None):
         if "official_periods" in query:
@@ -34,9 +35,19 @@ class FakeDatabase:
         raise AssertionError(query)
 
     async def fetch_all(self, query, params=None):
+        if "post_anomaly_state" in query or "account_tail_profile" in query:
+            return self.inflation.get("account_tail_profile" in query, [])
         if "WITH coded" in query:
             return self.months
         return []
+
+    @property
+    def forecasts(self):
+        return [body for body in self.recorded if body["formulaKey"] == rf.FORMULA_KEY]
+
+    @property
+    def cleans(self):
+        return [body for body in self.recorded if body["formulaKey"] == rc.CLEAN_KEY]
 
 
 SCORES = [{"code": "37", "name": "Вуз 37", "social_score": 46.9, "max_score": 60.4, "vk_score": 56.7,
@@ -55,7 +66,7 @@ def test_parse_retrospective():
 def test_job_records_current_month_with_extrapolation_and_finalizes_published():
     database = FakeDatabase(["Август 2026", "Сентябрь 2026"], {"Сентябрь 2026": SCORES}, MONTH_ROWS)
     asyncio.run(job.run(database, datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
-    [body] = database.recorded
+    [body] = database.forecasts
     assert body["parameters"]["status"] == "running" and body["parameters"]["basePeriod"] == "Сентябрь 2026"
     # 16 октября 01:10 по Москве — прошло 15 суток и 70 минут.
     elapsed = 15 + 70 / 1440
@@ -81,9 +92,9 @@ def test_job_retrospective_uses_the_previous_published_month():
                             {"Июль 2026": SCORES, "Август 2026": SCORES}, MONTH_ROWS)
     asyncio.run(job.run(database, datetime(2026, 10, 16, 22, tzinfo=timezone.utc),
                         retrospective=[date(2026, 8, 1), date(2026, 9, 1)]))
-    assert [(body["parameters"]["status"], body["parameters"]["basePeriod"]) for body in database.recorded] == \
+    assert [(body["parameters"]["status"], body["parameters"]["basePeriod"]) for body in database.forecasts] == \
         [("retrospective", "Июль 2026"), ("retrospective", "Август 2026")]
-    assert all(body["parameters"]["postsScale"] == 1.0 for body in database.recorded)
+    assert all(body["parameters"]["postsScale"] == 1.0 for body in database.forecasts)
 
 
 def test_definer_functions_read_the_revision_without_foreign_functions():
@@ -105,7 +116,7 @@ def test_job_reads_the_month_before_base_and_v2_keeps_the_formula():
     database = FakeDatabase(["Август 2026", "Сентябрь 2026"],
                             {"Август 2026": zero_max, "Сентябрь 2026": zero_max}, rows)
     asyncio.run(job.run(database, datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
-    [body] = database.recorded
+    [body] = database.forecasts
     assert body["results"][0]["explanation"]["categories"]["max"]["source"] == "formula"
     assert body["parameters"]["priorPeriod"] == "Август 2026"
 
@@ -119,3 +130,34 @@ def test_job_records_snapshots_with_the_current_formula():
     rutube = body["results"][0]["explanation"]["platforms"]["rutube"]
     # Видео по дате загрузки: 6, а не 4 опубликованных.
     assert rutube["metrics"]["posts"] == 6 and rutube["source"] == "formula"
+
+
+def test_job_records_the_month_without_inflation_beside_the_forecast():
+    database = FakeDatabase(["Август 2026", "Сентябрь 2026"], {"Сентябрь 2026": SCORES, "Август 2026": SCORES},
+                            MONTH_ROWS)
+    # Пакеты: 700 из 1400 реакций зрелых постов VK вуза 37.
+    database.inflation[False] = [{"code": "37", "platform": "vk", "mature_posts": 70, "mature_views": 0,
+                                  "mature_reactions": 700, "views": 0, "reactions": 800}]
+    asyncio.run(job.run(database, datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
+    [forecast] = database.forecasts
+    cleans = {body["parameters"]["period"]: body for body in database.cleans}
+    # Текущий месяц — от прогноза, опубликованные — от факта (ретроспектива).
+    assert cleans["Октябрь 2026"]["parameters"]["basis"] == "forecast"
+    assert cleans["Октябрь 2026"]["parameters"]["status"] == "running"
+    assert {cleans[period]["parameters"]["basis"] for period in ("Август 2026", "Сентябрь 2026")} == {"fact"}
+    assert cleans["Сентябрь 2026"]["parameters"]["status"] == "retrospective"
+    vk = cleans["Октябрь 2026"]["results"][0]["explanation"]["platforms"]["vk"]
+    assert vk["removedReactions"] == 700 and vk["cleanScore"] < vk["rawScore"]
+    assert cleans["Октябрь 2026"]["results"][0]["score"] < forecast["results"][0]["score"]
+
+
+def test_a_failing_clean_snapshot_does_not_stop_the_forecast(caplog):
+    class Broken(FakeDatabase):
+        async def fetch_all(self, query, params=None):
+            if "post_anomaly_state" in query:
+                raise RuntimeError("boom")
+            return await super().fetch_all(query, params)
+    database = Broken(["Август 2026", "Сентябрь 2026"], {"Сентябрь 2026": SCORES}, MONTH_ROWS)
+    asyncio.run(job.run(database, datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
+    assert len(database.forecasts) == 1 and database.cleans == []
+    assert "снимок без накрутки" in caplog.text

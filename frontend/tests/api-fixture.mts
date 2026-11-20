@@ -189,6 +189,28 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
 // Панель сравнения: детерминированные данные на все вузы фикстуры (в замере
 // производительности — 207) и четыре площадки. Числа различаются так, чтобы
 // рейтинг, карта и выделение имели что показывать.
+function ratingClean(month: string): Schema["RatingClean"] {
+  const cell = (score: number, rank: number, baseScore: number, baseRank: number) => ({ score, rank, baseScore, baseRank });
+  const platform = (removedReactions: number, smartReactions: number, removedViews: number, rawScore: number, cleanScore: number,
+    smart: Schema["RatingCleanPlatform"]["smart"] = null): Schema["RatingCleanPlatform"] =>
+    ({ views: 900000, interactions: 30000, removedViews, removedReactions, smartReactions, rawScore, cleanScore, smart });
+  const row = (id: number, name: string, social: [number, number, number, number], vk: Schema["RatingCleanPlatform"] | null,
+    max: Schema["RatingCleanPlatform"] | null): Schema["RatingCleanRow"] => ({
+    institutionId: uuid(9, id), legacyId: id, name, shortName: null,
+    categories: { social: cell(...social), vk: cell(60, 20, 60, 20), max: cell(60, 20, 60, 20), rutube: cell(30, 50, 30, 50) },
+    platforms: { vk, max },
+  });
+  return { month, status: "retrospective", period: month === "2026-09" ? "Сентябрь 2026" : "Октябрь 2026", basis: "fact",
+    basisPeriod: month === "2026-09" ? "Сентябрь 2026" : "Октябрь 2026", asOf: "2026-11-17T20:00:00Z", formulaVersion: 1,
+    baseFormulaVersion: 2, rows: [
+      row(1, "Университет без накрутки", [65.4, 6, 65.4, 7], platform(0, 0, 0, 70, 70), platform(0, 0, 0, 72, 72)),
+      row(2, "Университет с пакетами реакций", [58.4, 25, 68.6, 6], platform(19000, 0, 130000, 76.9, 61.4),
+        platform(13000, 0, 44000, 75.4, 61.6)),
+      row(3, "Университет с ровным откликом", [80.1, 4, 81.0, 4], platform(0, 6600, 0, 88.5, 87.0, null),
+        platform(0, 7500, 0, 83.2, 83.2, { evenness: 0.007, medianReactions: 283, tailRatio: 1.46, tailP90: 0.75 })),
+    ] };
+}
+
 function ratingForecast(month: string): Schema["RatingForecast"] {
   const retrospective = month === "2026-09";
   const base = (rank: number, source: Schema["RatingForecastCell"]["source"] = "formula") => ({
@@ -572,6 +594,11 @@ const server = createServer(async (request, response) => {
     { month: "2026-09", status: "retrospective", asOf: "2026-10-16T22:10:00Z" },
   ] } satisfies Schema["RatingForecastMonths"]);
   if (url.pathname === "/api/v1/rating/forecast") return json(ratingForecast(url.searchParams.get("month") ?? "2026-10"));
+  if (url.pathname === "/api/v1/rating/clean/months") return json({ months: [
+    { month: "2026-10", status: "retrospective", asOf: "2026-11-17T20:00:00Z" },
+    { month: "2026-09", status: "retrospective", asOf: "2026-11-17T20:00:00Z" },
+  ] } satisfies Schema["RatingForecastMonths"]);
+  if (url.pathname === "/api/v1/rating/clean") return json(ratingClean(url.searchParams.get("month") ?? "2026-10"));
   if (url.pathname === "/api/v1/rating/own") return json({ status: "no_methodology",
     questions: ["Какие площадки входят и с какими весами."] } satisfies Schema["OwnRating"]);
   if (url.pathname === "/api/v1/sitemap") return json({ publicationPages: 1, publications: 2, datasetRevision: revision, asOf,

@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "71121436ad04bc241a0e7e60bcccf3ebaf9b68a0f86bbfb1ebdf5c935103f3f3",
+  "sourceSha256": "d6f8e7525eba5f7dc8589aa4a390608bf2f1821b0d2c36ec51903a49a7d39575",
   "version": "1.0.0",
   "operations": [
     {
@@ -1584,6 +1584,71 @@
         {
           "name": "errors",
           "type": "object"
+        },
+        {
+          "name": "rows",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getRatingCleanMonths",
+      "path": "/api/v1/rating/clean/months",
+      "summary": "List months of the M-Rating without inflation",
+      "parameters": [],
+      "response": "RatingForecastMonths",
+      "fields": [
+        {
+          "name": "months",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getRatingClean",
+      "path": "/api/v1/rating/clean",
+      "summary": "Read the M-Rating social ranking without inflation",
+      "parameters": [
+        {
+          "name": "month",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "RatingClean",
+      "fields": [
+        {
+          "name": "month",
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "basis",
+          "type": "string"
+        },
+        {
+          "name": "basisPeriod",
+          "type": "string"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "formulaVersion",
+          "type": "integer"
+        },
+        {
+          "name": "baseFormulaVersion",
+          "type": "integer"
         },
         {
           "name": "rows",

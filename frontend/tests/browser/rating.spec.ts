@@ -71,9 +71,29 @@ test("прогноз неопубликованного месяца без ко
   await expect(headers.filter({ hasText: /факт/i })).toHaveCount(0);
 });
 
-test("«Наш рейтинг» — каркас с открытыми вопросами", async ({ page }) => {
-  await page.goto("/rating/own");
+test("«Наша формула» — каркас с открытыми вопросами", async ({ page }) => {
+  await page.goto("/rating/own/formula");
   await expect(page.getByTestId("rating-tabs").getByRole("link", { name: "Наш рейтинг" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("own-tabs").getByRole("link", { name: "Наша формула" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("Методика в разработке")).toBeVisible();
   await expect(page.getByText("Какие площадки входят и с какими весами.")).toBeVisible();
 });
+
+test("«М-Рейтинг без накрутки» — формула перед таблицей, места и что убрано", async ({ page }) => {
+  await page.goto("/rating/own");
+  await expect(page.getByTestId("own-tabs").getByRole("link", { name: "М-Рейтинг без накрутки" })).toHaveAttribute("aria-current", "page");
+  const method = page.getByTestId("clean-method");
+  await expect(method).toContainText("соцсети = 0.4 × MAX + 0.3 × VK + 0.3 × Rutube");
+  // Пояснение стоит перед таблицей.
+  const methodBox = await method.boundingBox();
+  const tableBox = await page.getByTestId("clean-table").boundingBox();
+  expect(methodBox!.y).toBeLessThan(tableBox!.y);
+  const rows = page.getByTestId("clean-row");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(2)).toContainText("Университет с пакетами реакций");
+  await expect(rows.nth(2).getByLabel("ниже на 19")).toBeVisible();
+  await page.getByTestId("clean-filter").getByRole("link", { name: "Только со сдвигом" }).click();
+  await expect(page).toHaveURL(/filter=changed/);
+  await expect(page.getByTestId("clean-row")).toHaveCount(2);
+});
+
