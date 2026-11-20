@@ -20,6 +20,18 @@ export function normalizeCategory(raw: string | string[] | undefined): RatingCat
   return RATING_CATEGORIES.find((item) => item.value === value)?.value ?? "social";
 }
 
+/** Чья сторона таблицы: наш прогноз или опубликованный факт. */
+export type RatingView = "forecast" | "fact";
+
+export const RATING_VIEWS = [
+  { value: "forecast", label: "Прогноз" },
+  { value: "fact", label: "Факт" },
+] as const satisfies readonly { value: RatingView; label: string }[];
+
+export function normalizeView(raw: string | string[] | undefined): RatingView {
+  return single(raw) === "fact" ? "fact" : "forecast";
+}
+
 export function normalizeMonth(raw: string | string[] | undefined): string | null {
   const value = single(raw);
   return value && MONTH.test(value) ? value : null;
@@ -54,9 +66,35 @@ export function rankDelta(cell: RatingForecastCell): number | null {
   return cell.baseRank === null ? null : cell.baseRank - cell.rank;
 }
 
-export function rowsFor(rows: RatingForecastRow[], category: RatingCategory): RatingForecastRow[] {
-  return [...rows].sort((left, right) => left.categories[category].rank - right.categories[category].rank
-    || left.name.localeCompare(right.name, "ru"));
+/** Место текущей стороны: прогнозное или фактическое (null — факта нет). */
+export function viewRank(cell: RatingForecastCell, view: RatingView): number | null {
+  return view === "fact" ? cell.actualRank : cell.rank;
+}
+
+export function viewScore(cell: RatingForecastCell, view: RatingView): number | null {
+  return view === "fact" ? cell.actualScore : cell.score;
+}
+
+/** Δ: на сколько мест выше места прошлого опубликованного месяца — по прогнозу или по факту. */
+export function monthShift(cell: RatingForecastCell, view: RatingView): number | null {
+  const current = viewRank(cell, view);
+  return cell.baseRank === null || current === null ? null : cell.baseRank - current;
+}
+
+/** ±: на сколько мест другая сторона выше текущей. В прогнозе — факт против
+ *  прогноза, в факте — прогноз против факта; плюс — место лучше. */
+export function placeGap(cell: RatingForecastCell, view: RatingView): number | null {
+  if (cell.actualRank === null) return null;
+  return view === "fact" ? cell.actualRank - cell.rank : cell.rank - cell.actualRank;
+}
+
+export function signed(value: number): string {
+  return value > 0 ? `+${value}` : value < 0 ? `−${-value}` : "0";
+}
+
+export function rowsFor(rows: RatingForecastRow[], category: RatingCategory, view: RatingView = "forecast"): RatingForecastRow[] {
+  const place = (row: RatingForecastRow) => viewRank(row.categories[category], view) ?? Number.POSITIVE_INFINITY;
+  return [...rows].sort((left, right) => place(left) - place(right) || left.name.localeCompare(right.name, "ru"));
 }
 
 export function scatterPoints(rows: RatingForecastRow[], category: RatingCategory) {
@@ -79,6 +117,12 @@ export function monthLabel(month: string): string {
 export function stripPosition(rank: number, total: number): number {
   if (total <= 1) return 0;
   return Math.min(100, Math.max(0, ((rank - 1) / (total - 1)) * 100));
+}
+
+/** Ячейка на неполных данных: помечается «*» перед числом. Нет аккаунта — не
+ *  неполнота: 0, как в официальном рейтинге. */
+export function isIncomplete(cell: RatingForecastCell): boolean {
+  return cell.source === "fallback" || cell.source === "partial" || cell.source === "source_zero";
 }
 
 /** Почему в ячейке не обычный расчёт по формуле; null — обычный. */
