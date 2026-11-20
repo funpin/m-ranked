@@ -28,7 +28,7 @@ from typing import Any, Awaitable, Callable
 from zoneinfo import ZoneInfo
 
 from api import server_monitor as monitor
-from api.system_overview import PROFILE_B_FRESHNESS, cpu_percent, pipeline
+from api.system_overview import PROFILE_B_FRESHNESS, analysis_queue, cpu_percent, pipeline
 from operations.storage import hostinfo
 
 from .emoji import banner, icon
@@ -298,11 +298,13 @@ class ServerMonitor:
             return LIGHT["unknown"] if seconds is None else LIGHT["ok"] if seconds <= limit else \
                 LIGHT["warn"] if seconds <= 2 * limit else LIGHT["fail"]
 
-        lag = values.get("analysisLagSeconds")
+        analysis, _detail = analysis_queue((latest or {}).get("pipeline") or {})
+        lag, fresh = values.get("analysisLagSeconds"), ((latest or {}).get("pipeline") or {}).get("analysisFreshLag")
         lines += ["", _section("ПРОЦЕССЫ"),
                   f"{light(age('ingestAcceptedAt'), 1200)} Приём с сборщиков · пакет {ago(age('ingestAcceptedAt'))}",
-                  f"{light(lag, 3 * 3600)} Анализ · очередь {values.get('analysisBacklog') or 0:.0f}, "
-                  f"отставание {length(lag)}",
+                  f"{LIGHT[analysis]} Анализ · очередь {values.get('analysisBacklog') or 0:.0f}, "
+                  + (f"отставание {length(lag)}" if fresh is None
+                     else f"свежие {length(fresh)}, вся {length(lag)}"),
                   f"{light(age('normsRunAt'), 26 * 3600)} Пересчёт норм · {ago(age('normsRunAt'))}",
                   f"{light(age('backupAt'), 36 * 3600)} Резервная копия · {ago(age('backupAt'))}"]
         lines += self._tasks(item["row"], now)

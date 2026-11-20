@@ -143,9 +143,11 @@ def pipeline(now: float) -> dict[str, Any]:
         found = [value for name, value in values.items() if name.split("{")[0] == prefix]
         return round((now - max(found)) / 60, 1) if found else None
 
-    lag = next((value for name, value in values.items() if name == "mranked_anomaly_queue_lag_seconds"), None)
+    lag = values.get("mranked_anomaly_queue_lag_seconds")
+    fresh = values.get("mranked_anomaly_fresh_queue_lag_seconds")
     return {"ingestMinutesAgo": age("mranked_transfer_ingest_last_accepted_unixtime"),
             "analysisLagMinutes": round(lag / 60, 1) if lag is not None else None,
+            "analysisFreshLagMinutes": round(fresh / 60, 1) if fresh is not None else None,
             "analysisBacklog": values.get("mranked_anomaly_due_backlog"),
             "backupHoursAgo": (round(a / 60, 1) if (a := age("mranked_backup_last_success_unixtime")) is not None else None),
             "normsHoursAgo": (round(a / 60, 1) if (a := age("mranked_anomaly_norm_last_run_unixtime")) is not None else None),
@@ -257,8 +259,16 @@ def problems(report: dict[str, Any]) -> list[str]:
     pipe = report.get("pipeline") or {}
     if (pipe.get("ingestMinutesAgo") or 0) > 20:
         found.append(f"пакеты с Сервера 1 не приходят {pipe['ingestMinutesAgo']} мин")
-    if (pipe.get("analysisLagMinutes") or 0) > 180:
-        found.append(f"анализ отстаёт на {pipe['analysisLagMinutes']} мин")
+    # Свежие посты идут первыми; вся очередь при нагрузке законно ждёт до 12 ч
+    # (растянутый интервал постов 7–30 суток). Без раздельной метрики — как раньше.
+    if pipe.get("analysisFreshLagMinutes") is None:
+        if (pipe.get("analysisLagMinutes") or 0) > 180:
+            found.append(f"анализ отстаёт на {pipe['analysisLagMinutes']} мин")
+    else:
+        if pipe["analysisFreshLagMinutes"] > 180:
+            found.append(f"свежие посты ждут анализа {pipe['analysisFreshLagMinutes']} мин")
+        if (pipe.get("analysisLagMinutes") or 0) > 720:
+            found.append(f"посты старше недели ждут анализа {pipe['analysisLagMinutes']} мин")
     if pipe.get("backupHoursAgo") is None or pipe["backupHoursAgo"] > 36:
         found.append(f"резервной копии нет {pipe.get('backupHoursAgo')} ч")
     store = report.get("storage") or {}

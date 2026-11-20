@@ -174,6 +174,32 @@ def pipeline(latest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_STATES = ("unknown", "ok", "warn", "fail")
+
+
+def _grade(seconds: float, ok: float, warn: float) -> str:
+    return "ok" if seconds <= ok else "warn" if seconds <= warn else "fail"
+
+
+def analysis_queue(values: dict[str, Any]) -> tuple[str, str]:
+    """Состояние очереди анализа по метрикам снимка: (ok|warn|fail|unknown, подпись).
+
+    Свежие посты (моложе недели) идут первыми, и их отставание видит читатель:
+    норма — до часа. Самая старая просрочка всей очереди — почти всегда пост
+    7–30 суток, чей интервал при нагрузке растягивается до 12 ч: это её норма.
+    Без раздельной метрики (работник до 20.11.2026) — прежние 3/6 ч по всей очереди.
+    """
+    lag = _number(values.get("analysisLag"))
+    backlog = _number(values.get("analysisBacklog")) or 0
+    if lag is None:
+        return "unknown", "метрики нет"
+    fresh = _number(values.get("analysisFreshLag"))
+    if fresh is None:
+        return _grade(lag, 3 * 3600, 6 * 3600), f"отставание {_minutes(lag)}, в очереди {backlog:.0f}"
+    state = max(_grade(fresh, 3600, 3 * 3600), _grade(lag, 12 * 3600, 24 * 3600), key=_STATES.index)
+    return state, f"свежие посты — {_minutes(fresh)}, вся очередь — {_minutes(lag)}, в очереди {backlog:.0f}"
+
+
 def _check(key: str, label: str, state: str, detail: str) -> dict[str, str]:
     return {"key": key, "label": label, "state": state, "detail": detail}
 
@@ -214,10 +240,7 @@ def checks(now: float, sampled_at: float | None, latest: dict[str, Any] | None,
     result.append(_check("ingest", "Приём с Сервера 1",
                          "unknown" if ingest_age is None else "ok" if ingest_age <= 1200 else "warn" if ingest_age <= 3600 else "fail",
                          "метрики нет" if ingest_age is None else f"последний пакет {_minutes(ingest_age)} назад"))
-    lag = values["analysisLagSeconds"]
-    result.append(_check("analysis", "Очередь анализа",
-                         "unknown" if lag is None else "ok" if lag <= 3 * 3600 else "warn" if lag <= 6 * 3600 else "fail",
-                         "метрики нет" if lag is None else f"отставание {_minutes(lag)}, в очереди {values['analysisBacklog'] or 0:.0f}"))
+    result.append(_check("analysis", "Очередь анализа", *analysis_queue(latest.get("pipeline") or {})))
     failed = (latest.get("units") or {}).get("failed") or []
     result.append(_check("units", "Службы", "fail" if failed else "ok",
                          ", ".join(failed) if failed else "все службы работают"))

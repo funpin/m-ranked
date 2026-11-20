@@ -79,10 +79,13 @@ def test_pipeline_metrics_pick_latest_and_sum_labels() -> None:
         'mranked_anomaly_analyses_total{platform="vk"}': 3.0,
         'mranked_anomaly_analyses_total{platform="max"}': 4.0,
         "mranked_anomaly_queue_lag_seconds": 60.0,
+        "mranked_anomaly_fresh_queue_lag_seconds": 5.0,
+        "mranked_anomaly_fresh_due_backlog": 2.0,
     }
     result = ops_sample.pipeline(values)
     assert result["ingestAcceptedAt"] == 1000.0 and result["analyses"] == 7.0
     assert result["analysisLag"] == 60.0 and result["backupAt"] is None
+    assert result["analysisFreshLag"] == 5.0 and result["analysisFreshBacklog"] == 2.0
 
 
 def test_directory_size_takes_du_total_even_when_parts_are_unreadable(tmp_path: Path) -> None:
