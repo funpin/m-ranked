@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "71121436ad04bc241a0e7e60bcccf3ebaf9b68a0f86bbfb1ebdf5c935103f3f3",
+  "sourceSha256": "ef71371156fc62bc94ee23f6d7bce1651693f160784455aedd41c5fa4e248c71",
   "version": "1.0.0",
   "operations": [
     {
@@ -1592,19 +1592,128 @@
       ]
     },
     {
-      "operationId": "getOwnRating",
-      "path": "/api/v1/rating/own",
-      "summary": "Read our own rating",
+      "operationId": "getRatingCleanMonths",
+      "path": "/api/v1/rating/clean/months",
+      "summary": "List months of the M-Rating without inflation",
       "parameters": [],
-      "response": "OwnRating",
+      "response": "RatingForecastMonths",
       "fields": [
+        {
+          "name": "months",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getRatingClean",
+      "path": "/api/v1/rating/clean",
+      "summary": "Read the M-Rating social ranking without inflation",
+      "parameters": [
+        {
+          "name": "month",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "RatingClean",
+      "fields": [
+        {
+          "name": "month",
+          "type": "string"
+        },
         {
           "name": "status",
           "type": "string"
         },
         {
-          "name": "questions",
-          "type": "string[]"
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "basis",
+          "type": "string"
+        },
+        {
+          "name": "basisPeriod",
+          "type": "string"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "formulaVersion",
+          "type": "integer"
+        },
+        {
+          "name": "baseFormulaVersion",
+          "type": "integer"
+        },
+        {
+          "name": "rows",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getOwnRatingMonths",
+      "path": "/api/v1/rating/own/months",
+      "summary": "List months of our own rating",
+      "parameters": [],
+      "response": "RatingForecastMonths",
+      "fields": [
+        {
+          "name": "months",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getOwnRating",
+      "path": "/api/v1/rating/own",
+      "summary": "Read our own rating",
+      "parameters": [
+        {
+          "name": "month",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "OwnRating",
+      "fields": [
+        {
+          "name": "month",
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "institutions",
+          "type": "integer"
+        },
+        {
+          "name": "ranked",
+          "type": "integer"
+        },
+        {
+          "name": "formula",
+          "type": "object"
+        },
+        {
+          "name": "rows",
+          "type": "object[]"
         }
       ]
     },

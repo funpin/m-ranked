@@ -189,6 +189,52 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
 // Панель сравнения: детерминированные данные на все вузы фикстуры (в замере
 // производительности — 207) и четыре площадки. Числа различаются так, чтобы
 // рейтинг, карта и выделение имели что показывать.
+function ratingClean(month: string): Schema["RatingClean"] {
+  const cell = (score: number, rank: number, baseScore: number, baseRank: number) => ({ score, rank, baseScore, baseRank });
+  const platform = (removedReactions: number, smartReactions: number, removedViews: number, rawScore: number, cleanScore: number,
+    smart: Schema["RatingCleanPlatform"]["smart"] = null): Schema["RatingCleanPlatform"] =>
+    ({ views: 900000, interactions: 30000, removedViews, removedReactions, smartReactions, rawScore, cleanScore, smart });
+  const row = (id: number, name: string, social: [number, number, number, number], vk: Schema["RatingCleanPlatform"] | null,
+    max: Schema["RatingCleanPlatform"] | null): Schema["RatingCleanRow"] => ({
+    institutionId: uuid(9, id), legacyId: id, name, shortName: null,
+    categories: { social: cell(...social), vk: cell(60, 20, 60, 20), max: cell(60, 20, 60, 20), rutube: cell(30, 50, 30, 50) },
+    platforms: { vk, max }, rutubeBatch: id === 2 ? { videos: 5, batch: 4, day: "2026-10-16", medianViews: 7 } : null,
+  });
+  return { month, status: "retrospective", period: month === "2026-09" ? "Сентябрь 2026" : "Октябрь 2026", basis: "fact",
+    basisPeriod: month === "2026-09" ? "Сентябрь 2026" : "Октябрь 2026", asOf: "2026-11-17T20:00:00Z", formulaVersion: 1,
+    baseFormulaVersion: 2, rows: [
+      row(1, "Университет без накрутки", [65.4, 6, 65.4, 7], platform(0, 0, 0, 70, 70), platform(0, 0, 0, 72, 72)),
+      row(2, "Университет с пакетами реакций", [58.4, 25, 68.6, 6], platform(19000, 0, 130000, 76.9, 61.4),
+        platform(13000, 0, 44000, 75.4, 61.6)),
+      row(3, "Университет с ровным откликом", [80.1, 4, 81.0, 4], platform(0, 6600, 0, 88.5, 87.0, null),
+        platform(0, 7500, 0, 83.2, 83.2, { evenness: 0.007, medianReactions: 283, tailRatio: 1.46, tailP90: 0.75 })),
+    ] };
+}
+
+function ownRating(): Schema["OwnRating"] {
+  const metrics = (posts: number, activeDays: number, removedInteractions = 0, evenCapped = false): Schema["OwnRatingPlatformMetrics"] =>
+    ({ posts, activeDays, coveredDays: 20.9, avgViews: 1200, students: 8000, reach: 0.15, erv: 0.021, removedViews: 0,
+      removedInteractions, evenCapped });
+  const platform = (score: number, rawScore = score, removed = 0, even = false): Schema["OwnRatingPlatform"] =>
+    ({ source: "formula", score, rawScore, subscores: { activity: 100, reach: score, engagement: score - 10 }, metrics: metrics(60, 18, removed, even) });
+  const missing = (source: "no_account" | "no_posts" | "no_data"): Schema["OwnRatingPlatform"] =>
+    ({ source, score: source === "no_data" ? null : 0, rawScore: source === "no_data" ? null : 0, subscores: null, metrics: null });
+  const row = (id: number, name: string, rank: number, score: number, rawRank: number, rawScore: number, partial: boolean,
+    platforms: Schema["OwnRatingRow"]["platforms"]): Schema["OwnRatingRow"] =>
+    ({ institutionId: uuid(8, id), legacyId: id, name, shortName: null, rank, score, rawRank, rawScore, partial, platforms });
+  const formula = { version: 1, weights: { telegram: 0.25, vk: 0.25, max: 0.25, rutube: 0.25 },
+    activeDays: { perDays: 30, full: { telegram: 24, vk: 24, max: 24, rutube: 8 } },
+    reachPerStudent: { telegram: { low: 0.065, high: 0.42 }, vk: { low: 0.108, high: 1.33 }, max: { low: 0.038, high: 0.27 }, rutube: { low: 0.0014, high: 0.14 } },
+    erv: { telegram: { low: 0.0085, high: 0.036 }, vk: { low: 0.009, high: 0.03 }, max: { low: 0.012, high: 0.05 }, rutube: { low: 0.0015, high: 0.038 } },
+    minPosts: { telegram: 8, vk: 8, max: 8, rutube: 4 } };
+  return { month: "2026-11", status: "running", period: "Ноябрь 2026", asOf: "2026-11-20T22:47:00Z", institutions: 4, ranked: 3, formula, rows: [
+    row(1, "Университет на четырёх площадках", 1, 78.4, 1, 78.4, false, { telegram: platform(80), vk: platform(78), max: platform(76), rutube: platform(80) }),
+    row(3, "Университет без Telegram", 2, 60.1, 3, 60.1, true, { telegram: missing("no_data"), vk: platform(82), max: platform(80), rutube: platform(18) }),
+    row(2, "Университет с пакетами реакций", 3, 55.2, 2, 70.3, false, { telegram: platform(60, 80, 4000), vk: platform(55, 75, 9000),
+      max: platform(50, 70, 3000, true), rutube: missing("no_posts") }),
+  ] };
+}
+
 function ratingForecast(month: string): Schema["RatingForecast"] {
   const retrospective = month === "2026-09";
   const base = (rank: number, source: Schema["RatingForecastCell"]["source"] = "formula") => ({
@@ -572,8 +618,14 @@ const server = createServer(async (request, response) => {
     { month: "2026-09", status: "retrospective", asOf: "2026-10-16T22:10:00Z" },
   ] } satisfies Schema["RatingForecastMonths"]);
   if (url.pathname === "/api/v1/rating/forecast") return json(ratingForecast(url.searchParams.get("month") ?? "2026-10"));
-  if (url.pathname === "/api/v1/rating/own") return json({ status: "no_methodology",
-    questions: ["Какие площадки входят и с какими весами."] } satisfies Schema["OwnRating"]);
+  if (url.pathname === "/api/v1/rating/clean/months") return json({ months: [
+    { month: "2026-10", status: "retrospective", asOf: "2026-11-17T20:00:00Z" },
+    { month: "2026-09", status: "retrospective", asOf: "2026-11-17T20:00:00Z" },
+  ] } satisfies Schema["RatingForecastMonths"]);
+  if (url.pathname === "/api/v1/rating/clean") return json(ratingClean(url.searchParams.get("month") ?? "2026-10"));
+  if (url.pathname === "/api/v1/rating/own/months") return json({ months: [
+    { month: "2026-11", status: "running", asOf: "2026-11-20T22:47:00Z" }] } satisfies Schema["RatingForecastMonths"]);
+  if (url.pathname === "/api/v1/rating/own") return json(ownRating());
   if (url.pathname === "/api/v1/sitemap") return json({ publicationPages: 1, publications: 2, datasetRevision: revision, asOf,
     accounts: [{ accountId: uuid(1,1), lastModified: "2026-07-07T00:00:00Z" }], institutions: [{ legacyId: 1 }, { legacyId: 2 }] });
   const sitemapPage = /^\/api\/v1\/sitemap\/publications\/(\d+)$/.exec(url.pathname);
