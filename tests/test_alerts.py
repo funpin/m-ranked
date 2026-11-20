@@ -15,7 +15,7 @@ sys.modules["alerts"] = alerts  # dataclass ищет модуль по имен�
 SPEC.loader.exec_module(alerts)
 
 LIMITS = {"backup_hours": 36, "disk_free_bytes": 6 * 10**9, "load15": 6.0, "ingest_minutes": 20, "ingest_lag_minutes": 10,
-          "analysis_lag_seconds": 3 * 3600, "docker_bytes": 5 * 10**9, "human_5xx": 20,
+          "analysis_lag_seconds": 3 * 3600, "analysis_old_lag_seconds": 12 * 3600, "docker_bytes": 5 * 10**9, "human_5xx": 20,
           "bot_503_share": 0.5, "misses_per_second": 20, "hit_ratio": 0.3,
           "cpu_percent": 90, "cpu_minutes": 45, "page_p95_seconds": 3.0, "memory_percent": 90,
           "swap_bytes": 10**9, "disk_urgent_share": 0.07, "bots_per_minute": 150, "bot_minutes": 5,
@@ -750,3 +750,22 @@ def test_stopped_ingest_is_reported_as_ingest_not_lag():
     values['mranked_transfer_ingest_last_batch_created_unixtime{producer="server-1/default"}'] = NOW - 7200
     firing = {rule.key for rule in alerts.evaluate(NOW, alerts.empty_bucket(), values, **arguments) if rule.firing}
     assert "ingest" in firing and "ingest_lag" not in firing
+
+
+def test_analysis_alert_watches_fresh_posts_and_the_old_cohort_separately():
+    # 20.11.2026 тревога «очередь отстаёт на 181 мин» мерила самую старую
+    # просрочку, а это всегда пост 7–30 суток: свежие при этом шли вовремя.
+    now = NOW
+    def firing(lag, fresh):
+        values, arguments = healthy(now)
+        values["mranked_anomaly_queue_lag_seconds"] = lag
+        if fresh is not None:
+            values["mranked_anomaly_fresh_queue_lag_seconds"] = fresh
+        return {rule.key: rule.text for rule in alerts.evaluate(now, alerts.empty_bucket(), values, **arguments)
+                if rule.firing and rule.key.startswith("analysis")}
+    assert firing(5 * 3600.0, 60.0) == {}
+    assert firing(5 * 3600.0, 4 * 3600.0) == {"analysis": "Свежие посты ждут анализа 240 мин"}
+    assert firing(13 * 3600.0, 60.0) == {
+        "analysis_old": "Посты старше недели ждут анализа 13.0 ч — дольше растянутого интервала"}
+    # Работник без раздельной метрики — прежнее правило по всей очереди.
+    assert firing(5 * 3600.0, None) == {"analysis": "Очередь анализа отстаёт на 300 мин"}

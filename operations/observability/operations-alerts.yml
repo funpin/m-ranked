@@ -65,12 +65,19 @@ groups:
         annotations:
           summary: Anomaly analysis has due posts but its worker textfile is stale.
       - alert: MRankedAnomalyQueueLag
-        expr: mranked_anomaly_queue_lag_seconds > 3600
+        expr: mranked_anomaly_fresh_queue_lag_seconds > 3600
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: The oldest due anomaly analysis is more than an hour late; 7-30 day intervals are being stretched.
+          summary: Anomaly analysis of posts younger than a week is more than an hour late.
+      - alert: MRankedAnomalyOldQueueLag
+        expr: mranked_anomaly_queue_lag_seconds > 43200
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The oldest due anomaly analysis waits longer than the fully stretched 12-hour interval.
       - alert: MRankedAnomalyWorkerFailures
         expr: increase(mranked_anomaly_analyses_total{outcome="failed"}[1h]) > 20
         for: 15m

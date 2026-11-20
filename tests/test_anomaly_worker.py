@@ -11,16 +11,20 @@ from anomaly_analysis.v2.domain import Level
 from anomaly_analysis.v2.schedule import ScheduleConfig
 from anomaly_analysis.v2.series import CollectionCadence
 from anomaly_analysis.v2.tail_ledger import VERSION as TAIL_LEDGER_VERSION
-from anomaly_analysis.v2.store import DueRow, Progress
+from anomaly_analysis.v2.store import DueRow, Progress, QueueState
 from anomaly_analysis.v2.worker import final_analysis_days, Worker
 from anomaly_reference.mature_norms import synthetic_cases
 
 
 class FakeStore:
-    def __init__(self, series, due, *, norm_version=None):
+    def __init__(self, series, due, *, norm_version=None, norm_floor=None, lag=0.0):
         self.series = series
         self.due = list(due)
         self.norm_version = norm_version
+        # Самая старая норма, вывод по которой ещё не перепроверяется.
+        self.norm_floor = norm_version if norm_floor is None else norm_floor
+        self.lag = lag
+        self.floor_requests: list = []
         self.written, self.postponed, self.rechecks = [], [], []
         self.series_reads: list = []
         self.kinds_requests: list = []
@@ -39,12 +43,18 @@ class FakeStore:
     def read_norms(self, version, platform):
         return None
 
-    def schedule_norm_recheck(self, version, now, window):
-        self.rechecks.append(version)
+    def norm_recheck_floor(self, accepted_after):
+        self.floor_requests.append(accepted_after)
+        return self.norm_floor
+
+    def schedule_norm_recheck(self, version, floor, now, window):
+        self.rechecks.append((version, floor))
         return 0
 
-    def queue_state(self, now):
-        return (0.0, len(self.due))
+    def queue_state(self, now, fresh_since):
+        due = [row for row in self.due if row.next_due_at <= now]
+        fresh = [row for row in due if row.published_at >= fresh_since]
+        return QueueState(self.lag, len(due), min(self.lag, 60.0) if fresh else 0.0, len(fresh))
 
     def claim_due(self, now, limit):
         taken = [row for row in self.due if row.next_due_at <= now][:limit]
@@ -220,9 +230,9 @@ def test_end_of_window_freezes_and_a_new_norm_triggers_a_recheck(tmp_path):
     worker.publish = lambda metrics: write_textfile(path, metrics.samples())
     worker.run_once()
     assert store.written[0].frozen and store.written[0].reason == "final"
-    assert store.rechecks == [7] and store.written[0].norm_version_id == 7
+    assert store.rechecks == [(7, 7)] and store.written[0].norm_version_id == 7
     worker.run_once()
-    assert store.rechecks == [7]
+    assert store.rechecks == [(7, 7)]
     text = path.read_text()
     assert 'mranked_anomaly_analyses_total{outcome="frozen"} 1' in text
     assert "mranked_anomaly_norm_version 7" in text and "mranked_anomaly_last_completion_unixtime" in text
@@ -323,3 +333,84 @@ def test_a_stream_sign_is_carried_while_kinds_are_not_read():
     assert _carried(row, at - timedelta(days=1)) == ()
     (sign,) = _carried(row, at - timedelta(days=1), stream=True)
     assert sign.pattern == 17 and sign.family is Family.COMPOSITION
+
+
+def _waiting_row(subject, now, norm_version_id):
+    """Пост, у которого с прошлого анализа одна новая точка: по расписанию он ждёт."""
+    return DueRow(subject.publication_id, subject.published_at, now, now - timedelta(hours=1),
+                  subject.observed_at[-2], norm_version_id, 0, ())
+
+
+def test_a_new_norm_does_not_force_reanalysis_of_a_recent_verdict():
+    # 20.11.2026: каждая ночная норма ставила на полный анализ все ~48 тыс.
+    # незамороженных постов. Вывод по норме моложе недели остаётся до
+    # очередного анализа, пост ждёт новых замеров как обычно — без чтения ряда.
+    subject = synthetic_cases()["honest_organic_vk"].subject
+    now = subject.observed_at[-1]
+    store = FakeStore({subject.publication_id: subject}, [_waiting_row(subject, now, 6)],
+                      norm_version=7, norm_floor=5)
+    _worker(store, now).run_once()
+    assert not store.written and store.postponed and store.series_reads == []
+    assert store.rechecks == [(7, 5)]
+    assert store.floor_requests == [now - timedelta(seconds=ScheduleConfig().norm_recheck_after_seconds)]
+
+
+def test_a_verdict_by_a_norm_older_than_the_floor_is_rechecked():
+    subject = synthetic_cases()["honest_organic_vk"].subject
+    now = subject.observed_at[-1]
+    for version in (4, None, 8):  # старше границы, без нормы, неизвестная (новее принятой)
+        store = FakeStore({subject.publication_id: subject}, [_waiting_row(subject, now, version)],
+                          norm_version=7, norm_floor=5)
+        _worker(store, now).run_once()
+        [write] = store.written
+        assert write.reason == "norm_recheck" and write.norm_version_id == 7
+
+
+def test_the_floor_moving_forward_reschedules_without_reloading_norms():
+    subject = synthetic_cases()["honest_organic_vk"].subject
+    now = subject.observed_at[-1]
+    store = FakeStore({subject.publication_id: subject}, [], norm_version=7, norm_floor=5)
+    worker = _worker(store, now)
+    worker.run_once()
+    worker.run_once()
+    store.norm_floor = 6
+    worker.run_once()
+    # Граница перечитывается не чаще раза в минуту: таблица норм меняется раз в сутки.
+    assert store.rechecks == [(7, 5)] and len(store.floor_requests) == 1
+    worker.clock = lambda: now + timedelta(minutes=1)
+    worker.run_once()
+    assert store.rechecks == [(7, 5), (7, 6)] and len(store.floor_requests) == 2
+
+
+def test_stretched_posts_get_their_own_share_of_the_longer_interval():
+    from anomaly_analysis.v2.schedule import interval, stretch_share
+    subject = synthetic_cases()["honest_organic_telegram"].subject
+    now = subject.published_at + timedelta(days=12)
+    config = ScheduleConfig()
+    expected = []
+    rows, series = [], {}
+    for index in range(1, 6):
+        item = replace(subject, publication_id=UUID(int=index))
+        series[item.publication_id] = item
+        rows.append(DueRow(item.publication_id, item.published_at, now, None, None, None, 0, ()))
+        expected.append(now + timedelta(seconds=interval(
+            config, item.platform, (now - item.published_at).total_seconds(), config.max_stretch,
+            stretch_share(item.publication_id))))
+    store = FakeStore(series, rows, lag=2 * 3600.0)
+    _worker(store, now).run_once()
+    by_id = {write.publication_id: write.next_due_at for write in store.written}
+    assert [by_id[row.publication_id] for row in rows] == expected
+    assert len(set(expected)) == len(expected)
+
+
+def test_fresh_queue_lag_is_published_beside_the_oldest_overdue(tmp_path):
+    subject = synthetic_cases()["honest_organic_telegram"].subject
+    now = subject.published_at + timedelta(days=12)
+    store = FakeStore({}, [], lag=3 * 3600.0)
+    worker = _worker(store, now)
+    path = tmp_path / "anomaly.prom"
+    worker.publish = lambda metrics: write_textfile(path, metrics.samples())
+    worker.run_once()
+    text = path.read_text()
+    assert "mranked_anomaly_queue_lag_seconds 10800" in text
+    assert "mranked_anomaly_fresh_queue_lag_seconds 0" in text and "mranked_anomaly_fresh_due_backlog 0" in text

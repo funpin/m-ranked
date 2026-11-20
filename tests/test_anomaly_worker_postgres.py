@@ -111,3 +111,64 @@ def test_batch_is_analyzed_logged_on_change_and_caught_up_once(databases):
     assert state["analyzed_at"] == later and state["next_due_at"] > later
     # Вывод не изменился — журнал не пополнился.
     assert count == 1
+
+
+def test_norm_floor_recheck_and_fresh_queue_on_the_real_schema(databases):
+    from anomaly_analysis.v2.store import NORM_MODEL_VERSION
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    young = _post(databases["admin"], now - timedelta(days=2), lambda index: 10, 2)
+    old = [_post(databases["admin"], now - timedelta(days=10), lambda index: 10, 2) for _ in range(5)]
+    store = PostgresAnomalyStore(databases["worker"])
+    # Нормы «из будущего»: граница не зависит от версий, оставленных другими тестами.
+    epoch = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    with psycopg.connect(databases["admin"], autocommit=True, row_factory=dict_row) as connection:
+        versions = [connection.execute(
+            "INSERT INTO analytics.anomaly_norm_version(model_version,status,created_at) "
+            "VALUES (%s,'accepted',%s) RETURNING id", (NORM_MODEL_VERSION, epoch + timedelta(days=day))
+        ).fetchone()["id"] for day in (0, 7, 14)]
+    try:
+        assert store.norm_recheck_floor(epoch + timedelta(days=5)) == versions[1]
+        assert store.norm_recheck_floor(epoch + timedelta(days=30)) == versions[2]
+        far = now + timedelta(days=20)
+        with psycopg.connect(databases["admin"], autocommit=True) as connection:
+            connection.execute("UPDATE analytics.post_anomaly_state SET frozen = true "
+                               "WHERE NOT (publication_id = ANY(%s))", ([young, *old],))
+            connection.execute("""
+                INSERT INTO analytics.post_anomaly_state(publication_id, published_at, next_due_at, analyzed_at,
+                                                         norm_version_id)
+                SELECT id, published_at, %s, %s, NULL FROM ingest.publication WHERE id = ANY(%s)
+                ON CONFLICT (publication_id) DO UPDATE SET next_due_at = excluded.next_due_at,
+                    analyzed_at = excluded.analyzed_at, frozen = false""", (far, now, [young, *old]))
+            for publication, version in zip(old, (versions[0], versions[1], versions[2], None)):
+                connection.execute("UPDATE analytics.post_anomaly_state SET norm_version_id = %s "
+                                   "WHERE publication_id = %s", (version, publication))
+            # Устаревшая, но срок и так раньше окна — строка не переписывается.
+            connection.execute("UPDATE analytics.post_anomaly_state SET norm_version_id = %s, next_due_at = %s "
+                               "WHERE publication_id = %s", (versions[0], now - timedelta(minutes=5), old[4]))
+            connection.execute("UPDATE analytics.post_anomaly_state SET norm_version_id = %s "
+                               "WHERE publication_id = %s", (versions[1], young))
+        moved = store.schedule_norm_recheck(versions[1], versions[1], now, 3600)
+        with psycopg.connect(databases["admin"], row_factory=dict_row) as connection:
+            due = {row["publication_id"]: row["next_due_at"] for row in connection.execute(
+                "SELECT publication_id, next_due_at FROM analytics.post_anomaly_state WHERE publication_id = ANY(%s)",
+                ([young, *old],)).fetchall()}
+        # Старше границы, новее принятой и без нормы — в окно; по норме границы — нет.
+        assert moved == 3
+        assert all(now <= due[item] < now + timedelta(hours=1) for item in (old[0], old[2], old[3]))
+        assert due[old[1]] == due[young] == far and due[old[4]] == now - timedelta(minutes=5)
+        assert store.schedule_norm_recheck(versions[1], versions[1], now, 3600) == 0
+        # Очередь: старый пост просрочен на 5 мин, свежий подойдёт через час.
+        with psycopg.connect(databases["admin"], autocommit=True) as connection:
+            connection.execute("UPDATE analytics.post_anomaly_state SET next_due_at = %s WHERE publication_id = %s",
+                               (now + timedelta(hours=1), young))
+        queue = store.queue_state(now, now - timedelta(days=7))
+        assert queue.backlog >= 1 and queue.lag_seconds == 300 and queue.fresh_backlog == 0
+        assert queue.fresh_lag_seconds == 0
+        queue = store.queue_state(now + timedelta(hours=2), now - timedelta(days=7))
+        assert queue.fresh_backlog == 1 and queue.fresh_lag_seconds == 3600
+        assert queue.backlog == 5 and queue.lag_seconds == 2 * 3600 + 300
+    finally:
+        with psycopg.connect(databases["admin"], autocommit=True) as connection:
+            connection.execute("UPDATE analytics.post_anomaly_state SET norm_version_id = NULL, frozen = true "
+                               "WHERE norm_version_id = ANY(%s)", (versions,))
+            connection.execute("DELETE FROM analytics.anomaly_norm_version WHERE id = ANY(%s)", (versions,))
