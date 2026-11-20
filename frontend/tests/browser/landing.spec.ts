@@ -111,6 +111,11 @@ test("прокрутка главной: упор вверх не перезаг
   await index.getByRole("link", { name: "Анализ" }).click();
   await expect(index.getByRole("link", { name: "Анализ" })).toHaveAttribute("aria-current", "location", { timeout: 5_000 });
   await expect(page.locator("#landing-analysis")).toBeInViewport();
+  // Переход по оглавлению — плавная прокрутка Lenis к разделу. Пока она идёт,
+  // Lenis каждый кадр ведёт страницу к своей цели и перебивает scrollTo: в первые
+  // ~300 мс страница возвращалась к «Анализу» (66 %) и тест зависел от таймингов
+  // браузера. Ждём конца анимации — пока на <html> висит класс lenis-scrolling.
+  await expect(page.locator("html")).not.toHaveClass(/(^|\s)lenis-scrolling(\s|$)/, { timeout: 10_000 });
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(thumb).toHaveText("100 %");
 });
