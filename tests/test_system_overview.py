@@ -232,3 +232,19 @@ def test_open_alerts_are_a_check_and_events_of_the_period_are_listed():
                 if item["key"] == "alerts")["state"] == "unknown"
     del rows[-1]["sample"]["alerts"]
     assert all(item["key"] != "alerts" for item in overview.status_summary(rows, T0, lambda platform: 2700)["checks"])
+
+
+def test_analysis_check_judges_fresh_posts_and_the_whole_queue_by_their_own_limits() -> None:
+    def check(lag, fresh, backlog=3316):
+        pipeline = {"analysisLag": lag, "analysisBacklog": backlog}
+        if fresh is not None:
+            pipeline["analysisFreshLag"] = fresh
+        return overview.analysis_queue(pipeline)
+    # Утро 20.11.2026: самая старая просрочка — 3 ч, свежие посты шли вовремя.
+    assert check(3 * 3600, 120) == ("ok", "свежие посты — 2 мин, вся очередь — 3.0 ч, в очереди 3316")
+    assert check(3 * 3600, 2 * 3600)[0] == "warn" and check(3 * 3600, 4 * 3600)[0] == "fail"
+    assert check(13 * 3600, 60)[0] == "warn" and check(25 * 3600, 60)[0] == "fail"
+    # Работник без раздельной метрики — прежние пороги по всей очереди.
+    assert check(120, None, 5) == ("ok", "отставание 2 мин, в очереди 5")
+    assert check(4 * 3600, None)[0] == "warn"
+    assert overview.analysis_queue({}) == ("unknown", "метрики нет")

@@ -176,3 +176,15 @@ def test_server_buttons_refused_to_people_without_alerts() -> None:
     handle(bot, callback(ADMIN, ADMIN, 5, "st|s|unknown-server"))
     assert telegram.of("edit") == []
     assert [call[2] for call in telegram.of("answer")] == ["недоступно", "кнопка устарела"]
+
+
+def test_main_view_judges_the_analysis_queue_by_fresh_posts(tmp_path: Path) -> None:
+    # Самая старая просрочка 3 ч — пост 7–30 суток; свежие разобраны за 2 мин.
+    store = MemoryStore()
+    seed(store)
+    store.host_samples[-1]["sample"]["pipeline"] = {"analysisLag": 3 * 3600, "analysisBacklog": 3316,
+                                                    "analysisFreshLag": 120}
+    write_proc(tmp_path)
+    monitor = ServerMonitor(store, local=LocalHost(proc=tmp_path, sleep=no_sleep))
+    text = asyncio.run(monitor.message("server-2")).text
+    assert "🟢 Анализ · очередь 3316, свежие 2 мин, вся 3,0 ч" in text
