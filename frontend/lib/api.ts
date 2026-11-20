@@ -143,6 +143,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
     ratingForecast(month?: string) {
       return client.GET("/api/v1/rating/forecast", { params: { query: month ? { month } : {} } }).then(unwrap);
     },
+    ratingCleanMonths() {
+      return client.GET("/api/v1/rating/clean/months", {}).then(unwrap);
+    },
+    ratingClean(month?: string) {
+      return client.GET("/api/v1/rating/clean", { params: { query: month ? { month } : {} } }).then(unwrap);
+    },
     ownRating() {
       return client.GET("/api/v1/rating/own", {}).then(unwrap);
     },

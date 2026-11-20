@@ -72,4 +72,7 @@ export type RatingForecastRow = components["schemas"]["RatingForecastRow"];
 export type RatingForecastCell = components["schemas"]["RatingForecastCell"];
 export type RatingForecastMonths = components["schemas"]["RatingForecastMonths"];
 export type OwnRating = components["schemas"]["OwnRating"];
+export type RatingClean = components["schemas"]["RatingClean"];
+export type RatingCleanRow = components["schemas"]["RatingCleanRow"];
+export type RatingCleanPlatform = components["schemas"]["RatingCleanPlatform"];
 export type RatingCategory = keyof RatingForecastRow["categories"];

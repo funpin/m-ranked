@@ -21,7 +21,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from .. import rating_forecast as rf
+from .. import rating_clean as rc, rating_forecast as rf
 from ..config import Settings
 from ..db import Database
 from ..institution_profile import _students_by_institution
@@ -148,7 +148,84 @@ async def _forecast_month(database: Any, month: date, status: str, as_of: dateti
                                          {"payload": json.dumps(body, ensure_ascii=False)})
     logger.info("снимок %s (%s): %d вузов, заменено %s", month.isoformat(), status, len(results),
                 row["result"]["replaced"])
+    if month not in published:
+        # Месяц ещё не опубликован: основа «без накрутки» — этот прогноз.
+        await _record_clean(database, month, status, as_of, institutions, scale,
+                            rc.forecast_basis(results, base), base.names, "forecast", base.period)
     return row["result"]
+
+
+async def _inflation(database: Any, month: date, as_of: datetime) -> dict[tuple[str, str], rc.Inflation]:
+    """Замеренная накрутка VK и MAX наших вузов за месяц — с теми же зрелыми постами, что и прогноз."""
+    start, end = rf.month_window(month)
+    parameters = {"window_start": start, "window_end": min(end, as_of),
+                  "mature_before": as_of - timedelta(days=rf.FORMULA_CURRENT["matureAfterDays"])}
+    packs = {(row["code"], row["platform"]): row for row in await database.fetch_all(sql.PLATFORM_INFLATION, parameters)}
+    smart: dict[tuple[str, str], rc.Smart] = {}
+    for row in await database.fetch_all(sql.ACCOUNT_SMART, parameters):
+        key = (row["code"], row["platform"])
+        mature = (packs.get(key) or {}).get("mature_posts", 0) > 0
+        found = rc.smart_account(row, row["platform"], row["mature_interactions"] if mature else row["interactions"])
+        if found is None:
+            continue
+        previous = smart.get(key)
+        smart[key] = found if previous is None else rc.Smart(
+            evenness=min(previous.evenness or 0, found.evenness or 0), median_reactions=previous.median_reactions,
+            tail_ratio=max(previous.tail_ratio or 0, found.tail_ratio or 0), tail_p90=previous.tail_p90,
+            reactions=previous.reactions + found.reactions)
+    result: dict[tuple[str, str], rc.Inflation] = {}
+    for key in set(packs) | set(smart):
+        row = packs.get(key) or {}
+        mature = row.get("mature_posts", 0) > 0
+        result[key] = rc.Inflation(views=int(row.get("mature_views" if mature else "views", 0)),
+                                   reactions=int(row.get("mature_reactions" if mature else "reactions", 0)),
+                                   smart=smart.get(key))
+    return result
+
+
+async def _record_clean(database: Any, month: date, status: str, as_of: datetime,
+                        institutions: list[rf.InstitutionMonth], scale: float,
+                        basis: dict[str, dict[str, float | None]], names: dict[str, str],
+                        basis_kind: str, basis_period: str) -> dict | None:
+    """Снимок «М-Рейтинг без накрутки». Сбой не мешает прогнозу."""
+    try:
+        inflation = await _inflation(database, month, as_of)
+        window_start, window_end = rf.month_window(month)
+        batches = {row["code"]: row for row in await database.fetch_all(
+            sql.RUTUBE_BATCH, {"window_start": window_start, "window_end": min(window_end, as_of)})}
+        results = rc.clean_month(institutions, inflation, basis, names, basis_kind=basis_kind, scale=scale,
+                                 formula=rf.FORMULA_CURRENT, rutube_batches=batches)
+        start, end = rf.month_window(month)
+        formula = rc.FORMULA_CLEAN_CURRENT
+        parameters = {"status": status, "period": rf.period_label(month), "basis": basis_kind,
+                      "basisPeriod": basis_period, "postsScale": round(scale, 4),
+                      "formulaVersion": formula["version"], "baseFormulaVersion": rf.FORMULA_CURRENT["version"]}
+        digest = hashlib.sha256(json.dumps({"month": month.isoformat(), "parameters": parameters,
+                                            "results": results}, sort_keys=True, default=str).encode()).hexdigest()
+        body = {"formulaKey": rc.CLEAN_KEY, "version": formula["version"],
+                "windowStart": start.astimezone(timezone.utc).isoformat(),
+                "windowEnd": min(end, as_of).astimezone(timezone.utc).isoformat(),
+                "asOf": as_of.astimezone(timezone.utc).isoformat(),
+                "startedAt": as_of.astimezone(timezone.utc).isoformat(),
+                "inputHash": digest, "parameters": parameters, "results": results}
+        row = await database.admin_fetch_one("SELECT ops_and_admin.record_rating_forecast(%(payload)s::jsonb) AS result",
+                                             {"payload": json.dumps(body, ensure_ascii=False)})
+        logger.info("без накрутки %s (%s, основа %s): %d вузов", month.isoformat(), status, basis_kind, len(results))
+        return row["result"]
+    except Exception as error:  # noqa: BLE001 — снимок без накрутки вторичен
+        logger.error("снимок без накрутки %s не записан: %s", month.isoformat(), type(error).__name__)
+        return None
+
+
+async def _clean_published(database: Any, month: date, as_of: datetime, published: dict[date, str]) -> dict | None:
+    """Опубликованный месяц без накрутки — от официальных баллов (ретроспектива)."""
+    fact = await _base(database, published[month])
+    if not fact.scores:
+        return None
+    institutions = await _institutions(database, month, as_of)
+    basis = {code: {category: value.get(category) for category in rf.CATEGORIES} for code, value in fact.scores.items()}
+    return await _record_clean(database, month, "retrospective", as_of, institutions, 1.0, basis, fact.names,
+                               "fact", fact.period)
 
 
 async def run(database: Any, as_of: datetime, *, retrospective: list[date] | None = None) -> list[dict]:
@@ -160,6 +237,13 @@ async def run(database: Any, as_of: datetime, *, retrospective: list[date] | Non
         result = await _forecast_month(database, month, status, as_of, published)
         if result is not None:
             recorded.append(result)
+    # «Без накрутки» опубликованных месяцев считается от факта: последние два
+    # каждую ночь (накопленные просмотры и состояния постов ещё меняются), месяцы
+    # ретроспективы — по запросу.
+    clean_months = ([month for month in retrospective if month in published] if retrospective
+                    else sorted(published)[-2:])
+    for month in clean_months:
+        await _clean_published(database, month, as_of, published)
     if not retrospective:
         for month in sorted(published)[-2:]:
             await database.admin_fetch_one(
