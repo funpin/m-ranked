@@ -85,6 +85,24 @@ def test_removed_reactions_never_exceed_the_month():
     assert rc.cleaned(month(interactions=1000), item).interactions == 0
 
 
+@pytest.mark.parametrize(("videos", "batch", "marked"), [(5, 4, True), (25, 25, True), (8, 3, False),
+                                                        (4, 4, False), (12, 2, False)])
+def test_rutube_threshold_taken_by_a_one_day_batch_is_marked(videos, batch, marked):
+    found = rc.rutube_batch({"videos": videos, "batch": batch, "day": "2026-10-16", "median_views": 7.0})
+    assert (found is not None) is marked
+    if marked:
+        assert found == {"videos": videos, "batch": batch, "day": "2026-10-16", "medianViews": 7.0}
+
+
+def test_rutube_batch_does_not_change_the_score():
+    institutions = [institution("1", {"vk": month()})]
+    plain = rc.clean_month(institutions, {}, basis(**{"1": 50.0}), NAMES, basis_kind="fact", formula=rf.FORMULA_V2)
+    marked = rc.clean_month(institutions, {}, basis(**{"1": 50.0}), NAMES, basis_kind="fact", formula=rf.FORMULA_V2,
+                            rutube_batches={"1": {"videos": 5, "batch": 4, "day": "2026-10-16", "median_views": 7}})
+    assert plain[0]["score"] == marked[0]["score"] and plain[0]["explanation"]["rutubeBatch"] is None
+    assert marked[0]["explanation"]["rutubeBatch"]["batch"] == 4
+
+
 def test_forecast_basis_takes_our_forecast_and_the_base_for_the_rest():
     base = rf.BaseMonth(period="Сентябрь 2026", names={"1": "А", "2": "Б"},
                         scores={"1": {"social": 40.0, "max": 1.0, "vk": 1.0, "rutube": 1.0},
@@ -103,7 +121,8 @@ RUN = {"id": "run", "as_of": datetime(2026, 11, 17, 20, tzinfo=timezone.utc),
 def test_clean_body_matches_the_contract():
     rows = rc.clean_month([institution("1", {"vk": month(), "max": month()})],
                           {("1", "max"): rc.Inflation(reactions=3000, smart=rc.Smart(0.01, 250.0, 1.4, 0.75, 400))},
-                          basis(**{"1": 70.0, "2": 69.0}), NAMES, basis_kind="fact", formula=rf.FORMULA_V2)
+                          basis(**{"1": 70.0, "2": 69.0}), NAMES, basis_kind="fact", formula=rf.FORMULA_V2,
+                          rutube_batches={"1": {"videos": 5, "batch": 4, "day": "2026-10-16", "median_views": None}})
     stored = [{"institution_id": rows[0]["institutionId"], "legacy_id": 7, "name": "Вуз", "short_name": None,
                "explanation": rows[0]["explanation"]}]
     body = rating.clean_body(RUN, stored)
@@ -112,3 +131,4 @@ def test_clean_body_matches_the_contract():
     assert body["month"] == "2026-10" and body["basis"] == "fact"
     assert row["platforms"]["max"]["smart"]["tailRatio"] == 1.4 and row["platforms"]["vk"]["smart"] is None
     assert row["categories"]["social"]["baseRank"] == 1
+    assert row["rutubeBatch"] == {"videos": 5, "batch": 4, "day": "2026-10-16", "medianViews": None}

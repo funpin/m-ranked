@@ -190,8 +190,11 @@ async def _record_clean(database: Any, month: date, status: str, as_of: datetime
     """Снимок «М-Рейтинг без накрутки». Сбой не мешает прогнозу."""
     try:
         inflation = await _inflation(database, month, as_of)
+        window_start, window_end = rf.month_window(month)
+        batches = {row["code"]: row for row in await database.fetch_all(
+            sql.RUTUBE_BATCH, {"window_start": window_start, "window_end": min(window_end, as_of)})}
         results = rc.clean_month(institutions, inflation, basis, names, basis_kind=basis_kind, scale=scale,
-                                 formula=rf.FORMULA_CURRENT)
+                                 formula=rf.FORMULA_CURRENT, rutube_batches=batches)
         start, end = rf.month_window(month)
         formula = rc.FORMULA_CLEAN_CURRENT
         parameters = {"status": status, "period": rf.period_label(month), "basis": basis_kind,

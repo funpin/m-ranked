@@ -92,6 +92,8 @@ test("«М-Рейтинг без накрутки» — формула пере�
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(2)).toContainText("Университет с пакетами реакций");
   await expect(rows.nth(2).getByLabel("ниже на 19")).toBeVisible();
+  await expect(rows.nth(2).getByTestId("rutube-batch")).toContainText("Rutube: 4 из 5 видео загружены 16 октября");
+  await expect(rows.nth(0).getByTestId("rutube-batch")).toHaveCount(0);
   await page.getByTestId("clean-filter").getByRole("link", { name: "Только со сдвигом" }).click();
   await expect(page).toHaveURL(/filter=changed/);
   await expect(page.getByTestId("clean-row")).toHaveCount(2);

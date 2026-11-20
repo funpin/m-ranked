@@ -43,6 +43,17 @@ function Removed({ item }: { item: RatingCleanPlatform | null | undefined }) {
   </span>;
 }
 
+/** Rutube засчитан только пачкой загрузок одного дня — отметка, балл не меняется. */
+function RutubeBatch({ batch }: { batch: RatingCleanRow["rutubeBatch"] }) {
+  if (!batch) return null;
+  const day = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${batch.day}T00:00:00Z`));
+  const views = batch.medianViews === null ? "" : `, медиана просмотров ${Math.round(batch.medianViews)}`;
+  return <span data-testid="rutube-batch" className="bg-warning/10 text-warning mt-1 inline-block rounded px-1.5 text-xs font-medium"
+    title={`Порог Rutube «5 видео за месяц» взят только благодаря загрузке ${batch.batch} роликов за один день${views}. Балл Rutube не меняется.`}>
+    Rutube: {batch.batch} из {batch.videos} видео загружены {day}
+  </span>;
+}
+
 export function CleanTable({ clean, rows }: { clean: RatingClean; rows: RatingCleanRow[] }) {
   const basis = clean.basis === "fact" ? "факт" : "прогноз";
   return <Table className="tabular-nums" data-testid="clean-table">
@@ -69,6 +80,7 @@ export function CleanTable({ clean, rows }: { clean: RatingClean; rows: RatingCl
             {row.legacyId ? <Link href={`/institutions/${row.legacyId}`} prefetch={false} title={row.name}
               className="hover:underline focus-visible:underline">{name}</Link> : name}
             {row.shortName && row.shortName !== row.name ? <span className="text-muted-foreground block text-xs">{row.name}</span> : null}
+            <RutubeBatch batch={row.rutubeBatch} />
           </TableCell>
           <TableCell className="text-right whitespace-nowrap">
             {social.baseScore !== social.score

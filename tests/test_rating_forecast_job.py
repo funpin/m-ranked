@@ -16,6 +16,7 @@ class FakeDatabase:
         self.periods, self.scores, self.months = periods, scores or {}, months or []
         self.recorded, self.finalized = [], []
         self.inflation: dict[bool, list[dict]] = {}
+        self.batches: list[dict] = []
 
     async def admin_fetch_all(self, query, params=None):
         if "official_periods" in query:
@@ -35,6 +36,8 @@ class FakeDatabase:
         raise AssertionError(query)
 
     async def fetch_all(self, query, params=None):
+        if "daily AS" in query:
+            return self.batches
         if "post_anomaly_state" in query or "account_tail_profile" in query:
             return self.inflation.get("account_tail_profile" in query, [])
         if "WITH coded" in query:
@@ -138,6 +141,7 @@ def test_job_records_the_month_without_inflation_beside_the_forecast():
     # Пакеты: 700 из 1400 реакций зрелых постов VK вуза 37.
     database.inflation[False] = [{"code": "37", "platform": "vk", "mature_posts": 70, "mature_views": 0,
                                   "mature_reactions": 700, "views": 0, "reactions": 800}]
+    database.batches = [{"code": "37", "videos": 6, "day": "2026-10-14", "batch": 5, "median_views": 3.0}]
     asyncio.run(job.run(database, datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
     [forecast] = database.forecasts
     cleans = {body["parameters"]["period"]: body for body in database.cleans}
@@ -149,6 +153,9 @@ def test_job_records_the_month_without_inflation_beside_the_forecast():
     vk = cleans["Октябрь 2026"]["results"][0]["explanation"]["platforms"]["vk"]
     assert vk["removedReactions"] == 700 and vk["cleanScore"] < vk["rawScore"]
     assert cleans["Октябрь 2026"]["results"][0]["score"] < forecast["results"][0]["score"]
+    # Rutube взят пачкой одного дня — только отметка.
+    assert cleans["Октябрь 2026"]["results"][0]["explanation"]["rutubeBatch"] == {
+        "videos": 6, "batch": 5, "day": "2026-10-14", "medianViews": 3.0}
 
 
 def test_a_failing_clean_snapshot_does_not_stop_the_forecast(caplog):

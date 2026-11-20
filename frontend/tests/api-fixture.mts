@@ -198,7 +198,7 @@ function ratingClean(month: string): Schema["RatingClean"] {
     max: Schema["RatingCleanPlatform"] | null): Schema["RatingCleanRow"] => ({
     institutionId: uuid(9, id), legacyId: id, name, shortName: null,
     categories: { social: cell(...social), vk: cell(60, 20, 60, 20), max: cell(60, 20, 60, 20), rutube: cell(30, 50, 30, 50) },
-    platforms: { vk, max },
+    platforms: { vk, max }, rutubeBatch: id === 2 ? { videos: 5, batch: 4, day: "2026-10-16", medianViews: 7 } : null,
   });
   return { month, status: "retrospective", period: month === "2026-09" ? "Сентябрь 2026" : "Октябрь 2026", basis: "fact",
     basisPeriod: month === "2026-09" ? "Сентябрь 2026" : "Октябрь 2026", asOf: "2026-11-17T20:00:00Z", formulaVersion: 1,

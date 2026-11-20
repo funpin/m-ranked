@@ -41,6 +41,8 @@ FORMULA_CLEAN_V1: dict[str, Any] = {
               "excludedKinds": ["gap", "write_off"], "views": "max(pack, discounted_views)"},
     "smart": {"minMedianReactions": 30, "minResiduals": 10, "maxEvenness": {"max": 0.10, "vk": 0.25},
               "tailAbove": "cohort_p90", "expectedTail": "cohort_median"},
+    # Только отметка (решение владельца 20.11.2026): балл Rutube не меняется.
+    "rutubeBatch": {"mark": True, "minVideos": 5, "minBatch": 3},
 }
 
 FORMULA_CLEAN_CURRENT = FORMULA_CLEAN_V1
@@ -84,6 +86,20 @@ def smart_account(row: Mapping[str, Any], platform: str, interactions: int,
                  tail_p90=float(p90), reactions=int(round(share * interactions)))
 
 
+def rutube_batch(row: Mapping[str, Any] | None,
+                 formula: Mapping[str, Any] = FORMULA_CLEAN_CURRENT) -> dict[str, Any] | None:
+    """Порог Rutube взят только пачкой загрузок одного дня; иначе None."""
+    rule = formula["rutubeBatch"]
+    if not row:
+        return None
+    videos, batch = int(row["videos"]), int(row["batch"])
+    if videos < rule["minVideos"] or batch < rule["minBatch"] or videos - batch >= rule["minVideos"]:
+        return None
+    median = row.get("median_views")
+    return {"videos": videos, "batch": batch, "day": str(row["day"]),
+            "medianViews": None if median is None else round(float(median), 1)}
+
+
 def cleaned(month: rf.PlatformMonth, inflation: Inflation) -> rf.PlatformMonth:
     removed = min(month.interactions, inflation.reactions + inflation.smart_reactions)
     return replace(month, views=max(0, month.views - inflation.views), interactions=month.interactions - removed)
@@ -95,7 +111,8 @@ def _clip(value: float) -> float:
 
 def clean_month(institutions: Iterable[rf.InstitutionMonth], inflation: Mapping[tuple[str, str], Inflation],
                 basis: Mapping[str, Mapping[str, float | None]], names: Mapping[str, str], *, basis_kind: str,
-                scale: float = 1.0, formula: Mapping[str, Any] = rf.FORMULA_V2) -> list[dict[str, Any]]:
+                scale: float = 1.0, formula: Mapping[str, Any] = rf.FORMULA_V2,
+                rutube_batches: Mapping[str, Mapping[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Баллы и места без накрутки.
 
     basis — баллы месяца всех вузов рейтинга (официальные или прогноз) по
@@ -133,7 +150,8 @@ def clean_month(institutions: Iterable[rf.InstitutionMonth], inflation: Mapping[
                   for platform in rf.PLATFORMS}
         scores["social"] = base["social"] - sum(weights[platform] * deltas[platform] for platform in rf.PLATFORMS)
         shifted[institution.code] = scores
-        details[institution.code] = {"institutionId": institution.institution_id, "platforms": platforms}
+        details[institution.code] = {"institutionId": institution.institution_id, "platforms": platforms,
+                                     "rutubeBatch": rutube_batch((rutube_batches or {}).get(institution.code))}
     rows: dict[str, dict[str, Any]] = {code: {"categories": {}} for code in shifted}
     for category in rf.CATEGORIES:
         pool = {code: float(value[category]) for code, value in basis.items() if value.get(category) is not None}
@@ -152,7 +170,8 @@ def clean_month(institutions: Iterable[rf.InstitutionMonth], inflation: Mapping[
         social = row["categories"]["social"]
         result.append({"institutionId": details[code]["institutionId"], "score": social["score"], "rank": social["rank"],
                        "explanation": {"code": code, "basis": basis_kind, "categories": row["categories"],
-                                       "platforms": details[code]["platforms"]}})
+                                       "platforms": details[code]["platforms"],
+                                       "rutubeBatch": details[code]["rutubeBatch"]}})
     return sorted(result, key=lambda item: (item["rank"], item["explanation"]["code"]))
 
 

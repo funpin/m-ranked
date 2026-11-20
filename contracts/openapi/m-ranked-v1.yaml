@@ -3057,7 +3057,7 @@ components:
     RatingCleanRow:
       type: object
       additionalProperties: false
-      required: [institutionId, legacyId, name, shortName, categories, platforms]
+      required: [institutionId, legacyId, name, shortName, categories, platforms, rutubeBatch]
       properties:
         institutionId: { type: string, format: uuid }
         legacyId: { type: [integer, 'null'] }
@@ -3073,6 +3073,20 @@ components:
           properties:
             max: { oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/RatingCleanPlatform' }] }
             vk: { oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/RatingCleanPlatform' }] }
+        rutubeBatch:
+          description: >-
+            Rutube threshold of 5 videos a month reached only thanks to uploads of one Moscow day. A mark only; the
+            Rutube score is unchanged.
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [videos, batch, day, medianViews]
+              properties:
+                videos: { type: integer, minimum: 0 }
+                batch: { type: integer, minimum: 0 }
+                day: { type: string, format: date }
+                medianViews: { type: [number, 'null'], minimum: 0 }
     RatingClean:
       type: object
       additionalProperties: false

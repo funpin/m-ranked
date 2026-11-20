@@ -139,6 +139,7 @@ def clean_body(run: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any
             "categories": {category: {key: cell[key] for key in ("score", "rank", "baseScore", "baseRank")}
                            for category, cell in explanation["categories"].items()},
             "platforms": {platform: _clean_platform(explanation["platforms"].get(platform)) for platform in ("max", "vk")},
+            "rutubeBatch": explanation.get("rutubeBatch"),
         })
     window = run["window_start"].astimezone(rf.MOSCOW)
     return {"month": f"{window.year:04d}-{window.month:02d}", "status": parameters["status"],

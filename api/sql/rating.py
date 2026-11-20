@@ -270,3 +270,35 @@ SELECT to_char(best.window_start AT TIME ZONE 'Europe/Moscow', 'YYYY-MM') AS mon
 """
 
 CLEAN_RUN = _CLEAN_BEST_RUN.format(filter="AND run.window_start = %(window_start)s")
+
+# Rutube: порог «5 видео за месяц» взят только благодаря пачке загрузок одного
+# дня (московские сутки). Балл не меняется — это отметка для читателя: залить
+# пачку роликов в конце месяца не накрутка просмотров, а игра с порогом.
+RUTUBE_BATCH = """
+WITH coded AS (
+    SELECT code.institution_id, code.external_id AS code
+      FROM catalog.institution_external_id code
+      JOIN catalog.visible_institution institution ON institution.id = code.institution_id
+     WHERE code.namespace = 'm-rating' AND code.valid_to IS NULL
+), video AS (
+    SELECT coded.code, (coalesce(publication.uploaded_at, publication.published_at) AT TIME ZONE 'Europe/Moscow')::date AS day,
+           latest.views_count AS views
+      FROM catalog.visible_platform_account account
+      JOIN coded ON coded.institution_id = account.institution_id
+      JOIN ingest.publication publication
+        ON publication.primary_account_id = account.id AND publication.deleted_at IS NULL
+       AND coalesce(publication.uploaded_at, publication.published_at) >= %(window_start)s
+       AND coalesce(publication.uploaded_at, publication.published_at) < %(window_end)s
+      LEFT JOIN analytics.publication_latest latest ON latest.publication_id = publication.id
+     WHERE account.platform = 'rutube'
+), daily AS (
+    SELECT code, day, count(*) AS videos,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY views) AS median_views
+      FROM video GROUP BY code, day
+)
+SELECT DISTINCT ON (daily.code) daily.code, totals.videos, daily.day, daily.videos AS batch,
+       daily.median_views::float8 AS median_views
+  FROM daily
+  JOIN (SELECT code, count(*) AS videos FROM video GROUP BY code) totals ON totals.code = daily.code
+ ORDER BY daily.code, daily.videos DESC, daily.day
+"""
