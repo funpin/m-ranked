@@ -26,11 +26,12 @@ const SEGMENT_ACTIVE = "bg-background text-foreground shadow-sm";
 /** Открытая формула картинкой — перед таблицей; пороги — из определения формулы снимка. */
 function Method({ own }: { own: OwnRating }) {
   const { formula } = own;
-  return <section aria-labelledby="own-method" data-testid="own-method" className="bg-muted/40 mb-6 space-y-5 rounded-lg p-4 sm:p-5">
-    <h2 id="own-method" className="font-heading text-base font-semibold">Как считается</h2>
+  return <section aria-labelledby="own-method" data-testid="own-method" className="bg-muted/40 mb-6 rounded-lg p-4 sm:p-5">
+    <h2 id="own-method" className="font-heading mb-3 text-base font-semibold">Как считается</h2>
+    <div className="space-y-4">
     <WeightStrip weights={formula.weights} label="Балл вуза — среднее четырёх площадок поровну" />
     <div>
-      <p className="mb-3 text-sm">Балл площадки — среднее трёх частей, каждая от 0 до 100:</p>
+      <p className="mb-2 text-sm">Балл площадки — среднее трёх частей, каждая от 0 до 100:</p>
       <Glyphs items={[
         { icon: CalendarDays, label: "Дни с публикациями", detail: `100 — от ${formula.activeDays.full.vk} дней из ${formula.activeDays.perDays}, у Rutube от ${formula.activeDays.full.rutube}` },
         { icon: Eye, label: "Просмотры поста на студента", detail: "0 и 100 — нижние и верхние 10 % вузов" },
@@ -38,7 +39,7 @@ function Method({ own }: { own: OwnRating }) {
       ]} />
     </div>
     <div>
-      <p className="mb-3 text-sm">Не засчитываем:</p>
+      <p className="mb-2 text-sm">Не засчитываем:</p>
       <Glyphs tone="minus" items={[
         { icon: Zap, label: "Пакеты реакций и просмотров" },
         { icon: Hourglass, label: "Поздние реакции сверх нормы площадки" },
@@ -61,6 +62,7 @@ function Method({ own }: { own: OwnRating }) {
         «*» — площадку собирали не весь месяц. Признаки статистические, а не доказательство нарушений.
         Версия {formula.version}, <Link href="/methodology/rating-forecast" className="underline">методика</Link>.</p>
     </details>
+    </div>
   </section>;
 }
 

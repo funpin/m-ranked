@@ -26,11 +26,12 @@ const FILTERS = [{ value: undefined, label: "Все вузы" }, { value: "chang
 
 /** Открытая формула картинкой — перед таблицей: основа и что из неё вычитается. */
 function Method({ clean }: { clean: RatingClean }) {
-  return <section aria-labelledby="clean-method" data-testid="clean-method" className="bg-muted/40 mb-6 space-y-5 rounded-lg p-4 sm:p-5">
-    <h2 id="clean-method" className="font-heading text-base font-semibold">Как считается</h2>
+  return <section aria-labelledby="clean-method" data-testid="clean-method" className="bg-muted/40 mb-6 rounded-lg p-4 sm:p-5">
+    <h2 id="clean-method" className="font-heading mb-3 text-base font-semibold">Как считается</h2>
+    <div className="space-y-4">
     <WeightStrip weights={{ max: 0.4, vk: 0.3, rutube: 0.3 }} label="Тот же балл соцсетей, что у М-Рейтинга" />
     <div>
-      <p className="mb-3 text-sm">Тот же балл, что у М-Рейтинга, но из VK и MAX вычитаем:</p>
+      <p className="mb-2 text-sm">Тот же балл, что у М-Рейтинга, но из VK и MAX вычитаем:</p>
       <Glyphs tone="minus" items={[
         { icon: Zap, label: "Пакеты реакций и просмотров", detail: "крупнейший эпизод на посте с явными признаками" },
         { icon: Equal, label: "Ровный отклик с долгим хвостом", detail: "поздние реакции сверх нормы площадки" },
@@ -41,6 +42,7 @@ function Method({ clean }: { clean: RatingClean }) {
       <PlatformLogo platform="rutube" size={14} decorative />Rutube, взявший порог «5 видео» пачкой роликов за один день, только отмечаем — балл не меняется</p>
     <p className="text-muted-foreground text-xs">Сдвиг вычитается {clean.basis === "fact" ? "из официального балла" : "из нашего прогноза: официального балла ещё нет"};
       Rutube, СМИ, сайт и повестка не меняются. Признаки статистические, а не доказательство накрутки.</p>
+    </div>
   </section>;
 }
 
