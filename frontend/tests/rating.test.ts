@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hasActual, monthLabel, normalizeCategory, normalizeMonth, rankDelta, rankLabel, rowsFor, scatterPoints, sourceNote, statusLine, stripPosition } from "../lib/rating";
+import { hasActual, isIncomplete, monthLabel, monthShift, normalizeCategory, normalizeMonth, normalizeView, placeGap, rankDelta, rankLabel, rowsFor, scatterPoints, signed, sourceNote, statusLine, stripPosition, viewScore } from "../lib/rating";
 import type { RatingForecastCell, RatingForecastRow } from "../lib/types";
 
 const cell = (rank: number, extra: Partial<RatingForecastCell> = {}): RatingForecastCell => ({
@@ -69,4 +69,50 @@ test("source notes explain every non-formula cell", () => {
   assert.equal(sourceNote(cell(5, { source: "fallback" }), "Сентябрь 2026"), "нет полных данных — взят балл за сентябрь 2026");
   assert.equal(sourceNote(cell(5, { source: "source_zero" }), "Сентябрь 2026"),
     "рейтинг не учитывает этот канал: 0 два месяца подряд");
+});
+
+test("view parameter falls back to the forecast", () => {
+  assert.equal(normalizeView("fact"), "fact");
+  assert.equal(normalizeView(["fact", "forecast"]), "fact");
+  assert.equal(normalizeView("other"), "forecast");
+  assert.equal(normalizeView(undefined), "forecast");
+});
+
+test("Δ compares with last month: our forecast or the actual place", () => {
+  const value = cell(8, { baseRank: 11, actualRank: 10 });
+  assert.equal(monthShift(value, "forecast"), 3);
+  assert.equal(monthShift(value, "fact"), 1);
+  assert.equal(monthShift(cell(8, { actualRank: 10 }), "fact"), null);
+  assert.equal(monthShift(cell(8, { baseRank: 11 }), "fact"), null);
+});
+
+test("± is plus when the other place is higher", () => {
+  // Прогноз 12, факт 10: факт на 2 места выше прогноза, прогноз на 2 ниже факта.
+  const value = cell(12, { actualRank: 10 });
+  assert.equal(placeGap(value, "forecast"), 2);
+  assert.equal(placeGap(value, "fact"), -2);
+  assert.equal(placeGap(cell(12), "forecast"), null);
+  assert.equal(signed(2), "+2");
+  assert.equal(signed(-2), "−2");
+  assert.equal(signed(0), "0");
+});
+
+test("rows follow the actual place in the fact view, rows without one go last", () => {
+  const rows = [row("А", 1, 1, 3), row("Б", 2, 1, 1), row("В", 3, 1)];
+  assert.deepEqual(rowsFor(rows, "social", "fact").map((item) => item.name), ["Б", "А", "В"]);
+  assert.deepEqual(rowsFor(rows, "social", "forecast").map((item) => item.name), ["А", "Б", "В"]);
+});
+
+test("score follows the view", () => {
+  assert.equal(viewScore(cell(5, { score: 61.2, actualScore: 58.4 }), "forecast"), 61.2);
+  assert.equal(viewScore(cell(5, { score: 61.2, actualScore: 58.4 }), "fact"), 58.4);
+  assert.equal(viewScore(cell(5, { score: 61.2 }), "fact"), null);
+});
+
+test("incomplete cells are marked, regular formula and missing accounts are not", () => {
+  assert.equal(isIncomplete(cell(5, { source: "fallback" })), true);
+  assert.equal(isIncomplete(cell(5, { source: "partial" })), true);
+  assert.equal(isIncomplete(cell(5, { source: "source_zero" })), true);
+  assert.equal(isIncomplete(cell(5, { source: "formula" })), false);
+  assert.equal(isIncomplete(cell(5, { source: "no_account" })), false);
 });
