@@ -3,8 +3,8 @@
 Пост анализируется повторно, когда с прошлого анализа прошёл интервал из
 таблицы и пришло не меньше трёх новых замеров. Исключения: замеры
 возобновились после пробела — анализ сразу; окно отслеживания кончилось —
-финальный анализ и заморозка; принята новая норма — перепроверка, растянутая
-по окну без всплеска.
+финальный анализ и заморозка; вывод поста посчитан по норме старше недели —
+перепроверка, растянутая по окну без всплеска.
 
 Догонка не отдельный режим, а свойство расчёта: срок всегда считается от
 момента анализа, а не от пропущенного срока, поэтому после простоя каждый
@@ -45,11 +45,20 @@ class ScheduleConfig:
     # отслеживания получает один финальный анализ и замораживается.
     seed_window_hours: int = 75 * 24
     # Деградация: при отставании очереди интервалы 7–30 суток растягиваются
-    # до вчетверо; свежие посты не страдают никогда.
+    # до вчетверо; свежие посты не страдают никогда. Растянутый срок поста —
+    # его доля между обычным и растянутым интервалом (stretch_share): с
+    # одинаковым множителем вся когорта приходила одной волной через 12 ч.
     max_stretch: float = 4.0
     stretch_after_lag_seconds: int = 15 * MINUTE
-    # Перепроверка после новой нормы расходится по шести часам.
-    recheck_window_seconds: int = 6 * HOUR
+    # Новая норма принимается каждую ночь и сдвигается на сотые доли MAD:
+    # суточная смена меняет 0.2 % выводов, недельная — 1 %, и только между
+    # уровнями 0 и 1 (замер на копии прода 20.11.2026). Пост с новыми замерами
+    # и так получает свежую норму в очередном анализе; принудительно
+    # перепроверяется только вывод по норме старше этого срока.
+    norm_recheck_after_seconds: int = 7 * DAY
+    # Перепроверка расходится по суткам: прежние шесть часов вместе с ежесуточной
+    # перепроверкой всех постов давали утренний вал очереди (до 3.4 ч, 20.11).
+    recheck_window_seconds: int = DAY
     # Пост без новых замеров проверяется на возобновление с шагом сбора, а не
     # с интервалом анализа: возобновившийся ряд анализируется сразу.
     stale_probe_seconds: int = 15 * MINUTE
@@ -99,11 +108,25 @@ class Plan:
     reason: str
 
 
-def interval(config: ScheduleConfig, platform: str, age_seconds: float, stretch: float = 1.0) -> float:
+def interval(config: ScheduleConfig, platform: str, age_seconds: float, stretch: float = 1.0,
+             spread: float = 1.0) -> float:
+    """Интервал анализа; `spread` — доля поста в растяжке (1 — растянуть полностью)."""
     band = min(3, max(0, int((AGE_BAND_EDGES <= age_seconds).sum()) - 1))
     base = float(config.intervals(platform)[band])
     # Растягивается только самый старый интервал — анализ свежих постов важнее.
-    return base * min(max(stretch, 1.0), config.max_stretch) if band == 3 else base
+    if band != 3:
+        return base
+    factor = min(max(stretch, 1.0), config.max_stretch)
+    return base * (1.0 + (factor - 1.0) * min(max(spread, 0.0), 1.0))
+
+
+def stretch_share(publication_id: UUID) -> float:
+    """Доля поста в растяжке интервала, [0, 1): детерминированно по идентификатору.
+
+    Берутся вторые 32 бита md5 — не те, что у recheck_offset, чтобы доля
+    растяжки не повторяла место поста в окне перепроверки.
+    """
+    return int(hashlib.md5(str(publication_id).encode("ascii")).hexdigest()[8:16], 16) / 2.0 ** 32
 
 
 def stretch_for_lag(config: ScheduleConfig, queue_lag_seconds: float) -> float:
@@ -117,13 +140,13 @@ def plan(config: ScheduleConfig, *, platform: str, published_at: datetime, now: 
          new_points: int, analyzed_before: bool, resumed_after_gap: bool = False,
          norm_recheck: bool = False, stale: bool = False, stretch: float = 1.0,
          reference_checkpoint: bool = False, tail_ledger_stale: bool = False,
-         silent_seconds: float = 0.0) -> Plan:
-    """Решение по посту, срок которого наступил."""
+         silent_seconds: float = 0.0, spread: float = 1.0) -> Plan:
+    """Решение по посту, срок которого наступил; `spread` — stretch_share поста."""
     age = (now - published_at).total_seconds()
     if age >= config.track_seconds:
         # Сбор прекращён: финальный анализ на всём ряду, затем заморозка.
         return Plan(True, True, now, "final")
-    step = timedelta(seconds=interval(config, platform, age, stretch))
+    step = timedelta(seconds=interval(config, platform, age, stretch, spread))
     if not analyzed_before:
         return Plan(True, False, now + step, "first")
     if resumed_after_gap:
