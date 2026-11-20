@@ -240,6 +240,10 @@ def pipeline(values: dict[str, float]) -> dict[str, float | None]:
         "ingestAccepted": total("mranked_transfer_ingest_accepted_total"),
         "analysisLag": latest("mranked_anomaly_queue_lag_seconds"),
         "analysisBacklog": latest("mranked_anomaly_due_backlog"),
+        # Посты моложе недели: их отставание видит читатель; у всей очереди
+        # самая старая просрочка — почти всегда пост 7–30 суток.
+        "analysisFreshLag": latest("mranked_anomaly_fresh_queue_lag_seconds"),
+        "analysisFreshBacklog": latest("mranked_anomaly_fresh_due_backlog"),
         "analysisCompletedAt": latest("mranked_anomaly_last_completion_unixtime"),
         "analyses": total("mranked_anomaly_analyses_total"),
         "normsRunAt": latest("mranked_anomaly_norm_last_run_unixtime"),

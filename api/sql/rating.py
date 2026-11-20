@@ -3,7 +3,9 @@
 # Площадки наших вузов (с действующим кодом m-rating) за месяц по Москве.
 # Аккаунт покрывает месяц, если включён и либо был в каталоге с начала месяца,
 # либо его догруженная история начинается раньше месяца. Вуз без аккаунтов на
-# VK/MAX/Rutube остаётся одной строкой с platform IS NULL.
+# VK/MAX/Rutube остаётся одной строкой с platform IS NULL. uploaded_posts — видео
+# Rutube, загруженные в окне (источник считает порог по дате загрузки; без неё —
+# по дате публикации); у прочих площадок NULL.
 PLATFORM_MONTH = """
 WITH coded AS (
     SELECT code.institution_id, code.external_id AS code, institution.canonical_name AS name
@@ -39,12 +41,23 @@ WITH coded AS (
        AND publication.published_at >= %(window_start)s AND publication.published_at < %(window_end)s
       LEFT JOIN analytics.publication_latest latest ON latest.publication_id = publication.id
      GROUP BY account.institution_id, account.platform
+), uploaded AS (
+    SELECT account.institution_id, count(publication.id) AS uploaded_posts
+      FROM account
+      JOIN ingest.publication publication
+        ON publication.primary_account_id = account.id AND publication.deleted_at IS NULL
+       AND coalesce(publication.uploaded_at, publication.published_at) >= %(window_start)s
+       AND coalesce(publication.uploaded_at, publication.published_at) < %(window_end)s
+     WHERE account.platform = 'rutube'
+     GROUP BY account.institution_id
 )
 SELECT coded.institution_id::text AS institution_id, coded.code, coded.name, platform_month.platform,
        platform_month.posts, platform_month.mature_posts, platform_month.mature_views,
        platform_month.mature_interactions, platform_month.viewed_posts, platform_month.views,
-       platform_month.interactions, platform_month.covered
+       platform_month.interactions, platform_month.covered,
+       CASE WHEN platform_month.platform = 'rutube' THEN coalesce(uploaded.uploaded_posts, 0) END AS uploaded_posts
   FROM coded LEFT JOIN platform_month ON platform_month.institution_id = coded.institution_id
+  LEFT JOIN uploaded ON uploaded.institution_id = coded.institution_id AND platform_month.platform = 'rutube'
  ORDER BY coded.code, platform_month.platform
 """
 

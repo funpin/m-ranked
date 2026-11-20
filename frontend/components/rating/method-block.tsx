@@ -9,7 +9,7 @@ export function ForecastMethod({ forecast }: { forecast: RatingForecast }) {
       Rutube: меньше 5 видео — 0. Места — среди всех вузов официального рейтинга; вузы, которых мы не отслеживаем,
       стоят с баллами за {forecast.basePeriod.toLowerCase()}.</p>
     <p className="mt-2">Типичная ошибка балла: соцсети ±{forecast.errors.social}, MAX ±{forecast.errors.max},
-      VK ±{forecast.errors.vk}, Rutube ±{forecast.errors.rutube}; в скобках — места при такой ошибке.
+      VK ±{forecast.errors.vk}, Rutube ±{forecast.errors.rutube}; под прогнозным местом — места при такой ошибке.
       СМИ, сайт и повестка МОН не прогнозируются. Формула, версия {forecast.formulaVersion}.</p>
     <p className="mt-2"><Link href="/methodology/rating-forecast" className="underline">Методика и ограничения</Link></p>
   </section>;

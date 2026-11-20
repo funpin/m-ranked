@@ -234,3 +234,31 @@ def test_official_rating_backfills_institutions_missing_from_recorded_periods(mo
         assert {item["category"]: item["rank"] for item in payload["institutions"]} == {
             "social": 2, "telegram": None, "vk": 2, "max": 2, "rutube": 2}
         assert payload["accounts"] == []
+
+
+def test_official_rating_button_recounts_forecast(monkeypatch) -> None:
+    """Кнопка сразу пересчитывает прогноз, а его ошибка не ломает загрузку.
+
+    Прежде прогноз пересчитывал только ночной таймер, и опубликованный месяц
+    становился итоговым на вкладке «Рейтинг» лишь следующей ночью.
+    """
+    import asyncio
+
+    from api import official_rating
+    from api.tools import rating_forecast
+
+    calls = []
+
+    async def run(database, as_of):
+        calls.append((database, as_of.tzinfo is not None))
+
+    monkeypatch.setattr(rating_forecast, "run", run)
+    database = object()
+    assert asyncio.run(official_rating.recount_forecast(database)) is True
+    assert calls == [(database, True)]
+
+    async def broken(database, as_of):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(rating_forecast, "run", broken)
+    assert asyncio.run(official_rating.recount_forecast(database)) is False

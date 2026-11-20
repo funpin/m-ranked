@@ -1,13 +1,14 @@
 """Расписание анализа v2: таблица периодичности, три точки, пробел, заморозка, деградация."""
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest
 
 from anomaly_analysis.v2.schedule import (
-    ScheduleConfig, interval, plan, recheck_offset, retry_after, stretch_for_lag,
+    ScheduleConfig, interval, plan, recheck_offset, retry_after, stretch_for_lag, stretch_share,
 )
 
 CONFIG = ScheduleConfig()
@@ -93,6 +94,38 @@ def test_degradation_stretches_only_the_oldest_interval():
     assert interval(CONFIG, "telegram", 10 * 24 * H, stretch) == 4 * 3 * H
     for age in (2, 30, 4 * 24):
         assert interval(CONFIG, "telegram", age * H, stretch) == interval(CONFIG, "telegram", age * H)
+
+
+@pytest.mark.parametrize("new_points", [3, 0])
+def test_stretched_old_posts_do_not_come_due_together_again(new_points):
+    # 20.11.2026: при отставании все посты 7–30 суток получали срок ровно
+    # через 12 ч и приходили одной волной — новый эпизод отставания, снова
+    # растяжка, ещё через 12 ч снова волна. Растянутый срок поста теперь —
+    # его детерминированная доля между обычным и растянутым интервалом.
+    stretch = CONFIG.max_stretch
+    steps = [decide(10 * 24, new_points=new_points, stretch=stretch,
+                    spread=stretch_share(UUID(int=index))).next_due_at - NOW for index in range(2000)]
+    base, longest = timedelta(hours=3), timedelta(hours=3 * stretch)
+    assert all(base <= step <= longest for step in steps)
+    hours = Counter(int(step.total_seconds() // 3600) for step in steps)
+    assert len(hours) == 9 and max(hours.values()) < 2 * len(steps) / len(hours)
+    # Без отставания срок прежний и доля поста ни на что не влияет.
+    assert {decide(10 * 24, new_points=new_points, spread=stretch_share(UUID(int=index))).next_due_at
+            for index in range(50)} == {NOW + base}
+
+
+def test_stretch_share_is_deterministic_per_post():
+    shares = [stretch_share(UUID(int=index)) for index in range(500)]
+    assert shares == [stretch_share(UUID(int=index)) for index in range(500)]
+    assert all(0.0 <= share < 1.0 for share in shares) and max(shares) - min(shares) > 0.9
+
+
+def test_norm_recheck_defaults_spread_over_a_day_and_a_week_of_norm_age():
+    assert CONFIG.recheck_window_seconds == 24 * H
+    assert CONFIG.norm_recheck_after_seconds == 7 * 24 * H
+    config = ScheduleConfig.from_environment({"ANOMALY_NORM_RECHECK_AFTER_SECONDS": "86400",
+                                              "ANOMALY_RECHECK_WINDOW_SECONDS": "21600"})
+    assert config.norm_recheck_after_seconds == 86400 and config.recheck_window_seconds == 21600
 
 
 def test_norm_recheck_is_spread_deterministically_over_the_window():

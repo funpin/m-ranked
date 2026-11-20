@@ -371,9 +371,24 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], host: Host, in
                       f"Приём данных отстаёт на {queue_lag:.0f} мин: Сервер 1 копит очередь пачек, "
                       "Сервер 2 не успевает их применять — сбор при этом идёт"
                       if lagging else "Приём пачек без отставания"))
+    # Работник берёт свежие посты первыми, поэтому самая старая просрочка всей
+    # очереди — почти всегда пост 7–30 суток, и при любой непустой очереди она
+    # растёт вместе с часами (20.11.2026: «отстаёт на 181 мин» при свежих
+    # постах, разобранных вовремя). Тревога — по свежим постам; у старых свой
+    # предел — растянутый интервал анализа (до 12 ч).
     lag = values.get("mranked_anomaly_queue_lag_seconds")
-    rules.append(Rule("analysis", lag is not None and lag > limits["analysis_lag_seconds"],
-                      f"Очередь анализа отстаёт на {lag / 60:.0f} мин" if lag else "Анализ в порядке"))
+    fresh = values.get("mranked_anomaly_fresh_queue_lag_seconds")
+    if fresh is None:
+        rules.append(Rule("analysis", lag is not None and lag > limits["analysis_lag_seconds"],
+                          f"Очередь анализа отстаёт на {lag / 60:.0f} мин" if lag else "Анализ в порядке"))
+    else:
+        rules.append(Rule("analysis", fresh > limits["analysis_lag_seconds"],
+                          f"Свежие посты ждут анализа {fresh / 60:.0f} мин"
+                          if fresh > limits["analysis_lag_seconds"] else "Анализ свежих постов в порядке"))
+        old = lag is not None and lag > limits["analysis_old_lag_seconds"]
+        rules.append(Rule("analysis_old", old,
+                          f"Посты старше недели ждут анализа {lag / 3600:.1f} ч — дольше растянутого интервала"
+                          if old else "Анализ старых постов в пределах растянутого интервала"))
     reference_accounts = values.get("mranked_anomaly_reference_accounts", 0)
     reference_expiry = values.get("mranked_anomaly_reference_expires_at_unixtime")
     remaining = reference_expiry - now if reference_expiry is not None and math.isfinite(reference_expiry) else None
@@ -632,7 +647,9 @@ def main() -> int:
         "bot_render_minutes": min(HISTORY_MINUTES - 1, max(1, env_int("ALERTS_BOT_RENDER_MINUTES", 10))),
         "ingest_minutes": max(1, env_int("ALERTS_INGEST_MINUTES", 20)),
         "ingest_lag_minutes": max(1, env_int("ALERTS_INGEST_LAG_MINUTES", 10)),
+        # Свежие посты (моложе недели); у всей очереди — свой предел ниже.
         "analysis_lag_seconds": max(1, env_int("ALERTS_ANALYSIS_LAG_MINUTES", 180)) * 60,
+        "analysis_old_lag_seconds": max(1, env_int("ALERTS_ANALYSIS_OLD_LAG_MINUTES", 720)) * 60,
         "docker_bytes": env_int("ALERTS_DOCKER_GB", 5) * 10**9,
         "human_5xx": env_int("ALERTS_HUMAN_5XX", 20),
         "bot_503_share": env_int("ALERTS_BOT_503_PERCENT", 50) / 100,
