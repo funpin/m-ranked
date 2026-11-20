@@ -301,6 +301,39 @@ def test_months_and_rows_prefer_the_real_forecast_over_retrospective(dsn):
     assert (float(rows[0]["score"]), rows[0]["legacy_id"], rows[0]["actual"]) == (60.0, world.legacy_id, None)
 
 
+def test_a_newer_formula_retrospective_replaces_an_older_published_forecast(dsn):
+    """Владелец 20.11.2026: прошлые месяцы показываются последней версией формулы.
+    Октябрь 2026 опубликован прогнозом v1 до публикации; ретроспектива v2 того же
+    месяца становится снимком страницы, а опубликованный снимок v1 остаётся в базе
+    для типичных ошибок."""
+    world = World(dsn, "vk")
+    record(dsn, payload(world.institution, START + timedelta(days=40), score=55.0))
+    with _connect(dsn) as connection:
+        connection.execute("SELECT ops_and_admin.finalize_rating_forecast(%s, %s)", (rf.FORMULA_KEY, START))
+    record(dsn, {**payload(world.institution, START + timedelta(days=50), status="retrospective",
+                           window_end=END, score=58.0), "version": 2})
+    with _connect(dsn) as connection:
+        months = connection.execute(sql.FORECAST_MONTHS, {"formula_key": rf.FORMULA_KEY}).fetchall()
+        run = connection.execute(sql.FORECAST_RUN, {"formula_key": rf.FORMULA_KEY, "window_start": START}).fetchone()
+        published = connection.execute(sql.PUBLISHED_SNAPSHOT_SCORES, {
+            "formula_key": rf.FORMULA_KEY, "window_start": START, "period": "Октябрь 2026"}).fetchall()
+    assert [(item["month"], item["status"]) for item in months] == [("2026-10", "retrospective")]
+    assert (run["version"], run["parameters"]["status"]) == (2, "retrospective")
+    # Типичные ошибки по-прежнему считаются по прогнозу до публикации (снимок v1).
+    assert {row["institution_id"] for row in published} == {str(world.institution)}
+
+
+def test_within_one_version_the_real_forecast_still_wins(dsn):
+    world = World(dsn, "vk")
+    record(dsn, {**payload(world.institution, START + timedelta(days=40), status="retrospective",
+                           window_end=END, score=50.0), "version": 2})
+    record(dsn, {**payload(world.institution, START + timedelta(days=35), status="final", window_end=END,
+                           score=61.0), "version": 2})
+    with _connect(dsn) as connection:
+        run = connection.execute(sql.FORECAST_RUN, {"formula_key": rf.FORMULA_KEY, "window_start": START}).fetchone()
+    assert (run["version"], run["parameters"]["status"]) == (2, "final")
+
+
 def test_rows_join_the_official_actual_for_the_period(dsn):
     world = World(dsn, "vk")
     as_of = datetime(2026, 10, 16, 22, tzinfo=timezone.utc)
