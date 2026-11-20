@@ -61,13 +61,17 @@ SELECT coded.institution_id::text AS institution_id, coded.code, coded.name, pla
  ORDER BY coded.code, platform_month.platform
 """
 
-# Месяц — один снимок: настоящий прогноз (итоговый, бегущий) важнее ретроспективы.
+# Месяц — один снимок. Сначала последняя версия формулы (решение владельца
+# 20.11.2026: прошлые месяцы показываются ею, ретроспективой), внутри версии
+# настоящий прогноз (итоговый, бегущий, опубликованный) важнее ретроспективы.
+# Опубликованный прогноз прежней версии остаётся в базе: по нему считаются
+# типичные ошибки (PUBLISHED_SNAPSHOT_SCORES).
 _BEST_RUN = """
     SELECT DISTINCT ON (run.window_start) run.id, run.as_of, run.window_start, run.parameters, formula.version
       FROM rating.rating_run run
       JOIN rating.formula_definition formula ON formula.id = run.formula_definition_id
      WHERE formula.formula_key = %(formula_key)s {filter}
-     ORDER BY run.window_start, (run.parameters->>'status' = 'retrospective'), run.as_of DESC
+     ORDER BY run.window_start, formula.version DESC, (run.parameters->>'status' = 'retrospective'), run.as_of DESC
 """
 
 FORECAST_MONTHS = f"""
