@@ -17,7 +17,7 @@ def tail_shares():
 TAIL = tail_shares()
 # "smart": regular_reactions status 2 + long tail (status 2 majority) -> ERV capped at platform median
 REG = {(r['institution_id'], r['platform']) for r in _csv.DictReader(open('findings.csv')) if r['kind'] == 'regular_reactions' and r['status'] == '2'}
-def metrics2(m, clean=True, floor=2000, account=True):
+def metrics2(m, clean=True, floor=0, account=True):
     M = metrics(m, clean=clean, floor=floor)
     if not (clean and account): return M, set()
     A = aggregate(m); smart = set()
@@ -29,7 +29,7 @@ def metrics2(m, clean=True, floor=2000, account=True):
         v['erv'] = (d['inter'] - rem) / V if V > 0 else None; v['tail_share'] = sh
         if (i, p) in REG and m == '2026-10': smart.add((i, p))
     return M, smart
-def run(m, A, clean=True, account=True, floor=2000):
+def run(m, A, clean=True, account=True, floor=0):
     M, smart = metrics2(m, clean, floor, account)
     cap = {}
     for p in PLATFORMS:

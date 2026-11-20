@@ -10,7 +10,7 @@ def active_days(m):
         t = (r['upl'] or r['pub']) if r['platform'] == 'rutube' else r['pub']
         if month(t) == m: days[(r['institution_id'], r['platform'])].add(t.astimezone(MSK).date())
     return days
-def metrics(m, clean=True, floor=2000, stat='mean'):
+def metrics(m, clean=True, floor=0, stat='mean'):
     A = aggregate(m); D = active_days(m); out = {}
     for (i, p), d in A.items():
         if i not in inst: continue
