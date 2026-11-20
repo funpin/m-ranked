@@ -314,3 +314,121 @@ def test_batch_tools_write_the_same_rows_before_and_after_packing(fixture):
     assert before["checkpoints"] and before["overview"]
     for name in before:
         assert normalized(after[name]) == normalized(before[name]), name
+
+
+# Строка, лежащая на границе окна карточек «Обзора», и её исправление в том же
+# бакете. Граница — as_of пересчёта, а не часы теста.
+BOUNDARY_POINT = """
+SELECT s.* FROM ingest.publication_metric_snapshot s
+ WHERE s.publication_id = %(post)s AND NOT s.synthetic AND s.quality <> 'invalid'
+   AND s.observed_at <= (SELECT max(committed_at) FROM analytics.dataset_revision) - %(back)s - interval '1 second'
+ ORDER BY s.observed_at DESC, s.id DESC LIMIT 1 OFFSET %(skip)s"""
+
+LATE_CORRECTION = """
+INSERT INTO ingest.publication_metric_snapshot(published_month, id, publication_id, collection_run_id, observed_at,
+  age_seconds, sampling_bucket, views_count, reactions_count, comments_count, shares_count, quality, views_quality,
+  reactions_quality, comments_quality, shares_quality, interval_uncertain, source_fingerprint, collected_at,
+  created_at, correction_reason, metric_evidence, semantic_fingerprint)
+SELECT s.published_month, %(id)s, s.publication_id, s.collection_run_id, s.observed_at + interval '1 millisecond',
+       s.age_seconds, s.sampling_bucket, s.views_count + 7, s.reactions_count + 1, s.comments_count, s.shares_count,
+       s.quality, s.views_quality, s.reactions_quality, s.comments_quality, s.shares_quality, s.interval_uncertain,
+       md5(s.source_fingerprint || 'late'), s.collected_at, s.created_at, 'provider_payload_changed',
+       s.metric_evidence, sha256(s.semantic_fingerprint || '\\x01'::bytea)
+  FROM ingest.publication_metric_snapshot s
+ WHERE s.published_month = %(month)s AND s.id = %(source)s"""
+
+# Та же строка ещё раз, после упаковки: исходной горячей строки уже нет, и
+# значения берутся из сохранённой копии; номер исправления снова ставит
+# триггер приёма — по упакованной точке того же бакета.
+REINSERT = """
+INSERT INTO ingest.publication_metric_snapshot(published_month, id, publication_id, collection_run_id, observed_at,
+  age_seconds, sampling_bucket, views_count, reactions_count, comments_count, shares_count, quality, views_quality,
+  reactions_quality, comments_quality, shares_quality, interval_uncertain, source_fingerprint, collected_at,
+  created_at, correction_reason, metric_evidence, semantic_fingerprint)
+SELECT r.published_month, r.id, r.publication_id, r.collection_run_id, r.observed_at, r.age_seconds,
+       r.sampling_bucket, r.views_count, r.reactions_count, r.comments_count, r.shares_count, r.quality,
+       r.views_quality, r.reactions_quality, r.comments_quality, r.shares_quality, r.interval_uncertain,
+       r.source_fingerprint, r.collected_at, r.created_at, r.correction_reason, r.metric_evidence,
+       r.semantic_fingerprint
+  FROM jsonb_populate_record(NULL::ingest.publication_metric_snapshot, %(row)s) r"""
+
+# Невалидная точка за секунду до границы в своём, пустом бакете: в массиве
+# упаковки она последняя не позже границы, и номер ищется перебором кодов.
+INVALID_AT_BOUNDARY = """
+SET session_replication_role = replica;
+INSERT INTO ingest.publication_metric_snapshot(published_month, id, publication_id, collection_run_id, observed_at,
+  age_seconds, sampling_bucket, views_count, reactions_count, comments_count, shares_count, quality, views_quality,
+  reactions_quality, comments_quality, shares_quality, interval_uncertain, source_fingerprint, collected_at,
+  created_at, metric_evidence, semantic_fingerprint)
+SELECT s.published_month, nextval(pg_get_serial_sequence('ingest.publication_metric_snapshot', 'id')),
+       s.publication_id, s.collection_run_id, at.moment,
+       floor(extract(epoch FROM at.moment - p.published_at))::integer,
+       floor(extract(epoch FROM at.moment) / 300)::bigint,
+       s.views_count * 100, s.reactions_count, s.comments_count, s.shares_count, 'invalid', 'invalid', 'invalid',
+       'invalid', 'invalid', false, md5(s.source_fingerprint || 'invalid'), at.moment + interval '2 seconds',
+       at.moment + interval '20 seconds', s.metric_evidence, sha256(s.semantic_fingerprint || '\\x02'::bytea)
+  FROM ingest.publication_metric_snapshot s
+  JOIN ingest.publication p ON p.id = s.publication_id
+ CROSS JOIN LATERAL (SELECT (SELECT max(committed_at) FROM analytics.dataset_revision)
+                            - %(back)s - interval '1 second' AS moment) at
+ WHERE s.published_month = %(month)s AND s.id = %(source)s
+   AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot same
+                    WHERE same.publication_id = s.publication_id
+                      AND same.sampling_bucket = floor(extract(epoch FROM at.moment) / 300)::bigint);
+SET session_replication_role = origin"""
+
+
+def test_overview_refresh_reads_late_rows_and_invalid_boundary_points_after_packing(fixture):
+    # Пересчёт карточек ищет упакованные точки двоичным поиском по observed_at
+    # и берёт из массивов значения на всех границах разом. Две ветки, которых
+    # общий тест не задевает: поздняя строка (горячая и упакованная точки
+    # спорят по времени) и невалидная точка ровно у границы.
+    with connect() as connection:
+        late_post = publication(connection, fixture["posts"][20])
+        # Исправление последней точки до границы 3 ч — горячая строка новее
+        # упакованной и побеждает; исправление предпоследней до границы суток —
+        # старше последней упакованной и проигрывает ей.
+        late = []
+        for back, skip in ((timedelta(hours=3), 0), (timedelta(days=1), 1)):
+            source = connection.execute(BOUNDARY_POINT, {"post": late_post["id"], "back": back,
+                                                         "skip": skip}).fetchone()
+            late_id = connection.execute("SELECT nextval(pg_get_serial_sequence("
+                                         "'ingest.publication_metric_snapshot', 'id')) AS id").fetchone()["id"]
+            row = {"id": late_id, "month": source["published_month"], "source": source["id"]}
+            connection.execute(LATE_CORRECTION, row)
+            late.append(connection.execute(
+                "SELECT published_month, id, to_jsonb(s) AS row FROM ingest.publication_metric_snapshot s "
+                "WHERE published_month = %(month)s AND id = %(id)s", row).fetchone())
+
+        invalid_post = publication(connection, fixture["posts"][45])
+        anchor = connection.execute(BOUNDARY_POINT, {"post": invalid_post["id"], "back": timedelta(days=7),
+                                                     "skip": 0}).fetchone()
+        for statement in INVALID_AT_BOUNDARY.split(";\n"):
+            connection.execute(statement, {"month": anchor["published_month"], "source": anchor["id"],
+                                           "back": timedelta(days=7)} if "%(" in statement else None)
+        assert connection.execute(BOUNDARY_POINT.replace("AND s.quality <> 'invalid'", ""),
+                                  {"post": invalid_post["id"], "back": timedelta(days=7) - timedelta(seconds=1),
+                                   "skip": 0}
+                                  ).fetchone()["quality"] == "invalid"
+
+        before = tool_rows(connection, fixture)
+
+        connection.execute("SET session_replication_role = replica")
+        for row in late:
+            connection.execute("DELETE FROM ingest.publication_metric_snapshot WHERE published_month = %s AND id = %s",
+                               (row["published_month"], row["id"]))
+        connection.execute("SET session_replication_role = origin")
+        for post in fixture["posts"]:
+            connection.execute("SELECT ingest.compact_publication_history(%s, %s)",
+                               (post, fixture["now"] - timedelta(hours=2)))
+        for row in late:
+            connection.execute(REINSERT, {"row": psycopg.types.json.Jsonb(row["row"])})
+        flags = connection.execute(
+            "SELECT publication_id, late_rows FROM ingest.publication_metric_history WHERE publication_id = ANY (%s)",
+            ([late_post["id"], invalid_post["id"]],)).fetchall()
+
+        after = tool_rows(connection, fixture)
+    assert {row["publication_id"]: row["late_rows"] for row in flags} == {late_post["id"]: True,
+                                                                          invalid_post["id"]: False}
+    assert before["overview"]
+    assert normalized(after["overview"]) == normalized(before["overview"])
