@@ -1,4 +1,5 @@
 import Link from "@/components/native-link";
+import { ScoreBar } from "@/components/rating/formula-visual";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { hasActual, isIncomplete, monthShift, placeGap, rowsFor, signed, sourceNote, stripPosition, viewScore, type RatingView } from "@/lib/rating";
 import type { RatingCategory, RatingForecast, RatingForecastCell } from "@/lib/types";
@@ -103,7 +104,7 @@ export function ForecastTable({ forecast, category, view, total }: { forecast: R
         <TableHead scope="col" className={cn(HIDE_DELTA, "text-right")} title={deltaTitle}>Δ</TableHead>
         <TableHead scope="col" className="text-right">Балл</TableHead>
         {category === "social" ? PLATFORM_COLUMNS.map(([key, label]) =>
-          <TableHead key={key} scope="col" className={cn(HIDE_PLATFORMS, "text-right")}>{label}</TableHead>) : null}
+          <TableHead key={key} scope="col" className={HIDE_PLATFORMS}>{label}</TableHead>) : null}
       </TableRow>
     </TableHeader>
     <TableBody>
@@ -124,14 +125,16 @@ export function ForecastTable({ forecast, category, view, total }: { forecast: R
           <TableCell className={cn(HIDE_DELTA, "text-right")}><Delta value={monthShift(cell, view)} /></TableCell>
           <TableCell className="text-right">{view === "forecast" ? <Mark cell={cell} basePeriod={forecast.basePeriod} /> : null}{score(viewScore(cell, view))}</TableCell>
           {category === "social" ? PLATFORM_COLUMNS.map(([key]) =>
-            <TableCell key={key} className={cn(HIDE_PLATFORMS, "text-muted-foreground text-right")}>
-              {view === "forecast" ? <Mark cell={row.categories[key]} basePeriod={forecast.basePeriod} /> : null}{score(viewScore(row.categories[key], view))}</TableCell>) : null}
+            <TableCell key={key} className={cn(HIDE_PLATFORMS, "w-32")}>
+              <span className="inline-flex w-full items-center">
+                {view === "forecast" ? <Mark cell={row.categories[key]} basePeriod={forecast.basePeriod} /> : null}
+                <ScoreBar value={viewScore(row.categories[key], view)} platform={key} />
+              </span></TableCell>) : null}
         </TableRow>;
       })}
     </TableBody>
   </Table>
   {marked ? <p data-testid="rating-incomplete-note" className="text-muted-foreground mt-2 text-xs">
-    * — неполные данные: нашей истории за месяц не хватает, балл площадки взят за {forecast.basePeriod.toLowerCase()};
-    у балла соцсетей — так посчитана часть площадок. Подробности — в подсказке у звёздочки.</p> : null}
+    * — неполные данные: часть месяца взята за {forecast.basePeriod.toLowerCase()}; причина — в подсказке у звёздочки.</p> : null}
   </>;
 }

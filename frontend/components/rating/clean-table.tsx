@@ -1,4 +1,5 @@
 import Link from "@/components/native-link";
+import { ScoreBar } from "@/components/rating/formula-visual";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { RatingClean, RatingCleanPlatform, RatingCleanRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -25,21 +26,22 @@ function Shift({ value }: { value: number }) {
   </span>;
 }
 
-/** Что убрано на площадке: доли реакций и просмотров, балл площадки до и после. */
-function Removed({ item }: { item: RatingCleanPlatform | null | undefined }) {
+/** Балл площадки без накрутки полоской; бледный хвост — балл как есть. Доли убранного — в подсказке. */
+function Removed({ item, platform }: { item: RatingCleanPlatform | null | undefined; platform: "vk" | "max" }) {
   if (!item) return <span className="text-muted-foreground">—</span>;
   const reactions = percent(item.removedReactions, item.interactions);
   const smart = percent(item.smartReactions, item.interactions);
   const views = percent(item.removedViews, item.views);
-  if (!reactions && !smart && !views) return <span className="text-muted-foreground">не найдено</span>;
   const parts = [reactions ? `реакции −${reactions} %` : null, smart ? `хвост −${smart} %` : null, views ? `просмотры −${views} %` : null]
     .filter(Boolean);
   const smartTitle = item.smart
-    ? `Ровный отклик (разброс ${item.smart.evenness.toFixed(2)}) и длинный хвост: поздних реакций на просмотр в ${item.smart.tailRatio.toFixed(1)} раза больше ранних при 90-м перцентиле площадки ${item.smart.tailP90.toFixed(2)}`
-    : undefined;
-  return <span className="inline-flex flex-col leading-tight" title={smartTitle}>
-    <span>{parts.join(" · ")}</span>
-    <span className="text-muted-foreground text-xs">балл {item.rawScore.toFixed(1)} → {item.cleanScore.toFixed(1)}</span>
+    ? `; ровный отклик (разброс ${item.smart.evenness.toFixed(2)}) и длинный хвост: поздних реакций на просмотр в ${item.smart.tailRatio.toFixed(1)} раза больше ранних при 90-м перцентиле площадки ${item.smart.tailP90.toFixed(2)}`
+    : "";
+  const title = `${parts.length ? `Убрано: ${parts.join(", ")}` : "Не найдено"}; балл ${item.rawScore.toFixed(1)} → ${item.cleanScore.toFixed(1)}${smartTitle}`;
+  return <span className="inline-flex w-full flex-col leading-tight">
+    <ScoreBar value={item.cleanScore} platform={platform} ghost={item.rawScore} title={title} />
+    <span className={cn("text-xs", parts.length ? "text-destructive" : "text-muted-foreground")}>
+      {parts.length ? parts.join(" · ") : "не найдено"}</span>
   </span>;
 }
 
@@ -65,7 +67,7 @@ export function CleanTable({ clean, rows }: { clean: RatingClean; rows: RatingCl
         <TableHead scope="col" className="text-right" title="↓ — без накрутки вуз ниже, ↑ — выше: обогнал тех, кто опустился">Сдвиг</TableHead>
         <TableHead scope="col">Вуз</TableHead>
         <TableHead scope="col" className="text-right">Балл соцсетей</TableHead>
-        {PLATFORMS.map(([key, label]) => <TableHead key={key} scope="col" className={HIDE_PLATFORMS}>{label}: убрано</TableHead>)}
+        {PLATFORMS.map(([key, label]) => <TableHead key={key} scope="col" className={HIDE_PLATFORMS}>{label} без накрутки</TableHead>)}
       </TableRow>
     </TableHeader>
     <TableBody>
@@ -87,7 +89,7 @@ export function CleanTable({ clean, rows }: { clean: RatingClean; rows: RatingCl
               ? <><span className="text-muted-foreground">{social.baseScore.toFixed(1)} → </span>{social.score.toFixed(1)}</>
               : social.score.toFixed(1)}
           </TableCell>
-          {PLATFORMS.map(([key]) => <TableCell key={key} className={cn(HIDE_PLATFORMS, "text-sm")}><Removed item={row.platforms[key]} /></TableCell>)}
+          {PLATFORMS.map(([key]) => <TableCell key={key} className={cn(HIDE_PLATFORMS, "w-40 text-sm")}><Removed item={row.platforms[key]} platform={key} /></TableCell>)}
         </TableRow>;
       })}
     </TableBody>
