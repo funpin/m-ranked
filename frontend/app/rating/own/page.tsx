@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { Equal, Waves, Zap } from "lucide-react";
 import Link from "@/components/native-link";
+import { PlatformLogo } from "@/components/platform-logo";
+import { Glyphs, GroupLabel, WeightStrip } from "@/components/rating/formula-visual";
 import { CleanTable, placeShift } from "@/components/rating/clean-table";
 import { OwnTabs } from "@/components/rating/own-tabs";
 import { RatingTabs } from "@/components/rating/rating-tabs";
@@ -21,31 +24,25 @@ const SEGMENT = "rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap tran
 const SEGMENT_ACTIVE = "bg-background text-foreground shadow-sm";
 const FILTERS = [{ value: undefined, label: "Все вузы" }, { value: "changed", label: "Только со сдвигом" }] as const;
 
-/** Открытая формула — перед таблицей, как просил владелец: что вычитается и откуда берётся основа. */
+/** Открытая формула картинкой — перед таблицей: основа и что из неё вычитается. */
 function Method({ clean }: { clean: RatingClean }) {
-  return <section aria-labelledby="clean-method" data-testid="clean-method" className="bg-muted/40 mb-5 rounded-lg p-4 text-sm">
-    <h2 id="clean-method" className="font-heading mb-2 text-base font-semibold">Как считается</h2>
-    <p className="mb-2">Тот же балл соцсетей, что у М-Рейтинга по нашей реконструкции формулы:{" "}
-      <span className="font-medium">соцсети = 0.4 × MAX + 0.3 × VK + 0.3 × Rutube</span>; балл VK и MAX — среднее трёх частей:
-      число постов за месяц, средние просмотры поста на студента и доля реакций, комментариев и репостов на просмотр.
-      Из VK и MAX вычитается то, что наш анализ замерил как накрутку:</p>
-    <ol className="mb-2 list-decimal space-y-1 pl-5">
-      <li><span className="font-medium">Пакеты на постах с явными признаками</span> (уровень 3): реакции и просмотры, пришедшие одним
-        эпизодом, — пакет реакций с остановкой, реакции раньше просмотров, рывок, обрывающийся в плато, и другие. С поста убирается
-        крупнейший эпизод каждой метрики; по просмотрам — ещё волны по стене и всплески без отклика.</li>
-      <li><span className="font-medium">«Умная» накрутка аккаунта</span>: посты одного дня получают почти одинаковое число реакций
-        (разброс сверх случайного не выше 0.10 в MAX и 0.25 в VK) и при этом старые посты добирают реакции на просмотр активнее,
-        чем у 90 % аккаунтов площадки. Убираются поздние реакции сверх обычного для площадки хвоста.</li>
-    </ol>
-    <p className="mb-2"><span className="font-medium">Только отмечается, не вычитается:</span> Rutube, у которого порог
-      «5 видео за месяц» взят лишь благодаря пачке роликов, загруженных за один день. Это не накрутка просмотров,
-      а игра с порогом — балл Rutube остаётся официальным.</p>
-    <p className="mb-2">Сдвиг балла площадки — разница нашей формулы на месяце как есть и без накрутки; он вычитается
-      {clean.basis === "fact" ? " из официального балла М-Рейтинга" : " из нашего прогноза — официального балла за этот месяц ещё нет"}.
-      Rutube, СМИ, сайт и повестка не меняются; места — среди всех вузов рейтинга, баллы неотслеживаемых вузов прежние.</p>
-    <p className="text-muted-foreground">Накрутка выгодна в М-Рейтинге в основном реакциями: доля реакций упирается в потолок
-      3.5 % в VK и 8 % в MAX, а лишние просмотры её снижают, поэтому вычитание одних просмотров может даже поднять балл.
-      Это статистическая оценка необычной активности, а не доказательство накрутки.</p>
+  return <section aria-labelledby="clean-method" data-testid="clean-method" className="bg-muted/40 mb-6 rounded-lg p-4 sm:p-5">
+    <h2 id="clean-method" className="font-heading mb-3 text-base font-semibold">Как считается</h2>
+    <div className="space-y-4">
+    <WeightStrip weights={{ max: 0.4, vk: 0.3, rutube: 0.3 }} label="Тот же балл соцсетей, что у М-Рейтинга" />
+    <div>
+      <GroupLabel>Тот же балл, что у М-Рейтинга, но из VK и MAX вычитаем</GroupLabel>
+      <Glyphs tone="minus" items={[
+        { icon: Zap, label: "Пакеты реакций и просмотров", detail: "крупнейший эпизод на посте с явными признаками" },
+        { icon: Equal, label: "Ровный отклик с долгим хвостом", detail: "поздние реакции сверх нормы площадки" },
+        { icon: Waves, label: "Волны просмотров по стене", detail: "и всплески без отклика" },
+      ]} />
+    </div>
+    <p className="text-muted-foreground flex items-center gap-2 text-xs">
+      <PlatformLogo platform="rutube" size={14} decorative />Rutube, взявший порог «5 видео» пачкой роликов за один день, только отмечаем — балл не меняется</p>
+    <p className="text-muted-foreground text-xs">Сдвиг вычитается {clean.basis === "fact" ? "из официального балла" : "из нашего прогноза: официального балла ещё нет"};
+      Rutube, СМИ, сайт и повестка не меняются. Признаки статистические, а не доказательство накрутки.</p>
+    </div>
   </section>;
 }
 
@@ -85,9 +82,9 @@ export default async function CleanRatingPage({ searchParams }: { searchParams: 
             {item.label}</Link>)}
         </nav>
       </div>
-      <p data-testid="clean-status" className="text-muted-foreground mb-4 max-w-3xl text-sm">{clean.period}: основа —{" "}
-        {clean.basis === "fact" ? `официальный М-Рейтинг за ${clean.basisPeriod.toLowerCase()}` : "наш прогноз, месяц ещё не опубликован"}.
-        Сдвиг: ↓ — без накрутки вуз ниже, ↑ — выше, потому что обогнал опустившихся.</p>
+      <p data-testid="clean-status" className="text-muted-foreground mb-4 text-sm">Основа —{" "}
+        {clean.basis === "fact" ? `официальный М-Рейтинг за ${clean.basisPeriod.toLowerCase()}` : "наш прогноз"}.
+        <span className="text-success"> ↑</span><span className="text-destructive">↓</span> — место без накрутки против основы.</p>
       {rows.length ? <CleanTable clean={clean} rows={rows} />
         : <EmptyState title="Сдвигов нет" description="Ни у одного вуза за этот месяц накрутка не меняет место." />}
     </>}

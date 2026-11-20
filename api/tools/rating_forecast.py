@@ -8,6 +8,9 @@
 Агрегаты читает пул чтения; баллы базового месяца и запись снимка — через
 функции миграции 0084 под api_write_admin. Задание фоновое (CPUWeight=10):
 агрегация месяца по 75 вузам на копии прода — меньше секунды.
+
+Тем же прогоном пишутся «М-Рейтинг без накрутки» и «Наш рейтинг»
+(api.tools.own_rating): своих таймеров у них нет, сбой любого не мешает прогнозу.
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from .. import rating_clean as rc, rating_forecast as rf
+from . import own_rating
 from ..config import Settings
 from ..db import Database
 from ..institution_profile import _students_by_institution
@@ -249,6 +253,8 @@ async def run(database: Any, as_of: datetime, *, retrospective: list[date] | Non
             await database.admin_fetch_one(
                 "SELECT ops_and_admin.finalize_rating_forecast(%(formula_key)s, %(window_start)s) AS result",
                 {"formula_key": rf.FORMULA_KEY, "window_start": rf.month_window(month)[0]})
+    # «Наш рейтинг» — тем же прогоном, без своего таймера; сбой не мешает прогнозу.
+    await own_rating.run(database, as_of, retrospective=retrospective)
     return recorded
 
 

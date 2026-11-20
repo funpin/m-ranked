@@ -59,9 +59,45 @@ def test_months_body_matches_the_contract():
     validate(body, "RatingForecastMonths")
 
 
-def test_own_rating_matches_the_contract():
-    validate(rating.OWN_RATING, "OwnRating")
-    assert rating.OWN_RATING["status"] == "no_methodology" and rating.OWN_RATING["questions"]
+def own_run():
+    from api import own_rating as own
+    return {"id": "own", "as_of": datetime(2026, 11, 20, 22, tzinfo=timezone.utc),
+            "window_start": datetime(2026, 10, 31, 21, tzinfo=timezone.utc), "version": 1,
+            "definition": own.FORMULA_V1,
+            "parameters": {"status": "running", "period": "Ноябрь 2026", "formulaVersion": 1, "elapsedDays": 20.9,
+                           "institutions": 133, "ranked": 2}}
+
+
+def own_rows():
+    from api import own_rating as own
+    accounts = [own.AccountMonth(platform=platform, covered_days=20.9, posts=60, active_days=18, viewed_posts=55,
+                                 views=55_000, interactions=1100, pack_reactions=200 if platform == "vk" else 0)
+                for platform in ("telegram", "vk", "max")]
+    institutions = [own.InstitutionMonth("aac11cf4-9cf6-5b88-b474-9691b38b8235", "Вуз А", 8000, tuple(accounts)),
+                    own.InstitutionMonth("bac11cf4-9cf6-5b88-b474-9691b38b8235", "Вуз Б", 3000,
+                                         (*accounts, own.AccountMonth("rutube", 9.0, 2, 2, 2, 100, 1)))]
+    rows = own.compute(institutions, elapsed_days=20.9, days_in_month=30)
+    return [{"institution_id": row["institutionId"], "legacy_id": None, "name": row["institutionId"][:4],
+             "short_name": None, "score": row["score"], "rank": row["rank"], "explanation": row["explanation"]}
+            for row in rows]
+
+
+def test_own_rating_body_matches_the_contract():
+    body = rating.own_body(own_run(), own_rows())
+    validate(body, "OwnRating")
+    assert (body["month"], body["status"], body["ranked"]) == ("2026-11", "running", 2)
+    assert body["formula"]["weights"] == {"telegram": 0.25, "vk": 0.25, "max": 0.25, "rutube": 0.25}
+    first = body["rows"][0]
+    assert first["platforms"]["vk"]["metrics"]["removedInteractions"] == 200
+    # Rutube без аккаунта — 0 без метрик; собранный 9 дней из 21 — «нет данных».
+    sources = {row["institutionId"][:4]: row["platforms"]["rutube"]["source"] for row in body["rows"]}
+    assert sources == {"aac1": "no_account", "bac1": "no_data"}
+    assert all(row["platforms"]["rutube"]["metrics"] is None for row in body["rows"])
+
+
+def test_own_months_body_matches_the_contract():
+    validate(rating.months_body([{"month": "2026-11", "status": "running", "as_of": own_run()["as_of"]}]),
+             "RatingForecastMonths")
 
 
 @pytest.mark.parametrize("value", ["2026-13", "26-10", "2026-1", "x"])

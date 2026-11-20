@@ -983,16 +983,52 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/rating/own/months:
+    get:
+      tags: [Query]
+      operationId: getOwnRatingMonths
+      summary: List months of our own rating
+      description: >-
+        Months that have a snapshot of our own social-media ranking, newest first, with the snapshot status:
+        running — the month is in progress; final — the month is over and the result is refined until the 7th;
+        published — the month result is closed; retrospective — a recomputation of a past month.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: List months of our own rating.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingForecastMonths'
+        '304':
+          description: The supplied validator matches this representation.
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/rating/own:
     get:
       tags: [Query]
       operationId: getOwnRating
       summary: Read our own rating
       description: >-
-        Placeholder until the methodology of our own rating is chosen: the open questions.
+        Our own open ranking of tracked institutions by social media: Telegram, VK, MAX and Rutube weigh 25 % each;
+        a platform score is the mean of regularity (days with publications), reach per student and engagement on a
+        log scale between the platform's 10th and 90th percentiles. Measured inflation is removed before scoring;
+        rawRank is the place without that removal. A statistical estimate, not proof of artificial activity.
       security: []
       parameters:
         - $ref: '#/components/parameters/IfNoneMatch'
+        - name: month
+          in: query
+          required: false
+          description: Month in Moscow time, YYYY-MM. Omitted — the newest month with a snapshot.
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
       responses:
         '200':
           description: Read our own rating.
@@ -1007,6 +1043,10 @@ paths:
                 $ref: '#/components/schemas/OwnRating'
         '304':
           description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/sitemap:
@@ -3101,13 +3141,115 @@ components:
         formulaVersion: { type: integer, minimum: 1 }
         baseFormulaVersion: { type: integer, minimum: 1 }
         rows: { type: array, items: { $ref: '#/components/schemas/RatingCleanRow' } }
+    OwnRatingPlatformMetrics:
+      type: object
+      additionalProperties: false
+      required: [posts, activeDays, coveredDays, avgViews, students, reach, erv, removedViews, removedInteractions, evenCapped]
+      properties:
+        posts: { type: integer, minimum: 0, description: 'Publications of the month; Rutube — videos uploaded in the month.' }
+        activeDays: { type: integer, minimum: 0, description: 'Days with at least one publication.' }
+        coveredDays: { type: number, minimum: 0, description: 'Days of the month window collected for this platform.' }
+        avgViews: { type: ['number', 'null'], minimum: 0, description: 'Mean views of a mature post after removing view packs.' }
+        students: { type: ['integer', 'null'], minimum: 0 }
+        reach: { type: ['number', 'null'], minimum: 0, description: 'avgViews per student.' }
+        erv: { type: ['number', 'null'], minimum: 0, description: 'Interactions per view after removing measured inflation.' }
+        removedViews: { type: integer, minimum: 0 }
+        removedInteractions: { type: integer, minimum: 0 }
+        evenCapped: { type: boolean, description: 'Engagement was capped at the platform median: an even response together with a long tail of late reactions.' }
+    OwnRatingPlatform:
+      type: object
+      additionalProperties: false
+      required: [source, score, rawScore, subscores, metrics]
+      properties:
+        source: { type: string, enum: [formula, partial, no_posts, no_account, no_data], description: 'partial — collected for part of the month; no_posts — the channel published nothing (scores 0); no_account — no account (scores 0); no_data — collected for too few days, excluded from the mean.' }
+        score: { type: ['number', 'null'], minimum: 0, maximum: 100 }
+        rawScore: { type: ['number', 'null'], minimum: 0, maximum: 100, description: 'The same score without removing inflation.' }
+        subscores:
+          oneOf:
+            - { type: 'null' }
+            - type: object
+              additionalProperties: false
+              required: [activity, reach, engagement]
+              properties:
+                activity: { type: number, minimum: 0, maximum: 100 }
+                reach: { type: number, minimum: 0, maximum: 100 }
+                engagement: { type: number, minimum: 0, maximum: 100 }
+        metrics:
+          oneOf:
+            - { type: 'null' }
+            - { $ref: '#/components/schemas/OwnRatingPlatformMetrics' }
+    OwnRatingRow:
+      type: object
+      additionalProperties: false
+      required: [institutionId, legacyId, name, shortName, rank, score, rawRank, rawScore, partial, platforms]
+      properties:
+        institutionId: { type: string, format: uuid }
+        legacyId: { type: ['integer', 'null'], minimum: 1 }
+        name: { type: string }
+        shortName: { type: ['string', 'null'] }
+        rank: { type: integer, minimum: 1 }
+        score: { type: number, minimum: 0, maximum: 100 }
+        rawRank: { type: integer, minimum: 1, description: 'Place by the same formula without removing inflation.' }
+        rawScore: { type: number, minimum: 0, maximum: 100 }
+        partial: { type: boolean, description: 'A platform was collected for part of the month or lacks data.' }
+        platforms:
+          type: object
+          additionalProperties: false
+          required: [telegram, vk, max, rutube]
+          properties:
+            telegram: { $ref: '#/components/schemas/OwnRatingPlatform' }
+            vk: { $ref: '#/components/schemas/OwnRatingPlatform' }
+            max: { $ref: '#/components/schemas/OwnRatingPlatform' }
+            rutube: { $ref: '#/components/schemas/OwnRatingPlatform' }
+    OwnRatingFormula:
+      type: object
+      additionalProperties: false
+      required: [version, weights, activeDays, reachPerStudent, erv, minPosts]
+      properties:
+        version: { type: integer, minimum: 1 }
+        weights:
+          type: object
+          additionalProperties: { type: number }
+        activeDays:
+          type: object
+          additionalProperties: false
+          required: [perDays, full]
+          properties:
+            perDays: { type: integer, minimum: 1 }
+            full:
+              type: object
+              additionalProperties: { type: integer, minimum: 1 }
+        reachPerStudent:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/OwnRatingRange' }
+        erv:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/OwnRatingRange' }
+        minPosts:
+          type: object
+          additionalProperties: { type: integer, minimum: 1 }
+    OwnRatingRange:
+      type: object
+      additionalProperties: false
+      required: [low, high]
+      properties:
+        low: { type: number, exclusiveMinimum: 0 }
+        high: { type: number, exclusiveMinimum: 0 }
     OwnRating:
       type: object
       additionalProperties: false
-      required: [status, questions]
+      required: [month, status, period, asOf, institutions, ranked, formula, rows]
       properties:
-        status: { type: string, enum: [no_methodology] }
-        questions: { type: array, items: { type: string } }
+        month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        status: { $ref: '#/components/schemas/RatingForecastStatus' }
+        period: { type: string }
+        asOf: { type: string, format: date-time }
+        institutions: { type: integer, minimum: 0, description: 'Tracked institutions in the snapshot.' }
+        ranked: { type: integer, minimum: 0, description: 'Institutions with data on at least three platforms.' }
+        formula: { $ref: '#/components/schemas/OwnRatingFormula' }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/OwnRatingRow' }
     SitemapSummary:
       type: object
       additionalProperties: false
